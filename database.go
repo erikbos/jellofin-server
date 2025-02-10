@@ -136,8 +136,8 @@ func dbLoadItem(coll *Collection, item *Item) {
 	var data DbItem
 
 	// Find this item by name in the database.
-	tx, err := dbHandle.Beginx()
-	err = dbHandle.Get(&data, "SELECT * FROM items WHERE name=? LIMIT 1", item.Name)
+	tx, _ := dbHandle.Beginx()
+	err := dbHandle.Get(&data, "SELECT * FROM items WHERE name=? LIMIT 1", item.Name)
 
 	// Not in database yet, insert
 	if err == sql.ErrNoRows {
@@ -205,5 +205,4 @@ func dbLoadItem(coll *Collection, item *Item) {
 	}
 
 	tx.Commit()
-	return
 }

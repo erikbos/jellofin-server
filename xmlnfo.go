@@ -88,15 +88,14 @@ func decodeNfo(r io.ReadSeeker) (nfo *Nfo) {
 	err = d.Decode(data)
 	// fmt.Printf("data: %+v\nxmlData: %s\n", data, string(xmlData))
 	if err != nil {
-		fmt.Println("Error unmarshalling from XML %v, %v", err, nfo)
+		fmt.Printf("Error unmarshalling from XML %v, %v\n", err, nfo)
 		return
 	}
 
 	// Fix up genre.. bleh.
 	needSplitup := false
 	for _, g := range data.Genre {
-		if strings.Index(g, ",") >= 0 ||
-			strings.Index(g, "/") >= 0 {
+		if strings.Contains(g, ",") || strings.Contains(g, "/") {
 			needSplitup = true
 			break
 		}

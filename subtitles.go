@@ -14,7 +14,7 @@ import (
 )
 
 var utf8BOM = "\xef\xbb\xbf"
-var invalidANSI = make([]bool, 256, 256)
+var invalidANSI = make([]bool, 256)
 var badANSIchars = []byte{127, 129, 140, 141, 142, 143, 144, 154, 157,
 	158, 159, 165, 197, 198, 225, 240, 254}
 

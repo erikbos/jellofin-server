@@ -26,7 +26,7 @@ type FileInfo struct {
 	didstat    bool
 }
 
-var NotDirectory = errors.New("Not a directory")
+var ErrNotDirectory = errors.New("not a directory")
 
 func OpenDir(name string) (dir *Dir, err error) {
 	f, err := os.Open(name)
@@ -38,7 +38,7 @@ func OpenDir(name string) (dir *Dir, err error) {
 		err = &os.PathError{
 			Op:   "Opendir",
 			Path: name,
-			Err:  NotDirectory,
+			Err:  ErrNotDirectory,
 		}
 		return
 	}
@@ -118,7 +118,6 @@ func (fi *FileInfo) stat() {
 		return
 	}
 	fi.set(s)
-	return
 }
 
 func (fi *FileInfo) set(s os.FileInfo) {
@@ -129,7 +128,6 @@ func (fi *FileInfo) set(s os.FileInfo) {
 	fi.sys = s.Sys()
 	fi.setCreatetime()
 	fi.didstat = true
-	return
 }
 
 func (fi *FileInfo) Sys() interface{} {

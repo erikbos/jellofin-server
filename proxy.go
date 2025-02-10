@@ -75,7 +75,7 @@ func hlsHandler(w http.ResponseWriter, r *http.Request) bool {
 	if !sourceOk {
 		return false
 	}
-	if strings.Index(path, ".mp4/") < 0 {
+	if !strings.Contains(path, ".mp4/") {
 		return false
 	}
 	hlsServer := getHlsServer(source)
