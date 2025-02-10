@@ -20,12 +20,13 @@ func (w *statusWriter) WriteHeader(status int) {
 	w.ResponseWriter.WriteHeader(status)
 }
 
-func (w *statusWriter) Write(b []byte) (int, error) {
+func (w *statusWriter) Write(b []byte) (length int, err error) {
 	if w.status == 0 {
 		w.status = 200
 	}
-	w.length = len(b)
-	return w.ResponseWriter.Write(b)
+	length, err = w.ResponseWriter.Write(b)
+	w.length += length
+	return
 }
 
 // HttpLog calls ServeHTTP with a custom responsewriter that
