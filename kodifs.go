@@ -3,6 +3,7 @@ package main
 
 import (
 	//	"fmt"
+	"fmt"
 	"net/url"
 	"path"
 	"regexp"
@@ -105,6 +106,7 @@ func buildMovie(coll *Collection, dir string) (movie *Item) {
 	}
 
 	movie = &Item{
+		Id:         idHash(mname),
 		Name:       mname,
 		Year:       year,
 		BaseUrl:    coll.BaseUrl,
@@ -232,6 +234,7 @@ func getSeason(show *Item, seasonNo int) (s *Season) {
 
 	// insert new
 	sn := &Season{
+		Id:       idHash(fmt.Sprintf("%s-season-%d", show.Name, seasonNo)),
 		SeasonNo: seasonNo,
 	}
 	for i = 0; i < len(show.Seasons); i++ {
@@ -364,6 +367,7 @@ func showScanDir(baseDir string, dir string, seasonHint int, show *Item) {
 		s = isVideo.FindStringSubmatch(fn)
 		if len(s) > 0 {
 			ep := Episode{
+				Id:       idHash(s[0]),
 				Video:    escapePath(path.Join(dir, fn)),
 				BaseName: s[1],
 			}
@@ -439,6 +443,7 @@ func showScanDir(baseDir string, dir string, seasonHint int, show *Item) {
 func buildShow(coll *Collection, dir string) (show *Item) {
 
 	item := &Item{
+		Id:      idHash(path.Base(dir)),
 		Name:    path.Base(dir),
 		BaseUrl: coll.BaseUrl,
 		Path:    escapePath(dir),

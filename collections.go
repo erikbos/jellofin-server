@@ -54,6 +54,7 @@ type Item struct {
 }
 
 type Season struct {
+	Id       string    `json:"id"`
 	SeasonNo int       `json:"seasonno"`
 	Banner   string    `json:"banner,omitempty"`
 	Fanart   string    `json:"fanart,omitempty"`
@@ -62,6 +63,7 @@ type Season struct {
 }
 
 type Episode struct {
+	Id        string `json:"id"`
 	Name      string `json:"name"`
 	SeasonNo  int    `json:"seasonno"`
 	EpisodeNo int    `json:"episodeno"`
