@@ -1,8 +1,8 @@
 package main
 
 import (
-	"math/big"
 	"crypto/sha256"
+	"math/big"
 )
 
 // Hash a string with sha256.
@@ -19,7 +19,7 @@ func idHash(name string) string {
 	// Use only the first 119 bits.
 	num128.Rsh(num128, 9)
 
-	const62:= big.NewInt(62)
+	const62 := big.NewInt(62)
 	mod := big.NewInt(0)
 
 	// into base62.

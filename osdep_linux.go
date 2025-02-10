@@ -1,13 +1,14 @@
+//go:build !freebsd
 // +build !freebsd
 
 package main
 
 import (
-        "syscall"
-        "time"
+	"syscall"
+	"time"
 )
 
-func (fi *FileInfo) setCreatetime() () {
+func (fi *FileInfo) setCreatetime() {
 	if fi.sys == nil {
 		fi.createtime = fi.modtime
 		return

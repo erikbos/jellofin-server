@@ -32,7 +32,7 @@ func (w *statusWriter) Write(b []byte) (int, error) {
 // stores the requests status and length so we can log it.
 func HttpLog(handle http.Handler) http.HandlerFunc {
 	if handle == nil {
-		handle = http.DefaultServeMux;
+		handle = http.DefaultServeMux
 	}
 	return func(w http.ResponseWriter, request *http.Request) {
 		start := time.Now()

@@ -11,26 +11,28 @@ import (
 	"path"
 	"strings"
 
-	"github.com/gorilla/mux"
-	"github.com/gorilla/handlers"
 	"github.com/XS4ALL/curlyconf-go"
+	"github.com/gorilla/handlers"
+	"github.com/gorilla/mux"
 )
 
 var configFile = "notflix-server.cfg"
+
 type cfgMain struct {
-	Listen		string
-	Tls		bool
-	TlsCert		string
-	TlsKey		string
-	Appdir		string
-	Cachedir	string
-	Dbdir		string
-	Logfile		string
-	Collections	[]Collection `cc:"collection"`
+	Listen      string
+	Tls         bool
+	TlsCert     string
+	TlsKey      string
+	Appdir      string
+	Cachedir    string
+	Dbdir       string
+	Logfile     string
+	Collections []Collection `cc:"collection"`
 }
+
 var config = cfgMain{
-	Listen:		"127.0.0.1:8060",
-	Logfile:	"stdout",
+	Listen:  "127.0.0.1:8060",
+	Logfile: "stdout",
 }
 
 func dataHandler(w http.ResponseWriter, r *http.Request) {
@@ -69,14 +71,14 @@ func dataHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fi , _ := file.Stat()
+	fi, _ := file.Stat()
 	if !fi.Mode().IsRegular() {
 		http.Error(w, "403 Access denied", http.StatusForbidden)
 		return
 	}
 
-	w.Header().Set("cache-control", "max-age=86400, stale-while-revalidate=300");
-	if (checkEtag(w, r, file)) {
+	w.Header().Set("cache-control", "max-age=86400, stale-while-revalidate=300")
+	if checkEtag(w, r, file) {
 		return
 	}
 
@@ -111,8 +113,8 @@ func main() {
 	log.Printf("Parsing flags")
 
 	logfile := flag.String("logfile", config.Logfile,
-		"Path of logfile. Use 'syslog' for syslog, 'stdout' " +
-		"for standard output, or 'none' to disable logging.")
+		"Path of logfile. Use 'syslog' for syslog, 'stdout' "+
+			"for standard output, or 'none' to disable logging.")
 	flag.Parse()
 
 	log.Printf("dbinit")
@@ -158,9 +160,9 @@ func main() {
 	s.HandleFunc("/collection/{coll}", collectionHandler)
 	s.HandleFunc("/collection/{coll}/genres", genresHandler)
 	s.Handle("/collection/{coll}/items",
-			gzip(http.HandlerFunc(itemsHandler)))
+		gzip(http.HandlerFunc(itemsHandler)))
 	s.Handle("/collection/{coll}/item/{item}",
-			gzip(http.HandlerFunc(itemHandler)))
+		gzip(http.HandlerFunc(itemHandler)))
 
 	r.Handle("/data", notFound)
 	s = r.PathPrefix("/data/").Subrouter()
@@ -183,13 +185,12 @@ func main() {
 
 	go backgroundTasks()
 
-	if (config.Tls) {
+	if config.Tls {
 		log.Printf("Serving HTTPS on %s", addr)
 		log.Fatal(http.ListenAndServeTLS(addr, config.TlsCert,
-						config.TlsKey, server))
+			config.TlsKey, server))
 	} else {
 		log.Printf("Serving HTTP on %s", addr)
 		log.Fatal(http.ListenAndServe(addr, server))
 	}
 }
-

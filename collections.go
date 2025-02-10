@@ -2,85 +2,85 @@ package main
 
 import (
 	"fmt"
-	"strconv"
 	"net/url"
+	"strconv"
 )
 
 type Collection struct {
-	SourceId	int		`json:"id"`
-	Name_		string		`json:"name"`
-	Type		string		`json:"type"`
-	Items		[]*Item		`json:"items,omitempty"`
-	Directory	string		`json:"-"`
-	BaseUrl		string		`json:"-"`
-	HlsServer	string		`json:"-"`
+	SourceId  int     `json:"id"`
+	Name_     string  `json:"name"`
+	Type      string  `json:"type"`
+	Items     []*Item `json:"items,omitempty"`
+	Directory string  `json:"-"`
+	BaseUrl   string  `json:"-"`
+	HlsServer string  `json:"-"`
 }
 
 // An 'item' can be a movie, a tv-show, a folder, etc.
 type Item struct {
 	// generic
-	Id		string		`json:"id"`
-	Name		string		`json:"name"`
-	Path		string		`json:"path"`
-	BaseUrl		string		`json:"baseurl"`
-	Type		string		`json:"type"`
-	FirstVideo	int64		`json:"firstvideo,omitempty"`
-	LastVideo	int64		`json:"lastvideo,omitempty"`
-	SortName	string		`json:"sortName,omitempty"`
-	NfoPath		string		`json:"-"`
-	NfoTime		int64		`json:"-"`
-	Nfo		*Nfo		`json:"nfo,omitempty"`
-	Banner		string		`json:"banner,omitempty"`
-	Fanart		string		`json:"fanart,omitempty"`
-	Folder		string		`json:"folder,omitempty"`
-	Poster		string		`json:"poster,omitempty"`
-	Rating		float32		`json:"rating,omitempty"`
-	Votes		int		`json:"votes,omitempty"`
-	Genre		[]string	`json:"genre,omitempty"`
-	Genrestring	string		`json:"-"`
-	Year		int		`json:"year,omitempty"`
+	Id          string   `json:"id"`
+	Name        string   `json:"name"`
+	Path        string   `json:"path"`
+	BaseUrl     string   `json:"baseurl"`
+	Type        string   `json:"type"`
+	FirstVideo  int64    `json:"firstvideo,omitempty"`
+	LastVideo   int64    `json:"lastvideo,omitempty"`
+	SortName    string   `json:"sortName,omitempty"`
+	NfoPath     string   `json:"-"`
+	NfoTime     int64    `json:"-"`
+	Nfo         *Nfo     `json:"nfo,omitempty"`
+	Banner      string   `json:"banner,omitempty"`
+	Fanart      string   `json:"fanart,omitempty"`
+	Folder      string   `json:"folder,omitempty"`
+	Poster      string   `json:"poster,omitempty"`
+	Rating      float32  `json:"rating,omitempty"`
+	Votes       int      `json:"votes,omitempty"`
+	Genre       []string `json:"genre,omitempty"`
+	Genrestring string   `json:"-"`
+	Year        int      `json:"year,omitempty"`
 
 	// movie
-	Video			string		`json:"video,omitempty"`
-	Thumb			string		`json:"thumb,omitempty"`
-	SrtSubs			[]Subs		`json:"srtsubs,omitempty"`
-	VttSubs			[]Subs		`json:"vttsubs,omitempty"`
+	Video   string `json:"video,omitempty"`
+	Thumb   string `json:"thumb,omitempty"`
+	SrtSubs []Subs `json:"srtsubs,omitempty"`
+	VttSubs []Subs `json:"vttsubs,omitempty"`
 
 	// show
-	SeasonAllBanner	string		`json:"seasonAllBanner,omitempty"`
-	SeasonAllFanart	string		`json:"seasonAllFanart,omitempty"`
-	SeasonAllPoster	string		`json:"seasonAllPoster,omitempty"`
-	Seasons		[]Season	`json:"seasons,omitempty"`
+	SeasonAllBanner string   `json:"seasonAllBanner,omitempty"`
+	SeasonAllFanart string   `json:"seasonAllFanart,omitempty"`
+	SeasonAllPoster string   `json:"seasonAllPoster,omitempty"`
+	Seasons         []Season `json:"seasons,omitempty"`
 }
 
 type Season struct {
-	SeasonNo	int		`json:"seasonno"`
-	Banner		string		`json:"banner,omitempty"`
-	Fanart		string		`json:"fanart,omitempty"`
-	Poster		string		`json:"poster,omitempty"`
-	Episodes	[]Episode	`json:"episodes,omitempty"`
+	SeasonNo int       `json:"seasonno"`
+	Banner   string    `json:"banner,omitempty"`
+	Fanart   string    `json:"fanart,omitempty"`
+	Poster   string    `json:"poster,omitempty"`
+	Episodes []Episode `json:"episodes,omitempty"`
 }
 
 type Episode struct {
-	Name		string		`json:"name"`
-	SeasonNo	int		`json:"seasonno"`
-	EpisodeNo	int		`json:"episodeno"`
-	Double		bool		`json:"double,omitempty"`
-	SortName	string		`json:"sortName,omitempty"`
-	BaseName	string		`json:"-"`
-	NfoPath		string		`json:"-"`
-	NfoTime		int64		`json:"-"`
-	VideoTS		int64		`json:"-"`
-	Nfo		*Nfo		`json:"nfo,omitempty"`
-	Video		string		`json:"video"`
-	Thumb		string		`json:"thumb,omitempty"`
-	SrtSubs		[]Subs		`json:"srtsubs,omitempty"`
-	VttSubs		[]Subs		`json:"vttsubs,omitempty"`
+	Name      string `json:"name"`
+	SeasonNo  int    `json:"seasonno"`
+	EpisodeNo int    `json:"episodeno"`
+	Double    bool   `json:"double,omitempty"`
+	SortName  string `json:"sortName,omitempty"`
+	BaseName  string `json:"-"`
+	NfoPath   string `json:"-"`
+	NfoTime   int64  `json:"-"`
+	VideoTS   int64  `json:"-"`
+	Nfo       *Nfo   `json:"nfo,omitempty"`
+	Video     string `json:"video"`
+	Thumb     string `json:"thumb,omitempty"`
+	SrtSubs   []Subs `json:"srtsubs,omitempty"`
+	VttSubs   []Subs `json:"vttsubs,omitempty"`
 }
 
 type Subs struct {
-	Lang		string		`json:"lang"`
-	Path		string		`json:"path"`
+	Lang string `json:"lang"`
+	Path string `json:"path"`
 }
 
 type byItem []Item
@@ -114,7 +114,7 @@ func (s bySeason) Less(i, j int) bool {
 }
 
 func (p PathString) MarshalText() (text []byte, err error) {
-	u := url.URL{ Path: string(p) }
+	u := url.URL{Path: string(p)}
 	text = []byte(u.EscapedPath())
 	return
 }
@@ -143,13 +143,13 @@ func initCollections() {
 }
 
 func getCollection(collName string) (c *Collection) {
-	sourceId := -1;
+	sourceId := -1
 	if n, err := strconv.Atoi(collName); err == nil {
-		sourceId = n;
+		sourceId = n
 	}
 	for n := range config.Collections {
-		if (config.Collections[n].Name_ == collName ||
-		    config.Collections[n].SourceId == sourceId) {
+		if config.Collections[n].Name_ == collName ||
+			config.Collections[n].SourceId == sourceId {
 			c = &(config.Collections[n])
 			return
 		}
@@ -177,7 +177,7 @@ func getHlsServer(source string) (h string) {
 		return
 	}
 	for n, c := range config.Collections {
-		if (int64(c.SourceId) == id) {
+		if int64(c.SourceId) == id {
 			h = config.Collections[n].HlsServer
 			return
 		}
@@ -191,11 +191,10 @@ func getDataDir(source string) (d string) {
 		return
 	}
 	for n, c := range config.Collections {
-		if (int64(c.SourceId) == id) {
+		if int64(c.SourceId) == id {
 			d = config.Collections[n].Directory
 			return
 		}
 	}
 	return
 }
-

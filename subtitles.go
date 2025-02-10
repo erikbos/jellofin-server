@@ -5,24 +5,24 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"strings"
-	"encoding/json"
 )
 
 var utf8BOM = "\xef\xbb\xbf"
 var invalidANSI = make([]bool, 256, 256)
-var badANSIchars = []byte{ 127, 129, 140, 141, 142, 143, 144, 154, 157,
-	158, 159, 165, 197, 198, 225, 240, 254 }
+var badANSIchars = []byte{127, 129, 140, 141, 142, 143, 144, 154, 157,
+	158, 159, 165, 197, 198, 225, 240, 254}
 
 type subEntry struct {
-	Id	int		`json:"id"`
-	Start	int		`json:"start"`
-	End	int		`json:"end"`
-	Lines	[]string	`json:"lines"`
+	Id    int      `json:"id"`
+	Start int      `json:"start"`
+	End   int      `json:"end"`
+	Lines []string `json:"lines"`
 }
 
 func init() {
@@ -41,7 +41,7 @@ func scanTime(word string, num *int) bool {
 	if err != nil {
 		return false
 	}
-	*num = (h * 3600 + m * 60 + s) * 1000 + ms
+	*num = (h*3600+m*60+s)*1000 + ms
 	return true
 }
 
@@ -54,7 +54,7 @@ func vttTime(ms int) string {
 	return fmt.Sprintf("%02d:%02d:%02d.%03d", h, m, s, ms)
 }
 
-func parseSrt (file io.Reader) (subs []subEntry, utf8 bool) {
+func parseSrt(file io.Reader) (subs []subEntry, utf8 bool) {
 
 	isUTF8 := false
 	isANSI := true
@@ -91,7 +91,7 @@ func parseSrt (file io.Reader) (subs []subEntry, utf8 bool) {
 			}
 		}
 
-outOfSync:
+	outOfSync:
 		switch state {
 		case 0:
 			_, err := fmt.Sscanf(line, "%d", &e.Id)
@@ -169,10 +169,10 @@ func OpenSub(rw http.ResponseWriter, rq *http.Request, name string) (file http.F
 
 	accept := rq.Header.Get("Accept")
 	if strings.Contains(accept, "application/json") {
-		rw.Header().Set("Content-Type", "application/json; " + charset)
+		rw.Header().Set("Content-Type", "application/json; "+charset)
 		jsonBytes, err2 := json.MarshalIndent(subs, "", "  ")
 		if err2 != nil {
-			jsonBytes = []byte{ '[', ']', '\n' }
+			jsonBytes = []byte{'[', ']', '\n'}
 		}
 		file = NewBlobBytesReader(jsonBytes, srtFile)
 		srtFile.Close()
@@ -180,15 +180,15 @@ func OpenSub(rw http.ResponseWriter, rq *http.Request, name string) (file http.F
 	}
 
 	if ext == "srt" && !strings.Contains(accept, "text/vtt") {
-		rw.Header().Set("Content-Type", "text/plain; " + charset)
+		rw.Header().Set("Content-Type", "text/plain; "+charset)
 		srtFile.Seek(0, 0)
 		file = srtFile
 		return
 	}
 
-	rw.Header().Set("Content-Type", "text/vtt; " + charset)
+	rw.Header().Set("Content-Type", "text/vtt; "+charset)
 
-	lines := []string{ "WEBVTT", ""}
+	lines := []string{"WEBVTT", ""}
 	for _, s := range subs {
 		tm := vttTime(s.Start) + " --> " + vttTime(s.End)
 		lines = append(lines, tm)
@@ -200,4 +200,3 @@ func OpenSub(rw http.ResponseWriter, rq *http.Request, name string) (file http.F
 	srtFile.Close()
 	return
 }
-

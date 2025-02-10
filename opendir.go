@@ -1,7 +1,5 @@
-//
-//	OpenDir is like Open(), but the Readdir() os.FileInfo
-//	results are lazy-loaded.
-//	
+// OpenDir is like Open(), but the Readdir() os.FileInfo
+// results are lazy-loaded.
 package main
 
 import (
@@ -12,25 +10,25 @@ import (
 )
 
 type Dir struct {
-	name	string
-	file	*os.File
+	name string
+	file *os.File
 }
 
 type FileInfo struct {
-	dir	*Dir
-	name	string
-	size	int64
-	mode	os.FileMode
-	modtime	time.Time
+	dir        *Dir
+	name       string
+	size       int64
+	mode       os.FileMode
+	modtime    time.Time
 	createtime time.Time
-	sys	interface{}
-	isdir	bool
-	didstat	bool
+	sys        interface{}
+	isdir      bool
+	didstat    bool
 }
 
 var NotDirectory = errors.New("Not a directory")
 
-func OpenDir(name string) (dir  *Dir, err error) {
+func OpenDir(name string) (dir *Dir, err error) {
 	f, err := os.Open(name)
 	if err != nil {
 		return
@@ -38,9 +36,9 @@ func OpenDir(name string) (dir  *Dir, err error) {
 	fi, _ := f.Stat()
 	if !fi.IsDir() {
 		err = &os.PathError{
-			Op: "Opendir",
+			Op:   "Opendir",
 			Path: name,
-			Err: NotDirectory,
+			Err:  NotDirectory,
 		}
 		return
 	}
@@ -134,9 +132,7 @@ func (fi *FileInfo) set(s os.FileInfo) {
 	return
 }
 
-
 func (fi *FileInfo) Sys() interface{} {
 	fi.stat()
 	return fi.sys
 }
-

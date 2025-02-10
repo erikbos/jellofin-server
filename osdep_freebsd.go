@@ -1,13 +1,13 @@
 package main
 
 import (
-        "syscall"
-        "time"
+	"syscall"
+	"time"
 )
 
-func (fi *FileInfo) setCreatetime() () {
+func (fi *FileInfo) setCreatetime() {
 	if fi.sys == nil {
-		return;
+		return
 	}
 	stat := fi.sys.(*syscall.Stat_t)
 	nsec := syscall.TimespecToNsec(stat.Ctimespec)

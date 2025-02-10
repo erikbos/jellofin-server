@@ -29,7 +29,7 @@ var hopHeaders = []string{
 }
 
 var netClient = &http.Client{
-  Timeout: time.Second * 120,
+	Timeout: time.Second * 120,
 }
 
 func copyHeader(dst, src http.Header) {
@@ -69,11 +69,11 @@ func hlsHandler(w http.ResponseWriter, r *http.Request) bool {
 	vars := mux.Vars(r)
 	path, pathOk := vars["path"]
 	if !pathOk {
-		return false;
+		return false
 	}
 	source, sourceOk := vars["source"]
 	if !sourceOk {
-		return false;
+		return false
 	}
 	if strings.Index(path, ".mp4/") < 0 {
 		return false

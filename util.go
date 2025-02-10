@@ -1,4 +1,3 @@
-
 package main
 
 import (
@@ -10,6 +9,5 @@ func TimeToUnixMS(t time.Time) int64 {
 }
 
 func UnixMSToTime(ms int64) time.Time {
-	return time.Unix(0, ms * 1000000)
+	return time.Unix(0, ms*1000000)
 }
-

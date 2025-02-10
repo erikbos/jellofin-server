@@ -1,25 +1,25 @@
-
-package main;
+package main
 
 import (
-	"fmt"
-	"strings"
 	"database/sql"
+	"fmt"
 	"os"
+	"strings"
+
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 type DbItem struct {
-	Id		string
-	Name		string
-	Votes		int
-	Genre		string
-	Rating		float32
-	Year		int
-	NfoTime		int64
-	FirstVideo	int64
-	LastVideo	int64
+	Id         string
+	Name       string
+	Votes      int
+	Genre      string
+	Rating     float32
+	Year       int
+	NfoTime    int64
+	FirstVideo int64
+	LastVideo  int64
 }
 
 var dbHandle *sqlx.DB
@@ -36,7 +36,7 @@ func dbInit(dbFile string) (err error) {
 	return
 }
 
-func dbInitSchema() (error) {
+func dbInitSchema() error {
 	tx, err := dbHandle.Beginx()
 	if err != nil {
 		return err
@@ -60,7 +60,7 @@ func dbInitSchema() (error) {
 		return err
 	}
 
-	index := "CREATE INDEX items_name_idx ON items (name);";
+	index := "CREATE INDEX items_name_idx ON items (name);"
 	_, err = tx.Exec(index)
 	if err != nil {
 		tx.Rollback()
@@ -72,7 +72,7 @@ func dbInitSchema() (error) {
 }
 
 // Check NFO file.
-func itemCheckNfo (item *Item) (updated bool) {
+func itemCheckNfo(item *Item) (updated bool) {
 	if item.NfoPath == "" {
 		return
 	}
@@ -115,23 +115,22 @@ func itemCheckNfo (item *Item) (updated bool) {
 func dbInsertItem(tx *sqlx.Tx, item *Item) (err error) {
 	item.Genrestring = strings.Join(item.Genre, ",")
 	_, err = tx.NamedExec(
-	`INSERT INTO items(id, name, votes, genre, rating, year, nfotime, ` +
-	`		firstvideo, lastvideo)` +
-	`VALUES (:id, :name, :votes, :genrestring, :rating, :year, :nfotime, ` +
-	`		:firstvideo, :lastvideo)`, item)
+		`INSERT INTO items(id, name, votes, genre, rating, year, nfotime, `+
+			`		firstvideo, lastvideo)`+
+			`VALUES (:id, :name, :votes, :genrestring, :rating, :year, :nfotime, `+
+			`		:firstvideo, :lastvideo)`, item)
 	return
 }
 
 func dbUpdateItem(tx *sqlx.Tx, item *Item) (err error) {
 	item.Genrestring = strings.Join(item.Genre, ",")
 	_, err = tx.NamedExec(
-	`UPDATE items SET votes = :votes, genre = :genrestring, rating = :rating, ` +
-	`		year = :year, nfotime = :nfotime, ` +
-	`		firstvideo = :firstvideo, lastvideo = :lastvideo ` +
-	`		WHERE name = :name`, item)
+		`UPDATE items SET votes = :votes, genre = :genrestring, rating = :rating, `+
+			`		year = :year, nfotime = :nfotime, `+
+			`		firstvideo = :firstvideo, lastvideo = :lastvideo `+
+			`		WHERE name = :name`, item)
 	return
 }
-
 
 func dbLoadItem(coll *Collection, item *Item) {
 	var data DbItem
@@ -187,7 +186,7 @@ func dbLoadItem(coll *Collection, item *Item) {
 	}
 
 	if item.FirstVideo != data.FirstVideo ||
-	   item.LastVideo != data.LastVideo {
+		item.LastVideo != data.LastVideo {
 		needUpdate = true
 	}
 

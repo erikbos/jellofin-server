@@ -1,11 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"time"
-	"encoding/json"
-	"net/http"
 
 	"github.com/gorilla/mux"
 )
@@ -41,9 +41,9 @@ func setheaders(h http.Header) {
 
 func serveJSON(obj interface{}, w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
-        j := json.NewEncoder(w)
-        j.SetIndent("", "  ")
-        j.Encode(obj)
+	j := json.NewEncoder(w)
+	j.SetIndent("", "  ")
+	j.Encode(obj)
 }
 
 func collectionsHandler(w http.ResponseWriter, r *http.Request) {
@@ -94,7 +94,7 @@ func itemsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == "HEAD" {
-		return;
+		return
 	}
 
 	// copy items
@@ -128,10 +128,10 @@ func itemHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == "HEAD" {
-		return;
+		return
 	}
 
-	r.ParseForm();
+	r.ParseForm()
 	doNfo := true
 	if _, ok := r.Form["nonfo"]; ok {
 		doNfo = false
@@ -198,4 +198,3 @@ func genresHandler(w http.ResponseWriter, r *http.Request) {
 
 	serveJSON(gc, w)
 }
-

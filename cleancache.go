@@ -1,4 +1,3 @@
-
 package main
 
 import (
@@ -85,10 +84,9 @@ func dirExists(dir string) (ok bool) {
 func cleanCache(dataDir string, cacheDir string, sleep time.Duration) {
 	for {
 		if dirExists(dataDir) && dirExists(cacheDir) {
-			m := scanData("/home/miquels/data/", 5 * time.Millisecond)
-			scanCache("/tmp/mxdav-img-cache", m, 20 * time.Millisecond)
+			m := scanData("/home/miquels/data/", 5*time.Millisecond)
+			scanCache("/tmp/mxdav-img-cache", m, 20*time.Millisecond)
 		}
 		time.Sleep(sleep)
 	}
 }
-

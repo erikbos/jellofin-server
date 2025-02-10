@@ -1,4 +1,3 @@
-
 package main
 
 import (
@@ -6,29 +5,29 @@ import (
 	"io"
 	"os"
 	"time"
+
 	"gopkg.in/gographics/imagick.v2/imagick"
 )
 
 type blobFile struct {
-	fi		blobFileInfo
-	blob		[]byte
-	size		int64
-	pos		int64
+	fi   blobFileInfo
+	blob []byte
+	size int64
+	pos  int64
 
 	// Yuck.
-	wand	*imagick.MagickWand
+	wand *imagick.MagickWand
 }
 
 type blobFileInfo struct {
-	osfi		os.FileInfo
-	size		int64
-	openTime	time.Time
+	osfi     os.FileInfo
+	size     int64
+	openTime time.Time
 }
 
 type ioStatter interface {
 	Stat() (os.FileInfo, error)
 }
-
 
 func NewBlobStringReader(data string, file interface{}) (f *blobFile) {
 	return NewBlobBytesReader([]byte(data), file)
@@ -69,7 +68,7 @@ func (f *blobFile) Seek(offset int64, whence int) (pos int64, err error) {
 	switch whence {
 	case 0:
 		pos = offset
-	case 1: 
+	case 1:
 		pos = f.pos + offset
 	case 2:
 		pos = f.size + offset
@@ -89,7 +88,7 @@ func (f *blobFile) Stat() (fi os.FileInfo, err error) {
 }
 
 func (f *blobFile) Readdir(count int) ([]os.FileInfo, error) {
-	return  nil, errors.New("not a directory")
+	return nil, errors.New("not a directory")
 }
 
 func (f *blobFile) Close() error {
@@ -134,4 +133,3 @@ func (f *blobFileInfo) Sys() interface{} {
 	}
 	return nil
 }
-

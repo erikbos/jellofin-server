@@ -1,16 +1,14 @@
-//
 // Support for `Kodi' style filesystem layout.
-//
 package main
 
 import (
-//	"fmt"
+	//	"fmt"
+	"net/url"
 	"path"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
-	"net/url"
 )
 
 var isVideo = regexp.MustCompile(`^(.*)\.(divx|mov|mp4|MP4|m4u|m4v)$`)
@@ -23,12 +21,12 @@ var isExt2 = regexp.MustCompile(`^(.*)[.-]([a-z]+)\.(png|jpg|jpeg|tbn|nfo|srt)$`
 var isYear = regexp.MustCompile(` \(([0-9]+)\)$`)
 
 type epMapType struct {
-	eps	*[]Episode
-	idx	int
+	eps *[]Episode
+	idx int
 }
 
 func escapePath(p string) string {
-	u := url.URL{ Path: p }
+	u := url.URL{Path: p}
 	return u.EscapedPath()
 }
 
@@ -46,7 +44,7 @@ func buildMovies(coll *Collection, pace int) (items []*Item) {
 	for _, f := range fi {
 		name := f.Name()
 		if (len(name) > 0 && name[:1] == ".") ||
-		   (len(name) > 1 && name[:2] == "+ ") {
+			(len(name) > 1 && name[:2] == "+ ") {
 			continue
 		}
 		m := buildMovie(coll, name)
@@ -99,7 +97,7 @@ func buildMovie(coll *Collection, dir string) (movie *Item) {
 		year = parseInt(s[1])
 	}
 	if year == 0 && created > 0 {
-		t := time.Unix(created / 1000, 0)
+		t := time.Unix(created/1000, 0)
 		year = t.Year()
 	}
 	if year == 0 {
@@ -107,21 +105,21 @@ func buildMovie(coll *Collection, dir string) (movie *Item) {
 	}
 
 	movie = &Item{
-		Name: mname,
-		Year: year,
-		BaseUrl: coll.BaseUrl,
-		Path: escapePath(dir),
-		Video: escapePath(video),
+		Name:       mname,
+		Year:       year,
+		BaseUrl:    coll.BaseUrl,
+		Path:       escapePath(dir),
+		Video:      escapePath(video),
 		FirstVideo: created,
-		LastVideo: created,
-		Type: `movie`,
+		LastVideo:  created,
+		Type:       `movie`,
 	}
 
 	for _, f := range fi {
 		name := f.Name()
 
-		var aux string;
-		var ext string;
+		var aux string
+		var ext string
 		s := isExt1.FindStringSubmatch(name)
 		if len(s) > 0 {
 			ext = s[3]
@@ -146,10 +144,14 @@ func buildMovie(coll *Collection, dir string) (movie *Item) {
 				aux = "poster"
 			}
 			switch aux {
-			case `banner`:	movie.Banner = p
-			case `fanart`:	movie.Fanart = p
-			case `folder`:	movie.Folder = p
-			case `poster`:	movie.Poster = p
+			case `banner`:
+				movie.Banner = p
+			case `fanart`:
+				movie.Fanart = p
+			case `folder`:
+				movie.Folder = p
+			case `poster`:
+				movie.Poster = p
 			}
 			continue
 		}
@@ -177,7 +179,7 @@ func buildMovie(coll *Collection, dir string) (movie *Item) {
 		}
 
 		if ext == "nfo" {
-			movie.NfoPath = path.Join(coll.Directory,  dir, name)
+			movie.NfoPath = path.Join(coll.Directory, dir, name)
 			continue
 		}
 	}
@@ -203,7 +205,7 @@ func buildShows(coll *Collection, pace int) (items []*Item) {
 	for _, f := range fi {
 		name := f.Name()
 		if (len(name) > 0 && name[:1] == ".") ||
-		   (len(name) > 1 && name[:2] == "+ ") {
+			(len(name) > 1 && name[:2] == "+ ") {
 			continue
 		}
 		m := buildShow(coll, name)
@@ -237,7 +239,7 @@ func getSeason(show *Item, seasonNo int) (s *Season) {
 			break
 		}
 	}
-	tmp := make([]Season, 0, len(show.Seasons) + 1)
+	tmp := make([]Season, 0, len(show.Seasons)+1)
 	tmp = append(tmp, show.Seasons[:i]...)
 	tmp = append(tmp, *sn)
 	tmp = append(tmp, show.Seasons[i:]...)
@@ -250,7 +252,8 @@ func epMatch(epMap map[string]epMapType, s []string) (ep *Episode, aux, ext stri
 	if len(s) < 4 {
 		return
 	}
-        epx, ok := epMap[s[1]]; if !ok {
+	epx, ok := epMap[s[1]]
+	if !ok {
 		return
 	}
 	ep = &(*epx.eps)[epx.idx]
@@ -299,15 +302,19 @@ func showScanDir(baseDir string, dir string, seasonHint int, show *Item) {
 			s = isImage.FindStringSubmatch(fn)
 			if len(s) > 0 {
 				p := escapePath(fn)
-				switch (s[1]) {
+				switch s[1] {
 				case "season-all-banner":
 					show.SeasonAllBanner = p
 				case "season-all-poster":
 					show.SeasonAllPoster = p
-				case "banner": show.Banner = p
-				case "fanart": show.Fanart = p
-				case "folder": show.Folder = p
-				case "poster": show.Poster = p
+				case "banner":
+					show.Banner = p
+				case "fanart":
+					show.Fanart = p
+				case "folder":
+					show.Folder = p
+				case "poster":
+					show.Poster = p
 				}
 			}
 		}
@@ -319,7 +326,7 @@ func showScanDir(baseDir string, dir string, seasonHint int, show *Item) {
 			c := false
 			if len(s) > 0 {
 				p := escapePath(path.Join(dir, fn))
-				switch (s[1]) {
+				switch s[1] {
 				case "banner":
 					season := getSeason(show, seasonHint)
 					season.Banner = p
@@ -357,7 +364,7 @@ func showScanDir(baseDir string, dir string, seasonHint int, show *Item) {
 		s = isVideo.FindStringSubmatch(fn)
 		if len(s) > 0 {
 			ep := Episode{
-				Video: escapePath(path.Join(dir, fn)),
+				Video:    escapePath(path.Join(dir, fn)),
 				BaseName: s[1],
 			}
 			ep.VideoTS = f.CreatetimeMS()
@@ -423,7 +430,7 @@ func showScanDir(baseDir string, dir string, seasonHint int, show *Item) {
 		}
 
 		if ext == "nfo" {
-			ep.NfoPath = path.Join(baseDir,  dir, name)
+			ep.NfoPath = path.Join(baseDir, dir, name)
 			continue
 		}
 	}
@@ -432,10 +439,10 @@ func showScanDir(baseDir string, dir string, seasonHint int, show *Item) {
 func buildShow(coll *Collection, dir string) (show *Item) {
 
 	item := &Item{
-		Name: path.Base(dir),
+		Name:    path.Base(dir),
 		BaseUrl: coll.BaseUrl,
-		Path: escapePath(dir),
-		Type: `show`,
+		Path:    escapePath(dir),
+		Type:    `show`,
 	}
 	d := path.Join(coll.Directory, dir)
 	showScanDir(d, "", -1, item)
@@ -473,8 +480,8 @@ func buildShow(coll *Collection, dir string) (show *Item) {
 	}
 
 	// If we have an NFO and at least one image, accept it.
-	if (item.NfoPath != "" &&
-		(item.Fanart != "" || item.Poster != "" || item.Thumb != "")) {
+	if item.NfoPath != "" &&
+		(item.Fanart != "" || item.Poster != "" || item.Thumb != "") {
 		show = item
 	}
 
@@ -492,7 +499,7 @@ func buildShow(coll *Collection, dir string) (show *Item) {
 	// guess the year in case it's not in the NFO file.
 	year := 0
 	if item.FirstVideo > 0 {
-		t := time.Unix(item.FirstVideo / 1000, 0)
+		t := time.Unix(item.FirstVideo/1000, 0)
 		year = t.Year()
 	}
 	if year == 0 {
@@ -507,7 +514,7 @@ func buildShow(coll *Collection, dir string) (show *Item) {
 
 func copySrtVttSubs(srt []Subs, vtt *[]Subs) {
 	for i := range srt {
-		sub := Subs{ Lang: srt[i].Lang }
+		sub := Subs{Lang: srt[i].Lang}
 		path := srt[i].Path
 		idx := strings.LastIndex(path, ".")
 		if idx >= 0 {
@@ -516,4 +523,3 @@ func copySrtVttSubs(srt []Subs, vtt *[]Subs) {
 		}
 	}
 }
-
