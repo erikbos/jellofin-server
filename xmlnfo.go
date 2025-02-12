@@ -10,34 +10,34 @@ import (
 )
 
 type Nfo struct {
-	Title        string   `xml:"title,omitempty" json:"title,omitempty"`
-	Id           string   `xml:"id,omitempty" json:"id,omitempty"`
-	Runtime      string   `xml:"runtime,omitempty" json:"runtime,omitempty"`
-	Mpaa         string   `xml:"mpaa,omitempty" json:"mpaa,omitempty"`
-	YearString   string   `xml:"year,omitempty" json:"-"`
-	Year         int      `xml:"-" json:"year,omitempty"`
-	OTitle       string   `xml:"originaltitle,omitempty" json:"originaltitle,omitempty"`
-	Plot         string   `xml:"plot,omitempty" json:"plot,omitempty"`
-	Tagline      string   `xml:"tagline,omitempty" json:"tagline,omitempty"`
-	Premiered    string   `xml:"premiered,omitempty" json:"premiered,omitempty"`
-	Season       string   `xml:"season,omitempty" json:"season,omitempty"`
-	Episode      string   `xml:"episode,omitempty" json:"episode,omitempty"`
-	Aired        string   `xml:"aired,omitempty" json:"aired,omitempty"`
-	Studio       string   `xml:"studio,omitempty" json:"studio,omitempty"`
-	RatingString string   `xml:"rating,omitempty" json:"-"`
-	Rating       float32  `xml:"-" json:"rating,omitempty"`
-	VotesString  string   `xml:"votes,omitempty" json:"-"`
-	Votes        int      `xml:"-" json:"votes,omitempty"`
-	Genre        []string `xml:"genre,omitempty" json:"genre,omitempty"`
-	Actor        []Actor  `xml:"actor,omitempty" json:"actor,omitempty"`
-	Director     string   `xml:"director,omitempty" json:"director,omitempty"`
-	Credits      string   `xml:"credits,omitempty" json:"credits,omitempty"`
-	Thumb        string   `xml:"thumb,omitempty" json:"thumb,omitempty"`
-	Fanart       []Thumb  `xml:"fanart,omitempty" json:"fanart,omitempty"`
-	Banner       []Thumb  `xml:"banner,omitempty" json:"banner,omitempty"`
-	Discart      []Thumb  `xml:"discart,omitempty" json:"discart,omitempty"`
-	Logo         []Thumb  `xml:"logo,omitempty" json:"logo,omitempty"`
-	// VidFileInfo	*VidFileInfo	`xml:"fileinfo,omitempty" json:"fileinfo,omitempty"`
+	Title        string       `xml:"title,omitempty" json:"title,omitempty"`
+	Id           string       `xml:"id,omitempty" json:"id,omitempty"`
+	Runtime      string       `xml:"runtime,omitempty" json:"runtime,omitempty"`
+	Mpaa         string       `xml:"mpaa,omitempty" json:"mpaa,omitempty"`
+	YearString   string       `xml:"year,omitempty" json:"-"`
+	Year         int          `xml:"-" json:"year,omitempty"`
+	OTitle       string       `xml:"originaltitle,omitempty" json:"originaltitle,omitempty"`
+	Plot         string       `xml:"plot,omitempty" json:"plot,omitempty"`
+	Tagline      string       `xml:"tagline,omitempty" json:"tagline,omitempty"`
+	Premiered    string       `xml:"premiered,omitempty" json:"premiered,omitempty"`
+	Season       string       `xml:"season,omitempty" json:"season,omitempty"`
+	Episode      string       `xml:"episode,omitempty" json:"episode,omitempty"`
+	Aired        string       `xml:"aired,omitempty" json:"aired,omitempty"`
+	Studio       string       `xml:"studio,omitempty" json:"studio,omitempty"`
+	RatingString string       `xml:"rating,omitempty" json:"-"`
+	Rating       float32      `xml:"-" json:"rating,omitempty"`
+	VotesString  string       `xml:"votes,omitempty" json:"-"`
+	Votes        int          `xml:"-" json:"votes,omitempty"`
+	Genre        []string     `xml:"genre,omitempty" json:"genre,omitempty"`
+	Actor        []Actor      `xml:"actor,omitempty" json:"actor,omitempty"`
+	Director     string       `xml:"director,omitempty" json:"director,omitempty"`
+	Credits      string       `xml:"credits,omitempty" json:"credits,omitempty"`
+	Thumb        string       `xml:"thumb,omitempty" json:"thumb,omitempty"`
+	Fanart       []Thumb      `xml:"fanart,omitempty" json:"fanart,omitempty"`
+	Banner       []Thumb      `xml:"banner,omitempty" json:"banner,omitempty"`
+	Discart      []Thumb      `xml:"discart,omitempty" json:"discart,omitempty"`
+	Logo         []Thumb      `xml:"logo,omitempty" json:"logo,omitempty"`
+	FileInfo     *VidFileInfo `xml:"fileinfo,omitempty" json:"fileinfo,omitempty"`
 }
 
 type Thumb struct {
@@ -45,24 +45,34 @@ type Thumb struct {
 }
 
 type Actor struct {
-	Name string `xml:"name,omitempty" json:"name,omitempty"`
-	Role string `xml:"role,omitempty" json:"role,omitempty"`
+	Name  string `xml:"name,omitempty" json:"name,omitempty"`
+	Role  string `xml:"role,omitempty" json:"role,omitempty"`
+	Thumb string `xml:"thumb,omitempty" json:"thumb,omitempty"`
 }
 
-/*
 type VidFileInfo struct {
-	StreamDetails	*StreamDetails	`xml:"streamdetails,omitempty" json:"streamdetails,omitempty"`
+	StreamDetails *StreamDetails `xml:"streamdetails,omitempty" json:"streamdetails,omitempty"`
 }
 type StreamDetails struct {
-	Video		*VideoDetails	`xml:"video,omitempty" json:"video,omitempty"`
+	Video *VideoDetails `xml:"video,omitempty" json:"video,omitempty"`
+	Audio *AudioDetails `xml:"audio,omitempty" json:"audio,omitempty"`
 }
 type VideoDetails struct {
-	Codec		string		`xml:"codec,omitempty" json:"codec,omitempty"`
-	Aspect		float32		`xml:"aspect,omitempty" json:"aspect,omitempty"`
-	Width		int		`xml:"width,omitempty" json:"width,omitempty"`
-	Height		int		`xml:"height,omitempty" json:"height,omitempty"`
+	Codec             string  `xml:"codec,omitempty" json:"codec,omitempty"`
+	Bitrate           int     `xml:"bitrate,omitempty" json:"bitrate,omitempty"`
+	Aspect            float32 `xml:"aspect,omitempty" json:"aspect,omitempty"`
+	Width             int     `xml:"width,omitempty" json:"width,omitempty"`
+	Height            int     `xml:"height,omitempty" json:"height,omitempty"`
+	FrameRate         float32 `xml:"framerate,omitempty" json:"framerate,omitempty"`
+	DurationInSeconds int     `xml:"durationinseconds,omitempty" json:"durationinseconds,omitempty"`
 }
-*/
+
+type AudioDetails struct {
+	Bitrate  int    `xml:"bitrate,omitempty" json:"bitrate,omitempty"`
+	Channels int    `xml:"channels,omitempty" json:"channels,omitempty"`
+	Codec    string `xml:"codec,omitempty" json:"codec,omitempty"`
+	Language string `xml:"language,omitempty" json:"language,omitempty"`
+}
 
 func decodeNfo(r io.ReadSeeker) (nfo *Nfo) {
 	// this is a really dirty hack to partially support <xbmcmultiepisode>
