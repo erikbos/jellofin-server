@@ -316,7 +316,12 @@ func OpenFile(rw http.ResponseWriter, rq *http.Request, name string) (file http.
 	// Create "File"
 	format := wand.GetImageFormat()
 	wand.SetImageFormat(format)
-	f := NewBlobBytesReader(wand.GetImageBlob(), file)
+	var imageblob []byte
+	imageblob, err = wand.GetImageBlob()
+	if err != nil {
+		return
+	}
+	f := NewBlobBytesReader(imageblob, file)
 	f.wand = wand
 
 	// Write cache file.
