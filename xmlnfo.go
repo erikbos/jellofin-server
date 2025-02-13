@@ -32,12 +32,19 @@ type Nfo struct {
 	Actor        []Actor      `xml:"actor,omitempty" json:"actor,omitempty"`
 	Director     string       `xml:"director,omitempty" json:"director,omitempty"`
 	Credits      string       `xml:"credits,omitempty" json:"credits,omitempty"`
+	UniqueIDs    []UniqueID   `xml:"uniqueid,omitempty"`
 	Thumb        string       `xml:"thumb,omitempty" json:"thumb,omitempty"`
 	Fanart       []Thumb      `xml:"fanart,omitempty" json:"fanart,omitempty"`
 	Banner       []Thumb      `xml:"banner,omitempty" json:"banner,omitempty"`
 	Discart      []Thumb      `xml:"discart,omitempty" json:"discart,omitempty"`
 	Logo         []Thumb      `xml:"logo,omitempty" json:"logo,omitempty"`
 	FileInfo     *VidFileInfo `xml:"fileinfo,omitempty" json:"fileinfo,omitempty"`
+}
+
+type UniqueID struct {
+	Type    string `xml:"type,attr" `
+	Default string `xml:"default,attr"`
+	Value   string `xml:",chardata"`
 }
 
 type Thumb struct {

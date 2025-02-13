@@ -204,39 +204,39 @@ type JFItem struct {
 	PlayAccess               string             `json:"PlayAccess,omitempty"`
 	ProductionYear           int                `json:"ProductionYear,omitempty"`
 	RemoteTrailers           []JFRemoteTrailers `json:"RemoteTrailers,omitempty"`
-	// ProviderIds              JFProviderIds      `json:"ProviderIds,omitempty"`
-	IsFolder                bool               `json:"IsFolder"`
-	ParentID                string             `json:"ParentId,omitempty"`
-	Type                    string             `json:"Type,omitempty"`
-	People                  []JFPeople         `json:"People,omitempty"`
-	Studios                 []JFStudios        `json:"Studios,omitempty"`
-	GenreItems              []JFGenreItems     `json:"GenreItems,omitempty"`
-	LocalTrailerCount       int                `json:"LocalTrailerCount,omitempty"`
-	UserData                JFUserData         `json:"UserData,omitempty"`
-	SpecialFeatureCount     int                `json:"SpecialFeatureCount,omitempty"`
-	DisplayPreferencesID    string             `json:"DisplayPreferencesId,omitempty"`
-	Tags                    []string           `json:"Tags,omitempty"`
-	PrimaryImageAspectRatio float64            `json:"PrimaryImageAspectRatio,omitempty"`
-	MediaStreams            []JFMediaStreams   `json:"MediaStreams,omitempty"`
-	VideoType               string             `json:"VideoType,omitempty"`
-	ImageTags               *JFImageTags       `json:"ImageTags,omitempty"`
-	BackdropImageTags       []string           `json:"BackdropImageTags,omitempty"`
-	ImageBlurHashes         *JFImageBlurHashes `json:"ImageBlurHashes,omitempty"`
-	Chapters                []string           `json:"Chapters,omitempty"`
-	LocationType            string             `json:"LocationType,omitempty"`
-	MediaType               string             `json:"MediaType,omitempty"`
-	LockedFields            []string           `json:"LockedFields,omitempty"`
-	LockData                bool               `json:"LockData,omitempty"`
-	Width                   int                `json:"Width,omitempty"`
-	Height                  int                `json:"Height,omitempty"`
-	SeriesID                string             `json:"SeriesId,omitempty"`
-	SeriesName              string             `json:"SeriesName,omitempty"`
-	SeasonID                string             `json:"SeasonId,omitempty"`
-	SeasonName              string             `json:"SeasonName,omitempty"`
-	IndexNumber             int                `json:"IndexNumber,omitempty"`
-	ParentIndexNumber       int                `json:"ParentIndexNumber,omitempty"`
-	RecursiveItemCount      int                `json:"RecursiveItemCount,omitempty"`
-	HasSubtitles            bool               `json:"HasSubtitles,omitempty"`
+	ProviderIds              JFProviderIds      `json:"ProviderIds,omitempty"`
+	IsFolder                 bool               `json:"IsFolder"`
+	ParentID                 string             `json:"ParentId,omitempty"`
+	Type                     string             `json:"Type,omitempty"`
+	People                   []JFPeople         `json:"People,omitempty"`
+	Studios                  []JFStudios        `json:"Studios,omitempty"`
+	GenreItems               []JFGenreItems     `json:"GenreItems,omitempty"`
+	LocalTrailerCount        int                `json:"LocalTrailerCount,omitempty"`
+	UserData                 JFUserData         `json:"UserData,omitempty"`
+	SpecialFeatureCount      int                `json:"SpecialFeatureCount,omitempty"`
+	DisplayPreferencesID     string             `json:"DisplayPreferencesId,omitempty"`
+	Tags                     []string           `json:"Tags,omitempty"`
+	PrimaryImageAspectRatio  float64            `json:"PrimaryImageAspectRatio,omitempty"`
+	MediaStreams             []JFMediaStreams   `json:"MediaStreams,omitempty"`
+	VideoType                string             `json:"VideoType,omitempty"`
+	ImageTags                *JFImageTags       `json:"ImageTags,omitempty"`
+	BackdropImageTags        []string           `json:"BackdropImageTags,omitempty"`
+	ImageBlurHashes          *JFImageBlurHashes `json:"ImageBlurHashes,omitempty"`
+	Chapters                 []string           `json:"Chapters,omitempty"`
+	LocationType             string             `json:"LocationType,omitempty"`
+	MediaType                string             `json:"MediaType,omitempty"`
+	LockedFields             []string           `json:"LockedFields,omitempty"`
+	LockData                 bool               `json:"LockData,omitempty"`
+	Width                    int                `json:"Width,omitempty"`
+	Height                   int                `json:"Height,omitempty"`
+	SeriesID                 string             `json:"SeriesId,omitempty"`
+	SeriesName               string             `json:"SeriesName,omitempty"`
+	SeasonID                 string             `json:"SeasonId,omitempty"`
+	SeasonName               string             `json:"SeasonName,omitempty"`
+	IndexNumber              int                `json:"IndexNumber,omitempty"`
+	ParentIndexNumber        int                `json:"ParentIndexNumber,omitempty"`
+	RecursiveItemCount       int                `json:"RecursiveItemCount,omitempty"`
+	HasSubtitles             bool               `json:"HasSubtitles,omitempty"`
 }
 
 type JFExternalUrls struct {
@@ -331,9 +331,8 @@ type JFRemoteTrailers struct {
 }
 
 type JFProviderIds struct {
-	Tmdb           string `json:"Tmdb"`
-	Imdb           string `json:"Imdb"`
-	TmdbCollection string `json:"TmdbCollection"`
+	Tmdb string `json:"Tmdb,omitempty"`
+	Imdb string `json:"Imdb,omitempty"`
 }
 
 // ImageBlurHashes Gets or sets the primary image blurhash.

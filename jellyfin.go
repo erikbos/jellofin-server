@@ -8,7 +8,6 @@ import (
 	"math"
 	"net/http"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -938,12 +937,6 @@ func enrichResponseWithNFO(response *JFItem, n *Nfo) {
 	// TV-14
 	response.OfficialRating = n.Mpaa
 
-	// ProviderIds: JFProviderIds{
-	// 	Tmdb:           "9659",
-	// 	Imdb:           "tt0079501",
-	// 	TmdbCollection: "8945",
-	// },
-
 	if n.Rating != 0 {
 		response.CommunityRating = math.Round(float64(n.Rating)*10) / 10
 	}
@@ -968,6 +961,19 @@ func enrichResponseWithNFO(response *JFItem, n *Nfo) {
 				ID:   idHash(n.Studio),
 			},
 		}
+	}
+
+	if len(n.UniqueIDs) != 0 {
+		ids := JFProviderIds{}
+		for _, id := range n.UniqueIDs {
+			switch id.Type {
+			case "imdb":
+				ids.Imdb = id.Value
+			case "themoviedb":
+				ids.Tmdb = id.Value
+			}
+		}
+		response.ProviderIds = ids
 	}
 
 	// if n.Actor != nil {
@@ -1001,14 +1007,11 @@ func enrichResponseWithNFO(response *JFItem, n *Nfo) {
 }
 
 func buildMediaSource(filename string, n *Nfo) (mediasources []JFMediaSources) {
-	// todo: this should be replaced with actual mp4 file detail gathering
-
-	basename := filepath.Base(filename)
 	mediasource := JFMediaSources{
 		ID:                    idHash(filename),
 		ETag:                  idHash(filename),
-		Name:                  basename,
-		Path:                  basename,
+		Name:                  filename,
+		Path:                  filename,
 		Type:                  "Default",
 		Container:             "mp4",
 		Protocol:              "File",
@@ -1054,13 +1057,21 @@ func buildMediaSource(filename string, n *Nfo) (mediasources []JFMediaSources) {
 		Height:           NfoVideo.Height,
 		Width:            NfoVideo.Width,
 		Codec:            NfoVideo.Codec,
+		VideoRange:       "SDR",
+		VideoRangeType:   "SDR",
 	}
 	switch strings.ToLower(NfoVideo.Codec) {
+	case "avc":
+		fallthrough
 	case "x264":
 		fallthrough
 	case "h264":
 		videostream.Codec = "h264"
 		videostream.CodecTag = "avc1"
+	case "x265":
+		fallthrough
+	case "h265":
+		fallthrough
 	case "hevc":
 		videostream.Codec = "hevc"
 		videostream.CodecTag = "hvc1"
@@ -1083,6 +1094,8 @@ func buildMediaSource(filename string, n *Nfo) (mediasources []JFMediaSources) {
 		IsInterlaced:       false,
 		IsAVC:              false,
 		IsDefault:          true,
+		VideoRange:         "Unknown",
+		VideoRangeType:     "Unknown",
 	}
 
 	NfoAudio := n.FileInfo.StreamDetails.Audio
@@ -1090,9 +1103,21 @@ func buildMediaSource(filename string, n *Nfo) (mediasources []JFMediaSources) {
 	audiostream.Channels = NfoAudio.Channels
 
 	switch NfoAudio.Channels {
+	case 1:
+		audiostream.Title = "Mono"
+		audiostream.ChannelLayout = "mono"
 	case 2:
 		audiostream.Title = "Stereo"
 		audiostream.ChannelLayout = "stereo"
+	case 3:
+		audiostream.Title = "2.1 Channel"
+		audiostream.ChannelLayout = "3.0"
+	case 4:
+		audiostream.Title = "3.1 Channel"
+		audiostream.ChannelLayout = "4.0"
+	case 5:
+		audiostream.Title = "4.1 Channel"
+		audiostream.ChannelLayout = "5.0"
 	case 6:
 		audiostream.Title = "5.1 Channel"
 		audiostream.ChannelLayout = "5.1"
