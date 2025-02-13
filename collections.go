@@ -124,6 +124,11 @@ func (p PathString) String() string {
 	return string(p)
 }
 
+const (
+	collectionMovies = "movies"
+	collectionShows  = "shows"
+)
+
 func updateCollections(pace int) {
 	id := 1
 	for i := range config.Collections {
@@ -131,9 +136,9 @@ func updateCollections(pace int) {
 		c.SourceId = id
 		c.BaseUrl = fmt.Sprintf("/data/%d", id)
 		switch c.Type {
-		case "movies":
+		case collectionMovies:
 			buildMovies(c, pace)
-		case "shows":
+		case collectionShows:
 			buildShows(c, pace)
 		}
 		id++

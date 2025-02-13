@@ -180,8 +180,8 @@ type JFItem struct {
 	ID                       string             `json:"Id"`
 	Etag                     string             `json:"Etag"`
 	DateCreated              time.Time          `json:"DateCreated,omitempty"`
-	CanDelete                bool               `json:"CanDelete,omitempty"`
-	CanDownload              bool               `json:"CanDownload,omitempty"`
+	CanDelete                bool               `json:"CanDelete"`
+	CanDownload              bool               `json:"CanDownload"`
 	Container                string             `json:"Container,omitempty"`
 	SortName                 string             `json:"SortName,omitempty"`
 	ForcedSortName           string             `json:"ForcedSortName,omitempty"`

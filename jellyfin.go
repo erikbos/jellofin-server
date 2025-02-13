@@ -59,12 +59,12 @@ func registerJellyfinHandlers(s *mux.Router) {
 
 const (
 	// Misc IDs for api responses
-	serverID              = "2b11644442754f02a0c1e45d2a9f5c71"
-	userID                = "2b1ec0a52b09456c9823a367d84ac9e5"
-	collectionRootID      = "e9d5075a555c1cbc394eec4cef295274"
-	displayPreferencesID  = "f137a2dd21bbc1b99aa5c0f6bf02a805"
-	collectionTypeMovies  = "movies"
-	collectionTypeTVShows = "tvshows"
+	serverID                  = "2b11644442754f02a0c1e45d2a9f5c71"
+	userID                    = "2b1ec0a52b09456c9823a367d84ac9e5"
+	collectionRootID          = "e9d5075a555c1cbc394eec4cef295274"
+	displayPreferencesID      = "f137a2dd21bbc1b99aa5c0f6bf02a805"
+	JellyfinCollectionMovies  = "movies"
+	JellyfinCollectionTVShows = "tvshows"
 
 	// itemid prefixes
 	itemprefix_collection = "collection_"
@@ -163,50 +163,14 @@ func usersHandler(w http.ResponseWriter, r *http.Request) {
 // curl -v 'http://127.0.0.1:9090/Users/2b1ec0a52b09456c9823a367d84ac9e5/Views?IncludeExternalContent=false'
 func usersViewsHandler(w http.ResponseWriter, r *http.Request) {
 	items := []JFItem{}
-
 	for _, c := range config.Collections {
-		itemID := genCollectionID(c.SourceId)
-
-		// Root item
-		item := JFItem{
-			ServerID:                 serverID,
-			ParentID:                 collectionRootID,
-			Type:                     "CollectionFolder",
-			IsFolder:                 true,
-			DateCreated:              time.Now().UTC(),
-			PremiereDate:             time.Now().UTC(),
-			Name:                     c.Name_,
-			SortName:                 c.Name_,
-			ID:                       itemID,
-			Etag:                     idHash(itemID),
-			CanDelete:                false,
-			CanDownload:              false,
-			EnableMediaSourceDisplay: true,
-			PlayAccess:               "Full",
-			RemoteTrailers:           []JFRemoteTrailers{},
-			LocalTrailerCount:        0,
-			ChildCount:               len(c.Items),
-			SpecialFeatureCount:      0,
-			DisplayPreferencesID:     displayPreferencesID,
-			LocationType:             "Remote",
-			Path:                     "/collection",
-			MediaType:                "Unknown",
-			LockData:                 false,
+		if item, err := buildJFItemCollection(genCollectionID(c.SourceId)); err == nil {
+			items = append(items, item)
 		}
-
-		switch c.Type {
-		case "movies":
-			item.CollectionType = collectionTypeMovies
-		case "shows":
-			item.CollectionType = collectionTypeTVShows
-		}
-
-		items = append(items, item)
 	}
-
 	response := JFUserViewsResponse{
 		Items:            items,
-		TotalRecordCount: len(config.Collections),
+		TotalRecordCount: len(items),
 		StartIndex:       0,
 	}
 	serveJSON(response, w)
@@ -282,7 +246,7 @@ func usersItemHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Item not found", http.StatusNotFound)
 		return
 	}
-	serveJSON(buildJFItem(c, i, false), w)
+	serveJSON(buildJFItem(i, idHash(c.Name_), c.Type, false), w)
 }
 
 // curl -v 'http://127.0.0.1:9090/Users/2b1ec0a52b09456c9823a367d84ac9e5/Items?ExcludeLocationTypes=Virtual&Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount&ParentId=f137a2dd21bbc1b99aa5c0f6bf02a805&SortBy=SortName,ProductionYear&SortOrder=Ascending&IncludeItemTypes=Movie&Recursive=true&StartIndex=0&Limit=50'
@@ -290,48 +254,37 @@ func usersItemHandler(w http.ResponseWriter, r *http.Request) {
 // curl -v 'http://127.0.0.1:9090/Users/2b1ec0a52b09456c9823a367d84ac9e5/Items?ExcludeLocationTypes=Virtual&Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount&SearchTerm=p&Recursive=true&Limit=24
 
 // generate list of items based upon provided ParentId or a text searchTerm
+// query params:
+// - ParentId, if provided scope result set to this collection
+// - SearchTerm, substring to match on
+// - StartIndex, index of first result item
+// - Limit=50, number of items to return
 func usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 	queryparams := r.URL.Query()
-
-	// collection id provided?
-	var c *Collection
-	collectionid, err := getCollectionID(queryparams.Get("ParentId"))
-
-	// FIXME: if searchTerm provided search in collection "2" (TV)
 	searchTerm := queryparams.Get("SearchTerm")
-	if searchTerm != "" {
-		collectionid = "2"
-		err = nil
+
+	searchCollection := queryparams.Get("ParentId")
+	var searchC *Collection
+	if searchCollection != "" {
+		collectionid := strings.TrimPrefix(searchCollection, itemprefix_collection)
+		searchC = getCollection(collectionid)
 	}
 
-	if collectionid == "" {
-		// TODO: this could be a search by person :)
-		http.Error(w, "Collection not found", http.StatusNotFound)
-		return
-	}
+	items := []JFItem{}
+	for _, c := range config.Collections {
+		// Skip if we are searching in one particular collection
+		if searchC != nil && searchC.SourceId != c.SourceId {
+			continue
+		}
 
-	if err == nil {
-		c = getCollection(collectionid)
-		if c == nil {
-			http.Error(w, "Collection not found", http.StatusNotFound)
-			return
-		}
-	}
-	var items []*Item
-	for _, i := range c.Items {
-		// Was a collectionId provided?
-		if collectionid != "" {
-			// log.Printf("provided collection: %s, searching in collection: %+v\n", collectionid, c)
-			if c.SourceId == 0 {
-				break
+		for _, i := range c.Items {
+			if searchTerm == "" || strings.Contains(strings.ToLower(i.Name), strings.ToLower(searchTerm)) {
+				// fixup sortname if need so we can sort later
+				if i.SortName == "" {
+					i.SortName = i.Name
+				}
+				items = append(items, buildJFItem(i, idHash(c.Name_), c.Type, true))
 			}
-		}
-		if searchTerm == "" || strings.Contains(strings.ToLower(i.Name), strings.ToLower(searchTerm)) {
-			// fix: sortname should be set at the source in Item
-			if i.SortName == "" {
-				i.SortName = i.Name
-			}
-			items = append(items, i)
 		}
 	}
 
@@ -339,56 +292,60 @@ func usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 	sortBy := queryparams.Get("SortBy")
 	if sortBy != "" {
 		sortFields := strings.Split(sortBy, ",")
+
+		sortOrder := queryparams.Get("SortOrder")
+		var sortDescending bool
+		if sortOrder == "Descending" {
+			sortDescending = true
+		}
+
 		sort.SliceStable(items, func(i, j int) bool {
-			sortOrder := queryparams.Get("SortOrder")
 			for _, field := range sortFields {
 				switch strings.ToLower(field) {
 				case "sortname":
 					if items[i].SortName != items[j].SortName {
-						if sortOrder == "Descending" {
+						if sortDescending {
 							return items[i].SortName > items[j].SortName
 						}
 						return items[i].SortName < items[j].SortName
 					}
 				case "productionyear":
-					if items[i].Year != items[j].Year {
-						if sortOrder == "Descending" {
-							return items[i].Year > items[j].Year
+					if items[i].ProductionYear != items[j].ProductionYear {
+						if sortDescending {
+							return items[i].ProductionYear > items[j].ProductionYear
 						}
-						return items[i].Year < items[j].Year
+						return items[i].ProductionYear < items[j].ProductionYear
 					}
 				case "criticrating":
-					if items[i].Rating != items[j].Rating {
-						if sortOrder == "Descending" {
-							return items[i].Rating > items[j].Rating
+					if items[i].CriticRating != items[j].CriticRating {
+						if sortDescending {
+							return items[i].CriticRating > items[j].CriticRating
 						}
-						return items[i].Rating < items[j].Rating
+						return items[i].CriticRating < items[j].CriticRating
 					}
+				default:
+					log.Printf("usersItemsHandler: unknown sortorder %s\n", sortBy)
 				}
 			}
 			return false
 		})
 	}
 
+	totalItemCount := len(items)
+
 	// Apply pagination
-	startIndex, _ := strconv.Atoi(queryparams.Get("StartIndex"))
-	limit, _ := strconv.Atoi(queryparams.Get("Limit"))
-	if startIndex >= 0 && startIndex < len(items) {
+	startIndex, startIndexErr := strconv.Atoi(queryparams.Get("StartIndex"))
+	if startIndexErr == nil && startIndex >= 0 && startIndex < len(items) {
 		items = items[startIndex:]
 	}
-	if limit > 0 && limit < len(items) {
+	limit, limitErr := strconv.Atoi(queryparams.Get("Limit"))
+	if limitErr == nil && limit > 0 && limit < len(items) {
 		items = items[:limit]
 	}
 
-	// Create API response
-	responseItems := []JFItem{}
-	for _, i := range items {
-		responseItems = append(responseItems, buildJFItem(c, i, true))
-	}
 	response := UserItemsResponse{
-		Items: responseItems,
-		// total count in collection, not count in returned page
-		TotalRecordCount: len(c.Items),
+		Items:            items,
+		TotalRecordCount: totalItemCount,
 		StartIndex:       0,
 	}
 	serveJSON(response, w)
@@ -396,13 +353,46 @@ func usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 
 // curl -v 'http://127.0.0.1:9090/Users/2b1ec0a52b09456c9823a367d84ac9e5/Items/Latest?Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount&ParentId=f137a2dd21bbc1b99aa5c0f6bf02a805&StartIndex=0&Limit=20'
 
+// generate list of new items based upon provided ParentId
+// query params:
+// - ParentId, if provided scope result set to this collection
+// - StartIndex, index of first result item
+// - Limit=50, number of items to return
 func usersItemsLatestHandler(w http.ResponseWriter, r *http.Request) {
-	c1, i1 := getItemByID("rVFG3EzPthk2wowNkqUl")
-	c2, i2 := getItemByID("q2e2UzCOd9zkmJenIOph")
-	items := []JFItem{
-		buildJFItem(c1, i1, true),
-		buildJFItem(c2, i2, true),
+	queryparams := r.URL.Query()
+	searchCollection := queryparams.Get("ParentId")
+	var searchC *Collection
+	if searchCollection != "" {
+		collectionid := strings.TrimPrefix(searchCollection, itemprefix_collection)
+		searchC = getCollection(collectionid)
 	}
+
+	items := []JFItem{}
+	for _, c := range config.Collections {
+		// Skip if we are searching in one particular collection
+		if searchC != nil && searchC.SourceId != c.SourceId {
+			continue
+		}
+		for _, i := range c.Items {
+			items = append(items, buildJFItem(i, idHash(c.Name_), c.Type, true))
+		}
+	}
+
+	// Sort by premieredate to list most recent releases first
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].PremiereDate.After(items[j].PremiereDate)
+	})
+
+	// Apply pagination
+	startIndex, startIndexErr := strconv.Atoi(queryparams.Get("StartIndex"))
+	if startIndexErr == nil && startIndex >= 0 && startIndex < len(items) {
+		items = items[startIndex:]
+	}
+	limit, limitErr := strconv.Atoi(queryparams.Get("Limit"))
+	if limitErr == nil && limit > 0 && limit < len(items) {
+		items = items[:limit]
+	}
+
 	serveJSON(items, w)
 }
 
@@ -418,10 +408,10 @@ func libraryVirtualFoldersHandler(w http.ResponseWriter, r *http.Request) {
 			Locations:          []string{"/"},
 		}
 		switch c.Type {
-		case "movies":
-			l.CollectionType = collectionTypeMovies
-		case "shows":
-			l.CollectionType = collectionTypeTVShows
+		case collectionMovies:
+			l.CollectionType = JellyfinCollectionMovies
+		case collectionShows:
+			l.CollectionType = JellyfinCollectionTVShows
 		}
 		libraries = append(libraries, l)
 	}
@@ -656,7 +646,7 @@ func showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 	c, i := getItemByID("rVFG3EzPthk2wowNkqUl")
 	response := JFShowsNextUpResponse{
 		Items: []JFItem{
-			buildJFItem(c, i, true),
+			buildJFItem(i, idHash(c.Name_), c.Type, true),
 		},
 		TotalRecordCount: 1,
 		StartIndex:       0,
@@ -720,11 +710,6 @@ func serveFile(w http.ResponseWriter, r *http.Request, filename string) {
 }
 
 func buildJFItemCollection(itemid string) (response JFItem, e error) {
-	if !strings.HasPrefix(itemid, itemprefix_collection) {
-		e = errors.New("malformed collection id")
-		return
-	}
-
 	collectionid := strings.TrimPrefix(itemid, itemprefix_collection)
 	c := getCollection(collectionid)
 	if c == nil {
@@ -754,24 +739,28 @@ func buildJFItemCollection(itemid string) (response JFItem, e error) {
 		MediaType:                "Unknown",
 		ParentID:                 "e9d5075a555c1cbc394eec4cef295274",
 		CanDelete:                false,
-		CanDownload:              false,
+		CanDownload:              true,
 		SpecialFeatureCount:      0,
+		// TODO: we do not support images for a collection
+		// ImageTags: &JFImageTags{
+		// 	Primary: "collection",
+		// },
 	}
 	switch c.Type {
-	case "movies":
-		response.CollectionType = collectionTypeMovies
-	case "shows":
-		response.CollectionType = collectionTypeTVShows
+	case collectionMovies:
+		response.CollectionType = JellyfinCollectionMovies
+	case collectionShows:
+		response.CollectionType = JellyfinCollectionTVShows
 	}
 	response.SortName = response.CollectionType
 	return
 }
 
 // buildJFItem builds movie or show from db
-func buildJFItem(c *Collection, i *Item, listView bool) (response JFItem) {
+func buildJFItem(i *Item, parentId, collectionType string, listView bool) (response JFItem) {
 	response = JFItem{
 		ID:                      i.Id,
-		ParentID:                idHash(c.Name_),
+		ParentID:                parentId,
 		ServerID:                serverID,
 		Name:                    i.Name,
 		OriginalTitle:           i.Name,
@@ -781,6 +770,8 @@ func buildJFItem(c *Collection, i *Item, listView bool) (response JFItem) {
 		DateCreated:             time.Unix(i.FirstVideo/1000, 0).UTC(),
 		PremiereDate:            time.Unix(i.FirstVideo/1000, 0).UTC(),
 		PrimaryImageAspectRatio: 0.6666666666666666,
+		CanDelete:               false,
+		CanDownload:             true,
 	}
 
 	response.ImageTags = &JFImageTags{
@@ -792,7 +783,7 @@ func buildJFItem(c *Collection, i *Item, listView bool) (response JFItem) {
 		response.ID,
 	}
 
-	if c.Type == "movies" {
+	if collectionType == collectionMovies {
 		response.Type = "Movie"
 		response.IsFolder = false
 		response.LocationType = "FileSystem"
@@ -802,8 +793,7 @@ func buildJFItem(c *Collection, i *Item, listView bool) (response JFItem) {
 		response.Container = "mov,mp4,m4a"
 
 		lazyLoadNFO(&i.Nfo, i.NfoPath)
-		filename := c.Directory + "/" + i.Name + "/" + i.Video
-		response.MediaSources = buildMediaSource(filename, i.Nfo)
+		response.MediaSources = buildMediaSource(i.Video, i.Nfo)
 
 		// listview = true, movie carousel return both primary and BackdropImageTags
 		// non-listview = false, remove primary (thumbnail) image reference
@@ -812,7 +802,7 @@ func buildJFItem(c *Collection, i *Item, listView bool) (response JFItem) {
 		}
 	}
 
-	if c.Type == "shows" {
+	if collectionType == collectionShows {
 		response.Type = "Series"
 		response.IsFolder = true
 		response.ChildCount = len(i.Seasons)
@@ -849,6 +839,8 @@ func buildJFItemSeason(seasonid string) (response JFItem, err error) {
 		RecursiveItemCount: len(season.Episodes),
 		DateCreated:        time.Now().UTC(),
 		PremiereDate:       time.Now().UTC(),
+		CanDelete:          false,
+		CanDownload:        true,
 		ImageTags: &JFImageTags{
 			Primary: "season",
 		},
@@ -880,6 +872,8 @@ func buildJFItemEpisode(episodeid string) (response JFItem, err error) {
 		HasSubtitles: true,
 		DateCreated:  time.Unix(episode.VideoTS/1000, 0).UTC(),
 		PremiereDate: time.Unix(episode.VideoTS/1000, 0).UTC(),
+		CanDelete:    false,
+		CanDownload:  true,
 		ImageTags: &JFImageTags{
 			Primary: "episode",
 		},
@@ -1180,18 +1174,6 @@ func getEpisodeByID(episodeId string) (*Collection, *Item, *Season, *Episode) {
 		}
 	}
 	return nil, nil, nil, nil
-}
-
-func searchItemByName(searchkey string) (*Collection, *Item) {
-	// fixme: wooho O(n^^4) "just temporarily.."
-	for _, c := range config.Collections {
-		for _, i := range c.Items {
-			if strings.Contains(i.Name, searchkey) {
-				return &c, i
-			}
-		}
-	}
-	return nil, nil
 }
 
 func parseTime(input string) (parsedTime time.Time, err error) {
