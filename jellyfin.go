@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -51,9 +50,7 @@ func registerJellyfinHandlers(s *mux.Router) {
 
 	r.Handle("/Persons", gzip(personsHandler))
 
-	r.Handle("/Sessions/Playing", gzip(sessionsPlayingHandler)).Methods("POST")
-	r.Handle("/Sessions/Playing/Progress", gzip(sessionsPlayingProgressHandler)).Methods("POST")
-	r.Handle("/Sessions/Playing/Stopped", gzip(sessionsPlayingStoppedHandler)).Methods("POST")
+	registerPlayStateHandlers(r)
 }
 
 const (
@@ -575,21 +572,19 @@ func itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 
 // curl -v 'http://127.0.0.1:9090/Items/68d73f6f48efedb7db697bf9fee580cb/PlaybackInfo?UserId=2b1ec0a52b09456c9823a367d84ac9e5'
 func itemsPlaybackInfoHandler(w http.ResponseWriter, r *http.Request) {
-	// vars := mux.Vars(r)
-	// itemId := vars["item"]
+	vars := mux.Vars(r)
+	itemId := vars["item"]
+	queryparams := r.URL.Query()
+	userId := queryparams.Get("UserId")
 
-	// c, i := getItemByID(itemId)
-	// if i == nil || i.Video == "" {
-	// 	http.Error(w, "Item not found", http.StatusNotFound)
-	// 	return
-	// }
-	// item := buildJFItem(c, i, true)
+	if userId == "" {
+		w.WriteHeader(http.StatusBadRequest)
+	}
 
 	response := JFUsersPlaybackInfoResponse{
 		MediaSources: buildMediaSource("test.mp4", nil),
-		// TODO this static id should be generated based upon authenticated user
 		// this id is used when submitting playstate via /Sessions/Playing endpoints
-		PlaySessionID: "fc3b27127bf84ed89a300c6285d697e2",
+		PlaySessionID: PlayState.New(userId, itemId),
 	}
 	serveJSON(response, w)
 }
@@ -651,45 +646,6 @@ func showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 		StartIndex:       0,
 	}
 	serveJSON(response, w)
-}
-
-// PositionTicks are in micro seconds
-const TicsToSeconds = 10000000
-
-func sessionsPlayingHandler(w http.ResponseWriter, r *http.Request) {
-	var request JFPlayState
-	err := json.NewDecoder(r.Body).Decode(&request)
-	if err != nil {
-		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
-		return
-	}
-	log.Printf("sessionsPlayingHandler %+v\n", request)
-	log.Printf("sessionsPlayingHandler Progress: %d seconds\n", request.PositionTicks/TicsToSeconds)
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func sessionsPlayingProgressHandler(w http.ResponseWriter, r *http.Request) {
-	var request JFPlayState
-	err := json.NewDecoder(r.Body).Decode(&request)
-	if err != nil {
-		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
-		return
-	}
-	log.Printf("sessionsPlayingProgressHandler %+v\n", request)
-	log.Printf("sessionsPlayingProgressHandler Progress: %d seconds\n", request.PositionTicks/TicsToSeconds)
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func sessionsPlayingStoppedHandler(w http.ResponseWriter, r *http.Request) {
-	var request JFPlayState
-	err := json.NewDecoder(r.Body).Decode(&request)
-	if err != nil {
-		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
-		return
-	}
-	log.Printf("sessionsPlayingStoppedHandler %+v\n", request)
-	log.Printf("sessionsPlayingStoppedHandler Progress: %d seconds\n", request.PositionTicks/TicsToSeconds)
-	w.WriteHeader(http.StatusNoContent)
 }
 
 func serveFile(w http.ResponseWriter, r *http.Request, filename string) {
@@ -805,6 +761,31 @@ func buildJFItem(i *Item, parentId, collectionType string, listView bool) (respo
 		response.Type = "Series"
 		response.IsFolder = true
 		response.ChildCount = len(i.Seasons)
+
+		// var episodeCount, playedEpisodes int
+		// for _, season := range i.Seasons {
+		// 	for _, e := range season.Episodes {
+
+		// 		episodeId := itemprefix_episode + e.Id
+		// 		episode, _ := buildJFItemEpisode(episodeId)
+
+		// 		episodeCount++
+
+		// 		episodePlaystate := PlayState.ItemUserData(&episode, "2b1ec0a52b09456c9823a367d84ac9e5")
+		// 		if episodePlaystate != nil {
+		// 			if episodePlaystate.Played {
+		// 				playedEpisodes++
+		// 			}
+		// 			// playedPercentage += episodePlaystate.PlayedPercentage
+		// 		}
+		// 	}
+		// }
+		// response.UserData = &JFUserData{
+		// 	LastPlayedDate:    time.Now(),
+		// 	UnplayedItemCount: episodeCount - playedEpisodes,
+		// 	Key:               response.ID,
+		// }
+		// response.UserData.PlayedPercentage = float64(playedEpisodes) / float64(episodeCount)
 	}
 
 	enrichResponseWithNFO(&response, i.Nfo)
@@ -844,6 +825,27 @@ func buildJFItemSeason(seasonid string) (response JFItem, err error) {
 			Primary: "season",
 		},
 	}
+
+	// var playedEpisodes int
+	// for _, e := range season.Episodes {
+	// 	episodeId := itemprefix_episode + e.Id
+	// 	episode, _ := buildJFItemEpisode(episodeId)
+
+	// 	episodePlaystate := PlayState.ItemUserData(&episode, "2b1ec0a52b09456c9823a367d84ac9e5")
+	// 	if episodePlaystate != nil {
+	// 		if episodePlaystate.Played {
+	// 			playedEpisodes++
+	// 		}
+	// 		// playedPercentage += episodePlaystate.PlayedPercentage
+	// 	}
+	// }
+	// response.UserData = &JFUserData{
+	// 	LastPlayedDate:    time.Now(),
+	// 	UnplayedItemCount: response.ChildCount - playedEpisodes,
+	// 	Key:               response.ID,
+	// }
+	// response.UserData.PlayedPercentage = (float64(len(season.Episodes)) - float64(response.UserData.UnplayedItemCount)) / float64(len(season.Episodes))
+
 	return response, nil
 }
 
@@ -896,6 +898,10 @@ func buildJFItemEpisode(episodeid string) (response JFItem, err error) {
 
 	// Add some generic mediasource to indicate "720p, stereo"
 	response.MediaSources = buildMediaSource(episode.Video, episode.Nfo)
+
+	if playstate := PlayState.ItemUserData(&response, "2b1ec0a52b09456c9823a367d84ac9e5"); playstate != nil {
+		response.UserData = playstate
+	}
 
 	return response, nil
 }

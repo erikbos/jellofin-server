@@ -162,17 +162,6 @@ type JFUserViewsResponse struct {
 	StartIndex       int      `json:"StartIndex"`
 }
 
-type ProviderIds struct {
-}
-
-type UserData struct {
-	PlaybackPositionTicks int    `json:"PlaybackPositionTicks"`
-	PlayCount             int    `json:"PlayCount"`
-	IsFavorite            bool   `json:"IsFavorite"`
-	Played                bool   `json:"Played"`
-	Key                   string `json:"Key"`
-}
-
 type JFItem struct {
 	Name                     string             `json:"Name"`
 	OriginalTitle            string             `json:"OriginalTitle,omitempty"`
@@ -212,7 +201,7 @@ type JFItem struct {
 	Studios                  []JFStudios        `json:"Studios,omitempty"`
 	GenreItems               []JFGenreItems     `json:"GenreItems,omitempty"`
 	LocalTrailerCount        int                `json:"LocalTrailerCount,omitempty"`
-	UserData                 JFUserData         `json:"UserData,omitempty"`
+	UserData                 *JFUserData        `json:"UserData,omitempty"`
 	SpecialFeatureCount      int                `json:"SpecialFeatureCount,omitempty"`
 	DisplayPreferencesID     string             `json:"DisplayPreferencesId,omitempty"`
 	Tags                     []string           `json:"Tags,omitempty"`
@@ -371,12 +360,14 @@ type JFGenreItems struct {
 	ID   string `json:"Id"`
 }
 type JFUserData struct {
-	PlaybackPositionTicks int       `json:"PlaybackPositionTicks"`
+	PlaybackPositionTicks int64     `json:"PlaybackPositionTicks"`
+	PlayedPercentage      float64   `json:"PlayedPercentage"`
 	PlayCount             int       `json:"PlayCount"`
 	IsFavorite            bool      `json:"IsFavorite"`
 	LastPlayedDate        time.Time `json:"LastPlayedDate,omitempty"`
 	Played                bool      `json:"Played"`
 	Key                   string    `json:"Key"`
+	UnplayedItemCount     int       `json:"UnplayedItemCount"`
 }
 
 type JFImageTags struct {
@@ -462,21 +453,96 @@ type JFMediaLibrary struct {
 	RefreshStatus      string           `json:"RefreshStatus,omitempty"`
 }
 
-type JFPlayState struct {
-	CanSeek         bool   `json:"CanSeek"`
-	RepeatMode      string `json:"RepeatMode"`
-	PositionTicks   int    `json:"PositionTicks"`
-	PlaySessionID   string `json:"PlaySessionId"`
-	MediaSourceID   string `json:"MediaSourceId"`
-	ItemID          string `json:"ItemId"`
-	PlayMethod      string `json:"PlayMethod"`
-	IsMuted         bool   `json:"IsMuted"`
-	EventName       string `json:"EventName"`
+type JFPlaybackProgressInfo struct {
+	AspectRatio string `json:"AspectRatio"`
+
+	// AudioStreamIndex Gets or sets the index of the audio stream.
+	AudioStreamIndex int32 `json:"AudioStreamIndex"`
+	Brightness       int32 `json:"Brightness"`
+
+	// CanSeek Gets or sets a value indicating whether this instance can seek.
+	CanSeek *bool `json:"CanSeek,omitempty"`
+
+	// IsMuted Gets or sets a value indicating whether this instance is muted.
+	IsMuted *bool `json:"IsMuted,omitempty"`
+
+	// IsPaused Gets or sets a value indicating whether this instance is paused.
+	IsPaused *bool `json:"IsPaused,omitempty"`
+
+	// Item Gets or sets the item.
+	Item *string `json:"Item"`
+
+	// ItemId Gets or sets the item identifier.
+	ItemId *string `json:"ItemId,omitempty"`
+
+	// LiveStreamId Gets or sets the live stream identifier.
+	LiveStreamId *string `json:"LiveStreamId"`
+
+	// MediaSourceId Gets or sets the media version identifier.
+	MediaSourceId   *string `json:"MediaSourceId"`
 	NowPlayingQueue []struct {
 		PlaylistItemID string `json:"PlaylistItemId"`
 		ID             string `json:"Id"`
 	} `json:"NowPlayingQueue"`
-	PlaylistLength int  `json:"PlaylistLength"`
-	PlaylistIndex  int  `json:"PlaylistIndex"`
-	IsPaused       bool `json:"IsPaused"`
+
+	// PlayMethod Gets or sets the play method.
+	PlayMethod *string `json:"PlayMethod,omitempty"`
+
+	// PlaySessionId Gets or sets the play session identifier.
+	PlaySessionId *string `json:"PlaySessionId"`
+
+	// PlaybackOrder Gets or sets the playback order.
+	PlaybackOrder          *string `json:"PlaybackOrder,omitempty"`
+	PlaybackStartTimeTicks *int64  `json:"PlaybackStartTimeTicks"`
+	PlaylistItemId         *string `json:"PlaylistItemId"`
+
+	// PositionTicks Gets or sets the position ticks.
+	PositionTicks *int64 `json:"PositionTicks"`
+
+	// RepeatMode Gets or sets the repeat mode.
+	RepeatMode *string `json:"RepeatMode,omitempty"`
+
+	// SessionId Gets or sets the session id.
+	SessionId *string `json:"SessionId"`
+
+	// SubtitleStreamIndex Gets or sets the index of the subtitle stream.
+	SubtitleStreamIndex *int32 `json:"SubtitleStreamIndex"`
+
+	// VolumeLevel Gets or sets the volume level.
+	VolumeLevel *int32 `json:"VolumeLevel"`
 }
+
+// type JFUserData struct {
+// 	// IsFavorite Gets or sets a value indicating whether this instance is favorite.
+// 	IsFavorite *bool `json:"IsFavorite,omitempty"`
+
+// 	// ItemId Gets or sets the item identifier.
+// 	ItemId string `json:"ItemId,omitempty"`
+
+// 	// Key Gets or sets the key.
+// 	Key *string `json:"Key,omitempty"`
+
+// 	// LastPlayedDate Gets or sets the last played date.
+// 	LastPlayedDate *time.Time `json:"LastPlayedDate"`
+
+// 	// Likes Gets or sets a value indicating whether this MediaBrowser.Model.Dto.UserItemDataDto is likes.
+// 	Likes *bool `json:"Likes"`
+
+// 	// PlayCount Gets or sets the play count.
+// 	PlayCount *int32 `json:"PlayCount,omitempty"`
+
+// 	// PlaybackPositionTicks Gets or sets the playback position ticks.
+// 	PlaybackPositionTicks *int64 `json:"PlaybackPositionTicks,omitempty"`
+
+// 	// Played Gets or sets a value indicating whether this MediaBrowser.Model.Dto.UserItemDataDto is played.
+// 	Played *bool `json:"Played,omitempty"`
+
+// 	// PlayedPercentage Gets or sets the played percentage.
+// 	PlayedPercentage *float64 `json:"PlayedPercentage"`
+
+// 	// Rating Gets or sets the rating.
+// 	Rating *float64 `json:"Rating"`
+
+// 	// UnplayedItemCount Gets or sets the unplayed item count.
+// 	UnplayedItemCount *int32 `json:"UnplayedItemCount"`
+// }

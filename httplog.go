@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 	"net/http"
-	"strconv"
 	"time"
 )
 
@@ -42,16 +41,24 @@ func HttpLog(handle http.Handler) http.HandlerFunc {
 		end := time.Now()
 		latency := end.Sub(start)
 
-		log.Printf("%v %s %s \"%s %s %s\" %d %d %s %v",
+		if writer.status != 200 && writer.status != 302 {
+			log.Printf("\n")
+		}
+
+		// request.URL.RawQuery = ""
+
+		log.Printf("%s %s %s %s %d %d %v",
 			end.Format("2006/01/02 15:04:05"),
-			request.Host,
-			request.RemoteAddr,
 			request.Method,
 			request.URL.String(),
 			request.Proto,
 			writer.status,
 			writer.length,
-			strconv.Quote(request.Header.Get("User-Agent")),
+			// strconv.Quote(request.Header.Get("User-Agent")),
 			latency)
+
+		if writer.status != 200 && writer.status != 302 {
+			log.Printf("\n")
+		}
 	}
 }
