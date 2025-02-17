@@ -2,12 +2,15 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type DbItem struct {
@@ -22,17 +25,27 @@ type DbItem struct {
 	LastVideo  int64
 }
 
+type DbUser struct {
+	Id       string
+	Username string
+	Password string
+}
+
 var dbHandle *sqlx.DB
 
 func dbInit(dbFile string) (err error) {
 	dbHandle, err = sqlx.Connect("sqlite3", dbFile)
-	if err == nil {
-		_, err = dbHandle.Query("SELECT count(*) FROM items")
-		if err != nil {
-			// database is empty, CREATE tables.
-			err = dbInitSchema()
-		}
+	if err != nil {
+		return
 	}
+	err = dbInitSchema()
+	// if err == nil {
+	// 	_, err = dbHandle.Query("SELECT count(*) FROM items")
+	// 	if err != nil {
+	// 		// database is empty, CREATE tables.
+	// 		err = dbInitSchema()
+	// 	}
+	// }
 	return
 }
 
@@ -42,29 +55,34 @@ func dbInitSchema() error {
 		return err
 	}
 
-	schema := `
-	CREATE TABLE items(
-		id TEXT NOT NULL PRIMARY KEY
-		name TEXT NOT NULL PRIMARY,
-		votes INTEGER,
-		year INTEGER,
-		genre TEXT NOT NULL,
-		rating REAL,
-		nfotime INTEGER NOT NULL,
-		firstvideo INTEGER NOT NULL,
-		lastvideo INTEGER NOT NULL
-	);`
-	_, err = tx.Exec(schema)
-	if err != nil {
-		tx.Rollback()
-		return err
+	schema := []string{
+		`CREATE TABLE IF NOT EXISTS items(
+id TEXT NOT NULL PRIMARY KEY,
+name TEXT NOT NULL,
+votes INTEGER,
+year INTEGER,
+genre TEXT NOT NULL,
+rating REAL,
+nfotime INTEGER NOT NULL,
+firstvideo INTEGER NOT NULL,
+lastvideo INTEGER NOT NULL);`,
+
+		`CREATE INDEX IF NOT EXISTS items_name_idx ON items (name);`,
+
+		`CREATE TABLE IF NOT EXISTS users (
+id TEXT NOT NULL PRIMARY KEY,
+username TEXT NOT NULL,
+password TEXT NOT NULL);`,
+
+		`CREATE UNIQUE INDEX IF NOT EXISTS users_name_idx ON users (username);`,
 	}
 
-	index := "CREATE INDEX items_name_idx ON items (name);"
-	_, err = tx.Exec(index)
-	if err != nil {
-		tx.Rollback()
-		return err
+	for _, query := range schema {
+		if _, err = tx.Exec(query); err != nil {
+			log.Printf("dbInitSchema error: %s\n", err)
+			tx.Rollback()
+			return err
+		}
 	}
 
 	tx.Commit()
@@ -205,4 +223,47 @@ func dbLoadItem(coll *Collection, item *Item) {
 	}
 
 	tx.Commit()
+}
+
+var (
+	ErrUserNotFound    = errors.New("user not found")
+	ErrInvalidPassword = errors.New("invalid password")
+)
+
+// dbUserValidate checks if the user exists and the password is correct.
+func dbUserValidate(username, password *string) (user *DbUser, err error) {
+	var data DbUser
+	sqlerr := dbHandle.Get(&data, "SELECT * FROM users WHERE username=? LIMIT 1", username)
+	if sqlerr != nil {
+		return nil, ErrUserNotFound
+
+	}
+	err = bcrypt.CompareHashAndPassword([]byte(data.Password), []byte(*password))
+	if err != nil {
+		return nil, ErrInvalidPassword
+	}
+	return &data, nil
+}
+
+// dbUserInsert inserts a new user into the database.
+func dbUserInsert(username, password *string) (user *DbUser, err error) {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(*password), bcrypt.MinCost)
+	if err != nil {
+		return nil, err
+	}
+
+	user = &DbUser{
+		Id:       idHash(*username),
+		Username: *username,
+		Password: string(hashedPassword),
+	}
+
+	tx, _ := dbHandle.Beginx()
+	_, err = tx.NamedExec(`INSERT INTO users (id, username, password) `+
+		`VALUES (:id, :username, :password)`, user)
+	if err != nil {
+		tx.Rollback()
+	}
+	tx.Commit()
+	return
 }

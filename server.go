@@ -28,6 +28,8 @@ type cfgMain struct {
 	Dbdir       string
 	Logfile     string
 	Collections []Collection `cc:"collection"`
+	// indicates if we should auto-register Jellyfin users
+	AutoRegister bool
 }
 
 var config = cfgMain{

@@ -94,11 +94,16 @@ type JFUserPolicy struct {
 	SyncPlayAccess                   string   `json:"SyncPlayAccess"`
 }
 
+type JFAuthenticateUserByName struct {
+	Username *string `json:"Username"`
+
+	Pw *string `json:"Pw"`
+}
 type JFAuthenticateByNameResponse struct {
-	User        JFUser        `json:"User"`
-	SessionInfo JFSessionInfo `json:"SessionInfo"`
-	AccessToken string        `json:"AccessToken"`
-	ServerId    string        `json:"ServerId"`
+	User        JFUser         `json:"User"`
+	SessionInfo *JFSessionInfo `json:"SessionInfo"`
+	AccessToken string         `json:"AccessToken"`
+	ServerId    string         `json:"ServerId"`
 }
 
 type JFUsersItemsResumeResponse struct {
@@ -108,23 +113,17 @@ type JFUsersItemsResumeResponse struct {
 }
 
 type JFSessionInfo struct {
-	PlayState struct {
-		CanSeek       bool   `json:"CanSeek"`
-		IsPaused      bool   `json:"IsPaused"`
-		IsMuted       bool   `json:"IsMuted"`
-		RepeatMode    string `json:"RepeatMode"`
-		PlaybackOrder string `json:"PlaybackOrder"`
-	} `json:"PlayState"`
-	RemoteEndPoint     string    `json:"RemoteEndPoint"`
-	Id                 string    `json:"Id"`
-	UserId             string    `json:"UserId"`
-	UserName           string    `json:"UserName"`
-	Client             string    `json:"Client"`
-	LastActivityDate   time.Time `json:"LastActivityDate"`
-	DeviceName         string    `json:"DeviceName"`
-	DeviceId           string    `json:"DeviceId"`
-	ApplicationVersion string    `json:"ApplicationVersion"`
-	IsActive           bool      `json:"IsActive"`
+	PlayState          *JFPlayState `json:"PlayState,omitempty"`
+	RemoteEndPoint     string       `json:"RemoteEndPoint,omitempty"`
+	Id                 string       `json:"Id,omitempty"`
+	UserId             string       `json:"UserId,omitempty"`
+	UserName           string       `json:"UserName,omitempty"`
+	Client             string       `json:"Client,omitempty"`
+	LastActivityDate   time.Time    `json:"LastActivityDate,omitempty"`
+	DeviceName         string       `json:"DeviceName,omitempty"`
+	DeviceId           string       `json:"DeviceId,omitempty"`
+	ApplicationVersion string       `json:"ApplicationVersion,omitempty"`
+	IsActive           bool         `json:"IsActive"`
 }
 
 type DisplayPreferencesCustomPrefs struct {
@@ -160,9 +159,6 @@ type JFUserViewsResponse struct {
 	Items            []JFItem `json:"Items"`
 	TotalRecordCount int      `json:"TotalRecordCount"`
 	StartIndex       int      `json:"StartIndex"`
-}
-
-type ProviderIds struct {
 }
 
 type UserData struct {

@@ -8,6 +8,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/mattn/go-sqlite3 v1.14.24
+	golang.org/x/crypto v0.33.0
 	gopkg.in/gographics/imagick.v2 v2.7.0
 )
 

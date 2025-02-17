@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"math"
+	"net"
 	"net/http"
 	"os"
 	"sort"
@@ -23,43 +25,46 @@ import (
 func registerJellyfinHandlers(s *mux.Router) {
 	r := s.UseEncodedPath()
 
-	gzip := func(handler http.HandlerFunc) http.Handler {
-		return handlers.CompressHandler(http.HandlerFunc(handler))
+	// Endpoints without auth
+	r.Handle("/System/Info/Public", http.HandlerFunc(systemInfoHandler))
+	r.Handle("/Users/AuthenticateByName", http.HandlerFunc(usersAuthenticateByNameHandler)).Methods("POST")
+
+	middleware := func(handler http.HandlerFunc) http.Handler {
+		return handlers.CompressHandler(authMiddleware(http.HandlerFunc(handler)))
 	}
 
-	r.Handle("/System/Info/Public", gzip(systemInfoHandler))
-	r.Handle("/DisplayPreferences/usersettings", gzip(displayPreferencesHandler))
+	// Endpoints with auth and gzip middleware
+	r.Handle("/DisplayPreferences/usersettings", middleware(displayPreferencesHandler))
+	r.Handle("/Users/{user}", middleware(usersHandler))
+	r.Handle("/Users/{user}/Views", middleware(usersViewsHandler))
+	r.Handle("/Users/{user}/GroupingOptions", middleware(usersGroupingOptionsHandler))
+	r.Handle("/Users/{user}/Items", middleware(usersItemsHandler))
+	r.Handle("/Users/{user}/Items/Latest", middleware(usersItemsLatestHandler))
+	r.Handle("/Users/{user}/Items/{item}", middleware(usersItemHandler))
+	r.Handle("/Users/{user}/Items/Resume", middleware(usersItemsResumeHandler))
 
-	r.Handle("/Users/AuthenticateByName", gzip(usersAuthenticateByNameHandler)).Methods("POST")
-	r.Handle("/Users/{user}", gzip(usersHandler))
-	r.Handle("/Users/{user}/Views", gzip(usersViewsHandler))
-	r.Handle("/Users/{user}/GroupingOptions", gzip(usersGroupingOptionsHandler))
-	r.Handle("/Users/{user}/Items", gzip(usersItemsHandler))
-	r.Handle("/Users/{user}/Items/Latest", gzip(usersItemsLatestHandler))
-	r.Handle("/Users/{user}/Items/{item}", gzip(usersItemHandler))
-	r.Handle("/Users/{user}/Items/Resume", gzip(usersItemsResumeHandler))
+	r.Handle("/Library/VirtualFolders", middleware(libraryVirtualFoldersHandler))
+	r.Handle("/Shows/NextUp", middleware(showsNextUpHandler))
+	r.Handle("/Shows/{show}/Seasons", middleware(showsSeasonsHandler))
+	r.Handle("/Shows/{show}/Episodes", middleware(showsEpisodesHandler))
 
-	r.Handle("/Library/VirtualFolders", gzip(libraryVirtualFoldersHandler))
-	r.Handle("/Shows/NextUp", gzip(showsNextUpHandler))
-	r.Handle("/Shows/{show}/Seasons", gzip(showsSeasonsHandler))
-	r.Handle("/Shows/{show}/Episodes", gzip(showsEpisodesHandler))
+	r.Handle("/Items/{item}/Images/{type}", middleware(itemsImagesHandler))
+	r.Handle("/Items/{item}/PlaybackInfo", middleware(itemsPlaybackInfoHandler))
+	r.Handle("/MediaSegments/{item}", middleware(mediaSegmentsHandler))
+	r.Handle("/Videos/{item}/stream", middleware(videoStreamHandler))
 
-	r.Handle("/Items/{item}/Images/{type}", gzip(itemsImagesHandler))
-	r.Handle("/Items/{item}/PlaybackInfo", gzip(itemsPlaybackInfoHandler))
-	r.Handle("/MediaSegments/{item}", gzip(mediaSegmentsHandler))
-	r.Handle("/Videos/{item}/stream", gzip(videoStreamHandler))
+	r.Handle("/Persons", middleware(personsHandler))
 
-	r.Handle("/Persons", gzip(personsHandler))
-
-	r.Handle("/Sessions/Playing", gzip(sessionsPlayingHandler)).Methods("POST")
-	r.Handle("/Sessions/Playing/Progress", gzip(sessionsPlayingProgressHandler)).Methods("POST")
-	r.Handle("/Sessions/Playing/Stopped", gzip(sessionsPlayingStoppedHandler)).Methods("POST")
+	r.Handle("/Sessions/Playing", middleware(sessionsPlayingHandler)).Methods("POST")
+	r.Handle("/Sessions/Playing/Progress", middleware(sessionsPlayingProgressHandler)).Methods("POST")
+	r.Handle("/Sessions/Playing/Stopped", middleware(sessionsPlayingStoppedHandler)).Methods("POST")
 }
+
+type contextKey string
 
 const (
 	// Misc IDs for api responses
 	serverID                  = "2b11644442754f02a0c1e45d2a9f5c71"
-	userID                    = "2b1ec0a52b09456c9823a367d84ac9e5"
 	collectionRootID          = "e9d5075a555c1cbc394eec4cef295274"
 	displayPreferencesID      = "f137a2dd21bbc1b99aa5c0f6bf02a805"
 	JellyfinCollectionMovies  = "movies"
@@ -75,19 +80,10 @@ const (
 	tagprefix_redirect = "redirect_"
 	// imagetag prefix means we will serve the filename from local disk
 	tagprefix_file = "file_"
-)
 
-var loggedInUser = JFUser{
-	Id:                        userID,
-	ServerId:                  serverID,
-	Name:                      "user",
-	HasPassword:               true,
-	HasConfiguredPassword:     true,
-	HasConfiguredEasyPassword: false,
-	EnableAutoLogin:           false,
-	LastLoginDate:             time.Now(),
-	LastActivityDate:          time.Now(),
-}
+	// Context key holding access token details within a request
+	contextAccessTokenDetails contextKey = "AccessTokenDetails"
+)
 
 // curl -v http://127.0.0.1:9090/System/Info/Public
 func systemInfoHandler(w http.ResponseWriter, r *http.Request) {
@@ -109,24 +105,154 @@ func systemInfoHandler(w http.ResponseWriter, r *http.Request) {
 // Authenticates a user by name.
 // (POST /Users/AuthenticateByName)
 func usersAuthenticateByNameHandler(w http.ResponseWriter, r *http.Request) {
+	var request JFAuthenticateUserByName
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "Invalid request", http.StatusUnauthorized)
+		return
+	}
+
+	if len(*request.Username) == 0 || len(*request.Pw) == 0 {
+		http.Error(w, "username and password required", http.StatusUnauthorized)
+		return
+	}
+
+	embyHeader, err := parseAuthHeader(r)
+	if err != nil || embyHeader == nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	user, err := dbUserValidate(request.Username, request.Pw)
+	if err != nil {
+		if err == ErrUserNotFound && config.AutoRegister {
+			user, err = dbUserInsert(request.Username, request.Pw)
+			if err != nil {
+				http.Error(w, "Failed to auto-register user", http.StatusInternalServerError)
+				return
+			}
+		} else {
+			http.Error(w, "Invalid username/password", http.StatusUnauthorized)
+			return
+		}
+	}
+
+	remoteAddress, _, _ := net.SplitHostPort(r.RemoteAddr)
+
+	session := &JFSessionInfo{
+		Id:                 "e3a869b7a901f8894de8ee65688db6c0",
+		UserId:             user.Id,
+		UserName:           user.Username,
+		Client:             embyHeader.client,
+		DeviceName:         embyHeader.device,
+		DeviceId:           embyHeader.deviceId,
+		ApplicationVersion: embyHeader.version,
+		RemoteEndPoint:     remoteAddress,
+		LastActivityDate:   time.Now().UTC(),
+		IsActive:           true,
+	}
+
+	accesstoken := AccessTokens.New(session)
+
 	response := JFAuthenticateByNameResponse{
-		User: loggedInUser,
-		SessionInfo: JFSessionInfo{
-			RemoteEndPoint:     "192.168.1.223",
-			Id:                 "e3a869b7a901f8894de8ee65688db6c0",
-			UserId:             loggedInUser.Id,
-			UserName:           loggedInUser.Name,
-			Client:             "Infuse-Direct",
-			LastActivityDate:   time.Now(),
-			DeviceName:         "Apple TV",
-			DeviceId:           "F3913A92-6378-48FF-A862-1EFB91C13355",
-			ApplicationVersion: "8.0",
-			IsActive:           true,
-		},
-		AccessToken: "83a6cca4f70f419288bc9f42ba7fa18c",
+		AccessToken: accesstoken,
+		SessionInfo: session,
 		ServerId:    serverID,
+		User: JFUser{
+			ServerId:                  serverID,
+			Id:                        user.Id,
+			Name:                      user.Username,
+			HasPassword:               true,
+			HasConfiguredPassword:     true,
+			HasConfiguredEasyPassword: false,
+			EnableAutoLogin:           false,
+			LastLoginDate:             time.Now().UTC(),
+			LastActivityDate:          time.Now().UTC(),
+		},
 	}
 	serveJSON(response, w)
+}
+
+// authMiddleware extracts and processes emby authorization header
+func authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		embyHeader, err := parseAuthHeader(r)
+		if err != nil || embyHeader == nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		// log.Printf("authMiddleware: Token=%s, Client=%s, Device=%s, DeviceId=%s, Version=%s",
+		// 	embyHeader.token, embyHeader.client, embyHeader.device, embyHeader.deviceID, embyHeader.version)
+
+		tokendetails := AccessTokens.Lookup(embyHeader.token)
+		if tokendetails == nil {
+			http.Error(w, "invalid access token", http.StatusUnauthorized)
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), contextAccessTokenDetails, tokendetails)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// getAccessTokenDetails returns access token details of a request in flight
+func getAccessTokenDetails(r *http.Request) *AccessToken {
+	// This should have been populated by authMiddleware
+	details, ok := r.Context().Value(contextAccessTokenDetails).(*AccessToken)
+	if ok {
+		return details
+	} else {
+		return nil
+	}
+}
+
+// AuthHeaderValues holds parsed x-emby-authorization header
+type AuthHeaderValues struct {
+	device   string
+	deviceId string
+	token    string
+	client   string
+	version  string
+}
+
+// parseAuthHeader parses x-emby-authorization header
+func parseAuthHeader(r *http.Request) (*AuthHeaderValues, error) {
+	errEmbyAuthHeader := errors.New("invalid or no emby-authorization header provided")
+
+	authHeader := r.Header.Get("x-emby-authorization")
+	if authHeader == "" {
+		return nil, errEmbyAuthHeader
+	}
+
+	// MediaBrowser Device="Mac", DeviceId="0dabe147-5d08-4e70-adde-d6b778b725aa", Token="826c2aa3596b47f2a386dd2811248649", Client="Infuse-Direct", Version="8.0.9"
+	i := strings.Index(authHeader, " ")
+	if i == -1 {
+		return nil, errEmbyAuthHeader
+	}
+	authHeader = authHeader[i+1:]
+
+	var result AuthHeaderValues
+	for _, part := range strings.Split(authHeader, ",") {
+		kv := strings.SplitN(strings.TrimSpace(part), "=", 2)
+		if len(kv) == 2 {
+			v := strings.Trim(kv[1], "\"")
+			switch kv[0] {
+			case "Device":
+				result.device = v
+			case "DeviceId":
+				result.deviceId = v
+			case "Token":
+				result.token = v
+			case "Client":
+				result.client = v
+			case "Version":
+				result.version = v
+			}
+		} else {
+			return nil, errEmbyAuthHeader
+		}
+	}
+	return &result, nil
 }
 
 // curl -v 'http://127.0.0.1:9090/DisplayPreferences/usersettings?userId=2b1ec0a52b09456c9823a367d84ac9e5&client=emby'
@@ -156,7 +282,30 @@ func displayPreferencesHandler(w http.ResponseWriter, r *http.Request) {
 
 // curl -v http://127.0.0.1:9090/Users/2b1ec0a52b09456c9823a367d84ac9e5
 func usersHandler(w http.ResponseWriter, r *http.Request) {
-	serveJSON(loggedInUser, w)
+	accessTokenDetails := getAccessTokenDetails(r)
+	if accessTokenDetails == nil {
+		http.Error(w, "accesstoken context not found", http.StatusUnauthorized)
+		return
+	}
+
+	vars := mux.Vars(r)
+	if vars["user"] != accessTokenDetails.session.UserId {
+		http.Error(w, "invalid user id", http.StatusNotFound)
+		return
+	}
+
+	user := JFUser{
+		Id:                        accessTokenDetails.session.UserId,
+		ServerId:                  serverID,
+		Name:                      accessTokenDetails.session.UserName,
+		HasPassword:               true,
+		HasConfiguredPassword:     true,
+		HasConfiguredEasyPassword: false,
+		EnableAutoLogin:           false,
+		LastLoginDate:             time.Now(),
+		LastActivityDate:          time.Now(),
+	}
+	serveJSON(user, w)
 }
 
 // curl -v 'http://127.0.0.1:9090/Users/2b1ec0a52b09456c9823a367d84ac9e5/Views?IncludeExternalContent=false'
@@ -657,38 +806,59 @@ func showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 const TicsToSeconds = 10000000
 
 func sessionsPlayingHandler(w http.ResponseWriter, r *http.Request) {
+	accessTokenDetails := getAccessTokenDetails(r)
+	if accessTokenDetails == nil {
+		http.Error(w, "user not found in context", http.StatusUnauthorized)
+		return
+	}
+
 	var request JFPlayState
 	err := json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
 		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
 		return
 	}
-	log.Printf("sessionsPlayingHandler %+v\n", request)
-	log.Printf("sessionsPlayingHandler Progress: %d seconds\n", request.PositionTicks/TicsToSeconds)
+	// log.Printf("sessionsPlayingHandler %+v\n", request)
+	log.Printf("sessionsPlayingHandler UserId: %s, ItemId: %s, Progress: %d seconds\n",
+		accessTokenDetails.session.UserId, request.ItemID, request.PositionTicks/TicsToSeconds)
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func sessionsPlayingProgressHandler(w http.ResponseWriter, r *http.Request) {
+	accessTokenDetails := getAccessTokenDetails(r)
+	if accessTokenDetails == nil {
+		http.Error(w, "accesstoken context not found", http.StatusUnauthorized)
+		return
+	}
+
 	var request JFPlayState
 	err := json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
 		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
 		return
 	}
-	log.Printf("sessionsPlayingProgressHandler %+v\n", request)
-	log.Printf("sessionsPlayingProgressHandler Progress: %d seconds\n", request.PositionTicks/TicsToSeconds)
+	// log.Printf("sessionsPlayingProgressHandler %+v\n", request)
+	log.Printf("sessionsPlayingProgressHandler UserId: %s, ItemId: %s, Progress: %d seconds\n",
+		accessTokenDetails.session.UserId, request.ItemID, request.PositionTicks/TicsToSeconds)
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func sessionsPlayingStoppedHandler(w http.ResponseWriter, r *http.Request) {
+	accessTokenDetails := getAccessTokenDetails(r)
+	if accessTokenDetails == nil {
+		http.Error(w, "accesstoken context not found", http.StatusUnauthorized)
+		return
+	}
+
 	var request JFPlayState
 	err := json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
 		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
 		return
 	}
-	log.Printf("sessionsPlayingStoppedHandler %+v\n", request)
-	log.Printf("sessionsPlayingStoppedHandler Progress: %d seconds\n", request.PositionTicks/TicsToSeconds)
+	// log.Printf("sessionsPlayingStoppedHandler %+v\n", request)
+	log.Printf("sessionsPlayingStoppedHandler UserId: %s, ItemId: %s, Progress: %d seconds\n",
+		accessTokenDetails.session.UserId, request.ItemID, request.PositionTicks/TicsToSeconds)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1042,8 +1212,13 @@ func buildMediaSource(filename string, n *Nfo) (mediasources []JFMediaSources) {
 	mediasource.Bitrate = NfoVideo.Bitrate
 	mediasource.RunTimeTicks = int64(NfoVideo.DurationInSeconds) * 10000000
 
-	// Take first alpha-3 language, ignore others
-	language := n.FileInfo.StreamDetails.Audio.Language[0:3]
+	// Take first alpha-3 language code, ignore others
+	var language string
+	if n.FileInfo.StreamDetails.Audio != nil && n.FileInfo.StreamDetails.Audio.Language != "" {
+		language = n.FileInfo.StreamDetails.Audio.Language[0:3]
+	} else {
+		language = "eng"
+	}
 
 	// Create video stream with high-level details based upon NFO
 	videostream := JFMediaStreams{
