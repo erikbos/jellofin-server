@@ -1013,6 +1013,8 @@ func buildJFItemCollection(itemid string) (response JFItem, e error) {
 		CanDelete:                false,
 		CanDownload:              true,
 		SpecialFeatureCount:      0,
+		// PremiereDate should be set based upon most recent item in collection
+		PremiereDate: time.Now().UTC(),
 		// TODO: we do not support images for a collection
 		// ImageTags: &JFImageTags{
 		// 	Primary: "collection",
