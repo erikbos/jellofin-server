@@ -42,6 +42,8 @@ func registerJellyfinHandlers(s *mux.Router) {
 	r.Handle("/Users/{user}/Items/Latest", middleware(usersItemsLatestHandler))
 	r.Handle("/Users/{user}/Items/{item}", middleware(usersItemHandler))
 	r.Handle("/Users/{user}/Items/Resume", middleware(usersItemsResumeHandler))
+	r.Handle("/Users/{user}/PlayedItems/{item}", middleware(usersPlayedItemsPostHandler)).Methods("POST")
+	r.Handle("/Users/{user}/PlayedItems/{item}", middleware(usersPlayedItemsDeleteHandler)).Methods("DELETE")
 
 	r.Handle("/Library/VirtualFolders", middleware(libraryVirtualFoldersHandler))
 	r.Handle("/Shows/NextUp", middleware(showsNextUpHandler))
@@ -71,6 +73,7 @@ const (
 	JellyfinCollectionTVShows = "tvshows"
 
 	// itemid prefixes
+	itemprefix_separator  = "_"
 	itemprefix_collection = "collection_"
 	itemprefix_show       = "show_"
 	itemprefix_season     = "season_"
@@ -197,7 +200,7 @@ func authMiddleware(next http.Handler) http.Handler {
 
 // getAccessTokenDetails returns access token details of a request in flight
 func getAccessTokenDetails(r *http.Request) *AccessToken {
-	// This should have been populated by authMiddleware
+	// This should have been populated by authMiddleware()
 	details, ok := r.Context().Value(contextAccessTokenDetails).(*AccessToken)
 	if ok {
 		return details
@@ -220,16 +223,13 @@ func parseAuthHeader(r *http.Request) (*AuthHeaderValues, error) {
 	errEmbyAuthHeader := errors.New("invalid or no emby-authorization header provided")
 
 	authHeader := r.Header.Get("x-emby-authorization")
+	authHeader = strings.TrimPrefix(authHeader, "MediaBrowser ")
 	if authHeader == "" {
 		return nil, errEmbyAuthHeader
 	}
 
+	// MediaBrowser Client="Jellyfin%20Media%20Player", Device="mbp", DeviceId="0dabe147-5d08-4e70-adde-d6b778b725aa", Version="1.11.1", Token="aea78abca5744378b2a2badf710e7307"
 	// MediaBrowser Device="Mac", DeviceId="0dabe147-5d08-4e70-adde-d6b778b725aa", Token="826c2aa3596b47f2a386dd2811248649", Client="Infuse-Direct", Version="8.0.9"
-	i := strings.Index(authHeader, " ")
-	if i == -1 {
-		return nil, errEmbyAuthHeader
-	}
-	authHeader = authHeader[i+1:]
 
 	var result AuthHeaderValues
 	for _, part := range strings.Split(authHeader, ",") {
@@ -302,8 +302,8 @@ func usersHandler(w http.ResponseWriter, r *http.Request) {
 		HasConfiguredPassword:     true,
 		HasConfiguredEasyPassword: false,
 		EnableAutoLogin:           false,
-		LastLoginDate:             time.Now(),
-		LastActivityDate:          time.Now(),
+		LastLoginDate:             time.Now().UTC(),
+		LastActivityDate:          time.Now().UTC(),
 	}
 	serveJSON(user, w)
 }
@@ -350,6 +350,12 @@ func usersItemsResumeHandler(w http.ResponseWriter, r *http.Request) {
 // curl -v 'http://127.0.0.1:9090/Users/2b1ec0a52b09456c9823a367d84ac9e5/Items/f137a2dd21bbc1b99aa5c0f6bf02a805?Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount'
 // handle individual item: any type: collection, a movie/show or individual file
 func usersItemHandler(w http.ResponseWriter, r *http.Request) {
+	accessTokenDetails := getAccessTokenDetails(r)
+	if accessTokenDetails == nil {
+		http.Error(w, "accesstoken not found in context", http.StatusUnauthorized)
+		return
+	}
+
 	vars := mux.Vars(r)
 	itemId := vars["item"]
 
@@ -366,7 +372,7 @@ func usersItemHandler(w http.ResponseWriter, r *http.Request) {
 			serveJSON(collectionItem, w)
 			return
 		case "season":
-			seasonItem, err := buildJFItemSeason(itemId)
+			seasonItem, err := buildJFItemSeason(accessTokenDetails.session.UserId, itemId)
 			if err != nil {
 				http.Error(w, "Could not find season", http.StatusNotFound)
 				return
@@ -374,7 +380,7 @@ func usersItemHandler(w http.ResponseWriter, r *http.Request) {
 			serveJSON(seasonItem, w)
 			return
 		case "episode":
-			episodeItem, err := buildJFItemEpisode(itemId)
+			episodeItem, err := buildJFItemEpisode(accessTokenDetails.session.UserId, itemId)
 			if err != nil {
 				http.Error(w, "Could not find episode", http.StatusNotFound)
 				return
@@ -394,7 +400,7 @@ func usersItemHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Item not found", http.StatusNotFound)
 		return
 	}
-	serveJSON(buildJFItem(i, idHash(c.Name_), c.Type, false), w)
+	serveJSON(buildJFItem(accessTokenDetails.session.UserId, i, idHash(c.Name_), c.Type, false), w)
 }
 
 // curl -v 'http://127.0.0.1:9090/Users/2b1ec0a52b09456c9823a367d84ac9e5/Items?ExcludeLocationTypes=Virtual&Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount&ParentId=f137a2dd21bbc1b99aa5c0f6bf02a805&SortBy=SortName,ProductionYear&SortOrder=Ascending&IncludeItemTypes=Movie&Recursive=true&StartIndex=0&Limit=50'
@@ -408,6 +414,12 @@ func usersItemHandler(w http.ResponseWriter, r *http.Request) {
 // - StartIndex, index of first result item
 // - Limit=50, number of items to return
 func usersItemsHandler(w http.ResponseWriter, r *http.Request) {
+	accessTokenDetails := getAccessTokenDetails(r)
+	if accessTokenDetails == nil {
+		http.Error(w, "accesstoken not found in context", http.StatusUnauthorized)
+		return
+	}
+
 	queryparams := r.URL.Query()
 	searchTerm := queryparams.Get("SearchTerm")
 
@@ -431,7 +443,7 @@ func usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 				if i.SortName == "" {
 					i.SortName = i.Name
 				}
-				items = append(items, buildJFItem(i, idHash(c.Name_), c.Type, true))
+				items = append(items, buildJFItem(accessTokenDetails.session.UserId, i, idHash(c.Name_), c.Type, true))
 			}
 		}
 	}
@@ -507,6 +519,12 @@ func usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 // - StartIndex, index of first result item
 // - Limit=50, number of items to return
 func usersItemsLatestHandler(w http.ResponseWriter, r *http.Request) {
+	accessTokenDetails := getAccessTokenDetails(r)
+	if accessTokenDetails == nil {
+		http.Error(w, "accesstoken not found in context", http.StatusUnauthorized)
+		return
+	}
+
 	queryparams := r.URL.Query()
 	searchCollection := queryparams.Get("ParentId")
 	var searchC *Collection
@@ -522,7 +540,7 @@ func usersItemsLatestHandler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		for _, i := range c.Items {
-			items = append(items, buildJFItem(i, idHash(c.Name_), c.Type, true))
+			items = append(items, buildJFItem(accessTokenDetails.session.UserId, i, idHash(c.Name_), c.Type, true))
 		}
 	}
 
@@ -569,6 +587,12 @@ func libraryVirtualFoldersHandler(w http.ResponseWriter, r *http.Request) {
 // curl -v 'http://127.0.0.1:9090/Shows/4QBdg3S803G190AgFrBf/Seasons?UserId=2b1ec0a52b09456c9823a367d84ac9e5&ExcludeLocationTypes=Virtual&Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount'
 // generate season overview
 func showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
+	accessTokenDetails := getAccessTokenDetails(r)
+	if accessTokenDetails == nil {
+		http.Error(w, "accesstoken not found in context", http.StatusUnauthorized)
+		return
+	}
+
 	vars := mux.Vars(r)
 	showId := vars["show"]
 	_, i := getItemByID(showId)
@@ -579,7 +603,7 @@ func showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
 	// Create API response
 	seasons := []JFItem{}
 	for _, s := range i.Seasons {
-		season, err := buildJFItemSeason(s.Id)
+		season, err := buildJFItemSeason(accessTokenDetails.session.UserId, s.Id)
 		if err != nil {
 			log.Printf("buildJFItemSeason returned error %s", err)
 			continue
@@ -597,6 +621,12 @@ func showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
 // curl -v 'http://127.0.0.1:9090/Shows/rXlq4EHNxq4HIVQzw3o2/Episodes?UserId=2b1ec0a52b09456c9823a367d84ac9e5&ExcludeLocationTypes=Virtual&Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount&SeasonId=rXlq4EHNxq4HIVQzw3o2/1'
 // generate episode overview for one season of a show
 func showsEpisodesHandler(w http.ResponseWriter, r *http.Request) {
+	accessTokenDetails := getAccessTokenDetails(r)
+	if accessTokenDetails == nil {
+		http.Error(w, "accesstoken not found in context", http.StatusUnauthorized)
+		return
+	}
+
 	vars := mux.Vars(r)
 	_, i := getItemByID(vars["show"])
 	if i == nil {
@@ -616,7 +646,7 @@ func showsEpisodesHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, e := range s.Episodes {
 			episodeId := itemprefix_episode + e.Id
-			episode, err := buildJFItemEpisode(episodeId)
+			episode, err := buildJFItemEpisode(accessTokenDetails.session.UserId, episodeId)
 			if err != nil {
 				log.Printf("buildJFItemEpisode returned error %s", err)
 				continue
@@ -791,15 +821,49 @@ func personsHandler(w http.ResponseWriter, r *http.Request) {
 
 // curl -v 'http://127.0.0.1:9090/Shows/NextUp?UserId=2b1ec0a52b09456c9823a367d84ac9e5&Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount&StartIndex=0&Limit=20'
 func showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
+	accessTokenDetails := getAccessTokenDetails(r)
+	if accessTokenDetails == nil {
+		http.Error(w, "accesstoken not found in context", http.StatusUnauthorized)
+		return
+	}
+
 	c, i := getItemByID("rVFG3EzPthk2wowNkqUl")
 	response := JFShowsNextUpResponse{
 		Items: []JFItem{
-			buildJFItem(i, idHash(c.Name_), c.Type, true),
+			buildJFItem(accessTokenDetails.session.UserId, i, idHash(c.Name_), c.Type, true),
 		},
 		TotalRecordCount: 1,
 		StartIndex:       0,
 	}
 	serveJSON(response, w)
+}
+
+func usersPlayedItemsPostHandler(w http.ResponseWriter, r *http.Request) {
+	accessTokenDetails := getAccessTokenDetails(r)
+	if accessTokenDetails == nil {
+		http.Error(w, "accesstoken not found in context", http.StatusUnauthorized)
+		return
+	}
+
+	vars := mux.Vars(r)
+	itemId := vars["item"]
+
+	playStateUpdate(accessTokenDetails.session.UserId, itemId, 0, true)
+	w.WriteHeader(http.StatusOK)
+}
+
+func usersPlayedItemsDeleteHandler(w http.ResponseWriter, r *http.Request) {
+	accessTokenDetails := getAccessTokenDetails(r)
+	if accessTokenDetails == nil {
+		http.Error(w, "accesstoken not found in context", http.StatusUnauthorized)
+		return
+	}
+
+	vars := mux.Vars(r)
+	itemId := vars["item"]
+
+	playStateUpdate(accessTokenDetails.session.UserId, itemId, 0, false)
+	w.WriteHeader(http.StatusOK)
 }
 
 // PositionTicks are in micro seconds
@@ -808,7 +872,7 @@ const TicsToSeconds = 10000000
 func sessionsPlayingHandler(w http.ResponseWriter, r *http.Request) {
 	accessTokenDetails := getAccessTokenDetails(r)
 	if accessTokenDetails == nil {
-		http.Error(w, "user not found in context", http.StatusUnauthorized)
+		http.Error(w, "accesstoken not found in context", http.StatusUnauthorized)
 		return
 	}
 
@@ -818,9 +882,9 @@ func sessionsPlayingHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
 		return
 	}
-	// log.Printf("sessionsPlayingHandler %+v\n", request)
-	log.Printf("sessionsPlayingHandler UserId: %s, ItemId: %s, Progress: %d seconds\n",
-		accessTokenDetails.session.UserId, request.ItemID, request.PositionTicks/TicsToSeconds)
+	// log.Printf("\nsessionsPlayingHandler UserId: %s, ItemId: %s, Progress: %d seconds\n\n",
+	// 	accessTokenDetails.session.UserId, request.ItemId, request.PositionTicks/TicsToSeconds)
+	playStateUpdate(accessTokenDetails.session.UserId, request.ItemId, request.PositionTicks, false)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -837,9 +901,9 @@ func sessionsPlayingProgressHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
 		return
 	}
-	// log.Printf("sessionsPlayingProgressHandler %+v\n", request)
-	log.Printf("sessionsPlayingProgressHandler UserId: %s, ItemId: %s, Progress: %d seconds\n",
-		accessTokenDetails.session.UserId, request.ItemID, request.PositionTicks/TicsToSeconds)
+	// log.Printf("\nsessionsPlayingProgressHandler UserId: %s, ItemId: %s, Progress: %d seconds\n\n",
+	// 	accessTokenDetails.session.UserId, request.ItemId, request.PositionTicks/TicsToSeconds)
+	playStateUpdate(accessTokenDetails.session.UserId, request.ItemId, request.PositionTicks, false)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -856,10 +920,49 @@ func sessionsPlayingStoppedHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
 		return
 	}
-	// log.Printf("sessionsPlayingStoppedHandler %+v\n", request)
-	log.Printf("sessionsPlayingStoppedHandler UserId: %s, ItemId: %s, Progress: %d seconds\n",
-		accessTokenDetails.session.UserId, request.ItemID, request.PositionTicks/TicsToSeconds)
+	// log.Printf("\nsessionsPlayingStoppedHandler UserId: %s, ItemId: %s, Progress: %d seconds, canSeek: %t\n\n",
+	// 	accessTokenDetails.session.UserId, request.ItemId, request.PositionTicks/TicsToSeconds, request.CanSeek)
+	playStateUpdate(accessTokenDetails.session.UserId, request.ItemId, request.PositionTicks, false)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func playStateUpdate(userId, itemId string, positionTicks int, markAsWatched bool) (err error) {
+	log.Printf("playStateUpdate UserId: %s, ItemId: %s, Progress: %d sec\n",
+		userId, itemId, positionTicks/TicsToSeconds)
+
+	var duration int
+	if strings.HasPrefix(itemId, itemprefix_episode) {
+		_, _, _, episode := getEpisodeByID(itemId)
+
+		// fix me: we should not have to load NFO here
+		lazyLoadNFO(&episode.Nfo, episode.NfoPath)
+
+		duration = episode.Nfo.FileInfo.StreamDetails.Video.DurationInSeconds
+	} else {
+		_, item := getItemByID(itemId)
+		duration = item.Nfo.Runtime * 60
+	}
+
+	playstate := PlayStateEntry{
+		timestamp: time.Now().UTC(),
+	}
+
+	position := positionTicks / TicsToSeconds
+	playedPercentage := 100 * position / duration
+
+	// Mark as watched in case > 98% of the item is played
+	if markAsWatched || playedPercentage >= 98 {
+		playstate.position = 0
+		playstate.playedPercentage = 0
+		playstate.played = true
+	} else {
+		playstate.position = position
+		playstate.playedPercentage = playedPercentage
+		playstate.played = false
+	}
+
+	PlayState.Update(userId, itemId, playstate)
+	return nil
 }
 
 func serveFile(w http.ResponseWriter, r *http.Request, filename string) {
@@ -925,8 +1028,8 @@ func buildJFItemCollection(itemid string) (response JFItem, e error) {
 	return
 }
 
-// buildJFItem builds movie or show from db
-func buildJFItem(i *Item, parentId, collectionType string, listView bool) (response JFItem) {
+// buildJFItem builds movie or show from provided item
+func buildJFItem(userId string, i *Item, parentId, collectionType string, listView bool) (response JFItem) {
 	response = JFItem{
 		ID:                      i.Id,
 		ParentID:                parentId,
@@ -975,16 +1078,48 @@ func buildJFItem(i *Item, parentId, collectionType string, listView bool) (respo
 		response.Type = "Series"
 		response.IsFolder = true
 		response.ChildCount = len(i.Seasons)
+
+		var playedEpisodes, totalEpisodes int
+		var lastestPlayed time.Time
+		for _, s := range i.Seasons {
+			for _, e := range s.Episodes {
+				totalEpisodes++
+				episodePlaystate, err := PlayState.Get(userId, e.Id)
+				if err == nil {
+					if episodePlaystate.played {
+						playedEpisodes++
+						if episodePlaystate.timestamp.After(lastestPlayed) {
+							lastestPlayed = episodePlaystate.timestamp
+						}
+					}
+				}
+			}
+		}
+		if totalEpisodes != 0 {
+			response.UserData = &JFUserData{
+				UnplayedItemCount: totalEpisodes - playedEpisodes,
+				PlayedPercentage:  100 * playedEpisodes / totalEpisodes,
+				LastPlayedDate:    lastestPlayed,
+				Key:               response.ID,
+			}
+			if playedEpisodes == response.ChildCount {
+				response.UserData.Played = true
+			}
+		}
 	}
 
 	enrichResponseWithNFO(&response, i.Nfo)
 
+	if playstate, err := PlayState.Get(userId, i.Id); err == nil {
+		response.UserData = buildJFUserData(playstate)
+		response.UserData.Key = i.Id
+	}
 	return response
 }
 
 // buildJFItemSeason builds season
-func buildJFItemSeason(seasonid string) (response JFItem, err error) {
-	_, show, season := getSeasonByID(seasonid)
+func buildJFItemSeason(userId, seasonId string) (response JFItem, err error) {
+	_, show, season := getSeasonByID(seasonId)
 	if season == nil {
 		err = errors.New("could not find season")
 		return
@@ -995,8 +1130,8 @@ func buildJFItemSeason(seasonid string) (response JFItem, err error) {
 		ServerID:           serverID,
 		ParentID:           show.Id,
 		SeriesID:           show.Id,
-		ID:                 itemprefix_season + seasonid,
-		Etag:               idHash(seasonid),
+		ID:                 itemprefix_season + seasonId,
+		Etag:               idHash(seasonId),
 		SeriesName:         show.Name,
 		IndexNumber:        season.SeasonNo,
 		Name:               fmt.Sprintf("Season %d", season.SeasonNo),
@@ -1014,12 +1149,36 @@ func buildJFItemSeason(seasonid string) (response JFItem, err error) {
 			Primary: "season",
 		},
 	}
+
+	var playedEpisodes int
+	var lastestPlayed time.Time
+	for _, e := range season.Episodes {
+		episodePlaystate, err := PlayState.Get(userId, e.Id)
+		if err == nil {
+			if episodePlaystate.played {
+				playedEpisodes++
+				if episodePlaystate.timestamp.After(lastestPlayed) {
+					lastestPlayed = episodePlaystate.timestamp
+				}
+			}
+		}
+	}
+	response.UserData = &JFUserData{
+		UnplayedItemCount: response.ChildCount - playedEpisodes,
+		PlayedPercentage:  100 * playedEpisodes / response.ChildCount,
+		LastPlayedDate:    lastestPlayed,
+		Key:               response.ID,
+	}
+	if playedEpisodes == response.ChildCount {
+		response.UserData.Played = true
+	}
+
 	return response, nil
 }
 
 // buildJFItemEpisode builds episode
-func buildJFItemEpisode(episodeid string) (response JFItem, err error) {
-	_, show, _, episode := getEpisodeByID(episodeid)
+func buildJFItemEpisode(userId, episodeId string) (response JFItem, err error) {
+	_, show, _, episode := getEpisodeByID(episodeId)
 	if episode == nil {
 		err = errors.New("could not find episode")
 		return
@@ -1027,8 +1186,8 @@ func buildJFItemEpisode(episodeid string) (response JFItem, err error) {
 
 	response = JFItem{
 		Type:         "Episode",
-		ID:           episodeid,
-		Etag:         idHash(episodeid),
+		ID:           episodeId,
+		Etag:         idHash(episodeId),
 		ServerID:     serverID,
 		SeriesName:   show.Name,
 		SeriesID:     idHash(show.Name),
@@ -1067,7 +1226,21 @@ func buildJFItemEpisode(episodeid string) (response JFItem, err error) {
 	// Add some generic mediasource to indicate "720p, stereo"
 	response.MediaSources = buildMediaSource(episode.Video, episode.Nfo)
 
+	if playstate, err := PlayState.Get(userId, episodeId); err == nil {
+		response.UserData = buildJFUserData(playstate)
+		response.UserData.Key = episodeId
+	}
 	return response, nil
+}
+
+func buildJFUserData(p PlayStateEntry) (response *JFUserData) {
+	response = &JFUserData{
+		PlaybackPositionTicks: p.position * TicsToSeconds,
+		PlayedPercentage:      p.playedPercentage,
+		Played:                p.played,
+		LastPlayedDate:        p.timestamp,
+	}
+	return
 }
 
 func lazyLoadNFO(n **Nfo, filename string) {
@@ -1320,15 +1493,6 @@ func buildMediaSource(filename string, n *Nfo) (mediasources []JFMediaSources) {
 
 func genCollectionID(id int) (collectionID string) {
 	collectionID = itemprefix_collection + fmt.Sprintf("%d", id)
-	return
-}
-
-func getCollectionID(input string) (id string, err error) {
-	if !strings.HasPrefix(input, itemprefix_collection) {
-		err = errors.New("not a collectionid")
-		return
-	}
-	id = strings.TrimPrefix(input, itemprefix_collection)
 	return
 }
 

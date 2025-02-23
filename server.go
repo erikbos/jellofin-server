@@ -124,8 +124,9 @@ func main() {
 	err = dbInit(path.Join(config.Dbdir, "tink-items.db"))
 	if err != nil {
 		log.Fatalf("dbInit: %s\n", err)
-		return
 	}
+
+	PlayState.Init()
 
 	log.Printf("setting logfile")
 

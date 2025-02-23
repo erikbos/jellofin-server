@@ -208,7 +208,7 @@ type JFItem struct {
 	Studios                  []JFStudios        `json:"Studios,omitempty"`
 	GenreItems               []JFGenreItems     `json:"GenreItems,omitempty"`
 	LocalTrailerCount        int                `json:"LocalTrailerCount,omitempty"`
-	UserData                 JFUserData         `json:"UserData,omitempty"`
+	UserData                 *JFUserData        `json:"UserData,omitempty"`
 	SpecialFeatureCount      int                `json:"SpecialFeatureCount,omitempty"`
 	DisplayPreferencesID     string             `json:"DisplayPreferencesId,omitempty"`
 	Tags                     []string           `json:"Tags,omitempty"`
@@ -368,11 +368,13 @@ type JFGenreItems struct {
 }
 type JFUserData struct {
 	PlaybackPositionTicks int       `json:"PlaybackPositionTicks"`
+	PlayedPercentage      int       `json:"PlayedPercentage"`
 	PlayCount             int       `json:"PlayCount"`
 	IsFavorite            bool      `json:"IsFavorite"`
 	LastPlayedDate        time.Time `json:"LastPlayedDate,omitempty"`
 	Played                bool      `json:"Played"`
 	Key                   string    `json:"Key"`
+	UnplayedItemCount     int       `json:"UnplayedItemCount"`
 }
 
 type JFImageTags struct {
@@ -464,7 +466,7 @@ type JFPlayState struct {
 	PositionTicks   int    `json:"PositionTicks"`
 	PlaySessionID   string `json:"PlaySessionId"`
 	MediaSourceID   string `json:"MediaSourceId"`
-	ItemID          string `json:"ItemId"`
+	ItemId          string `json:"ItemId"`
 	PlayMethod      string `json:"PlayMethod"`
 	IsMuted         bool   `json:"IsMuted"`
 	EventName       string `json:"EventName"`

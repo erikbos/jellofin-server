@@ -12,7 +12,7 @@ import (
 type Nfo struct {
 	Title        string       `xml:"title,omitempty" json:"title,omitempty"`
 	Id           string       `xml:"id,omitempty" json:"id,omitempty"`
-	Runtime      string       `xml:"runtime,omitempty" json:"runtime,omitempty"`
+	Runtime      int          `xml:"runtime,omitempty" json:"runtime,omitempty"`
 	Mpaa         string       `xml:"mpaa,omitempty" json:"mpaa,omitempty"`
 	YearString   string       `xml:"year,omitempty" json:"-"`
 	Year         int          `xml:"-" json:"year,omitempty"`
