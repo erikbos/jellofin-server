@@ -50,6 +50,7 @@ func registerJellyfinHandlers(s *mux.Router) {
 	r.Handle("/Shows/{show}/Seasons", middleware(showsSeasonsHandler))
 	r.Handle("/Shows/{show}/Episodes", middleware(showsEpisodesHandler))
 
+	r.Handle("/Items/{item}", middleware(itemsDeleteHandler)).Methods("DELETE")
 	r.Handle("/Items/{item}/Images/{type}", middleware(itemsImagesHandler))
 	r.Handle("/Items/{item}/PlaybackInfo", middleware(itemsPlaybackInfoHandler))
 	r.Handle("/MediaSegments/{item}", middleware(mediaSegmentsHandler))
@@ -660,6 +661,10 @@ func showsEpisodesHandler(w http.ResponseWriter, r *http.Request) {
 		StartIndex:       0,
 	}
 	serveJSON(response, w)
+}
+
+func itemsDeleteHandler(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "Not implemented", http.StatusForbidden)
 }
 
 // curl -v 'http://127.0.0.1:9090/Items/rVFG3EzPthk2wowNkqUl/Images/Backdrop?tag=7cec54f0c8f362c75588e83d76fefa75'
