@@ -14,6 +14,8 @@ import (
 	"github.com/XS4ALL/curlyconf-go"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+
+	"github.com/miquels/notflix-server/imageresize"
 )
 
 var configFile = "notflix-server.cfg"
@@ -28,8 +30,12 @@ type cfgMain struct {
 	Dbdir       string
 	Logfile     string
 	Collections []Collection `cc:"collection"`
-	// indicates if we should auto-register Jellyfin users
-	AutoRegister bool
+	Jellyfin    struct {
+		// Indicates if we should auto-register Jellyfin users
+		AutoRegister bool
+		// JPEG quality for posters
+		ImageQualityPoster int
+	}
 }
 
 var config = cfgMain{
@@ -65,7 +71,7 @@ func dataHandler(w http.ResponseWriter, r *http.Request) {
 	if ext == "srt" || ext == "vtt" {
 		file, err = OpenSub(w, r, fn)
 	} else {
-		file, err = OpenFile(w, r, fn)
+		file, err = resizer.OpenFile(w, r, fn, 0)
 	}
 	defer file.Close()
 	if err != nil {
@@ -97,10 +103,9 @@ func backgroundTasks() {
 	}
 }
 
-func main() {
-	resizeimg_init()
-	defer resizeimg_deinit()
+var resizer *imageresize.Resizer
 
+func main() {
 	log.Printf("Parsing config file")
 
 	p, err := curlyconf.NewParser(configFile, curlyconf.ParserNL)
@@ -126,6 +131,9 @@ func main() {
 		log.Fatalf("dbInit: %s\n", err)
 	}
 
+	resizer = imageresize.New(imageresize.ResizerConfig{
+		Cachedir: config.Cachedir,
+	})
 	PlayState.Init()
 
 	log.Printf("setting logfile")

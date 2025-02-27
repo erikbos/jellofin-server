@@ -1,4 +1,4 @@
-package main
+package imageresize
 
 import (
 	"fmt"
@@ -81,11 +81,11 @@ func dirExists(dir string) (ok bool) {
 	return
 }
 
-func cleanCache(dataDir string, cacheDir string, sleep time.Duration) {
+func (r *Resizer) CleanCache(dataDir string, cacheDir string, sleep time.Duration) {
 	for {
 		if dirExists(dataDir) && dirExists(cacheDir) {
 			m := scanData("/home/miquels/data/", 5*time.Millisecond)
-			scanCache("/tmp/mxdav-img-cache", m, 20*time.Millisecond)
+			scanCache(r.cachedir, m, 20*time.Millisecond)
 		}
 		time.Sleep(sleep)
 	}

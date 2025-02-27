@@ -1,12 +1,10 @@
-package main
+package imageresize
 
 import (
 	"errors"
 	"io"
 	"os"
 	"time"
-
-	"gopkg.in/gographics/imagick.v2/imagick"
 )
 
 type blobFile struct {
@@ -14,9 +12,6 @@ type blobFile struct {
 	blob []byte
 	size int64
 	pos  int64
-
-	// Yuck.
-	wand *imagick.MagickWand
 }
 
 type blobFileInfo struct {
@@ -92,9 +87,6 @@ func (f *blobFile) Readdir(count int) ([]os.FileInfo, error) {
 }
 
 func (f *blobFile) Close() error {
-	if f.wand != nil {
-		f.wand.Destroy()
-	}
 	return nil
 }
 

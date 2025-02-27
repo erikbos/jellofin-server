@@ -71,13 +71,3 @@ more than one directory, or even remote locations.
 Each source of a collection is mapped to /\_data/:source. That's why the
 baseuri is included in each item, since there can be multiple baseuris
 in one collection.
-
-## Development
-
-ImageMagick v6 is required:
-
-```shell
-# We still require Imagemagick v6, downgrade in case you've got v4:
-brew unlink imagemagick
-brew install imagemagick@6 && brew link imagemagick@6 --force
-```

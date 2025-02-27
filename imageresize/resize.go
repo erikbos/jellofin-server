@@ -1,7 +1,11 @@
-package main
+package imageresize
 
 import (
+	"bytes"
 	"fmt"
+	"image"
+	"image/jpeg"
+	"image/png"
 	"net/http"
 	"net/url"
 	"os"
@@ -10,22 +14,30 @@ import (
 	"sync"
 	"syscall"
 
-	"gopkg.in/gographics/imagick.v2/imagick"
+	"github.com/disintegration/imaging"
 )
 
-var resizeMutexMap = make(map[string]*sync.Mutex)
-var resizeMutexMapLock sync.Mutex
+type Resizer struct {
+	cachedir           string
+	resizeMutexMap     map[string]*sync.Mutex
+	tmpExt             string
+	resizeMutexMapLock sync.Mutex
+}
+
+type ResizerConfig struct {
+	Cachedir string
+}
+
+func New(config ResizerConfig) *Resizer {
+	r := &Resizer{
+		cachedir:       config.Cachedir,
+		resizeMutexMap: make(map[string]*sync.Mutex),
+		tmpExt:         fmt.Sprintf(".%d", os.Getpid()),
+	}
+	return r
+}
 
 var isImg = regexp.MustCompile(`\.(png|jpg|jpeg|tbn)$`)
-var tmpExt = ".tmp"
-
-func resizeimg_init() {
-	imagick.Initialize()
-	tmpExt = fmt.Sprintf(".%d", os.Getpid())
-}
-func resizeimg_deinit() {
-	imagick.Terminate()
-}
 
 func param2float(params map[string][]string, param string) (r float64) {
 	if val, ok := params[param]; ok && len(val) > 0 {
@@ -48,15 +60,15 @@ func cacheName(file http.File) (r string) {
 }
 
 // get info about the original file (width x height) from the cache.
-func cacheReadInfo(file http.File) (w float64, h float64) {
-	if config.Cachedir == "" {
+func (r *Resizer) cacheReadInfo(file http.File) (w float64, h float64) {
+	if r.cachedir == "" {
 		return
 	}
 	cn := cacheName(file)
 	if cn == "" {
 		return
 	}
-	fn := fmt.Sprintf("%s/%s", config.Cachedir, cn)
+	fn := fmt.Sprintf("%s/%s", r.cachedir, cn)
 	fh, err := os.Open(fn)
 	if err != nil {
 		return
@@ -72,16 +84,16 @@ func cacheReadInfo(file http.File) (w float64, h float64) {
 }
 
 // write info about the original file (width x height) to the cache.
-func cacheWriteInfo(file http.File, w float64, h float64) {
-	if config.Cachedir == "" {
+func (r *Resizer) cacheWriteInfo(file http.File, w float64, h float64) {
+	if r.cachedir == "" {
 		return
 	}
 	cn := cacheName(file)
 	if cn == "" {
 		return
 	}
-	fn := fmt.Sprintf("%s/%s", config.Cachedir, cn)
-	tmp := fn + tmpExt
+	fn := fmt.Sprintf("%s/%s", r.cachedir, cn)
+	tmp := fn + r.tmpExt
 	fh, err := os.Create(tmp)
 	if err != nil {
 		return
@@ -97,15 +109,15 @@ func cacheWriteInfo(file http.File, w float64, h float64) {
 }
 
 // see if we have the resized file in the cache.
-func cacheRead(file http.File, w uint, h uint, q uint) (rfile http.File) {
-	if config.Cachedir == "" {
+func (r *Resizer) cacheRead(file http.File, w, h, q uint) (rfile http.File) {
+	if r.cachedir == "" {
 		return
 	}
 	cn := cacheName(file)
 	if cn == "" {
 		return
 	}
-	fn := fmt.Sprintf("%s/%s:%dx%dq=%d", config.Cachedir, cn, w, h, q)
+	fn := fmt.Sprintf("%s/%s:%dx%dq=%d", r.cachedir, cn, w, h, q)
 	rfile, err := os.Open(fn)
 	if err != nil {
 		rfile = nil
@@ -114,16 +126,16 @@ func cacheRead(file http.File, w uint, h uint, q uint) (rfile http.File) {
 }
 
 // store resized file in the cache.
-func cacheWrite(file http.File, blob []byte, w uint, h uint, q uint) (rfile http.File) {
-	if config.Cachedir == "" {
+func (r *Resizer) cacheWrite(file http.File, blob []byte, w, h, q uint) (rfile http.File) {
+	if r.cachedir == "" {
 		return
 	}
 	cn := cacheName(file)
 	if cn == "" {
 		return
 	}
-	fn := fmt.Sprintf("%s/%s:%dx%dq=%d", config.Cachedir, cn, w, h, q)
-	tmp := fn + tmpExt
+	fn := fmt.Sprintf("%s/%s:%dx%dq=%d", r.cachedir, cn, w, h, q)
+	tmp := fn + r.tmpExt
 	fh, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0666)
 	if err != nil {
 		return
@@ -146,8 +158,8 @@ func cacheWrite(file http.File, blob []byte, w uint, h uint, q uint) (rfile http
 
 // If the file is present, an image, and needs to be resized,
 // then we return a handle to the resized image.
-func OpenFile(rw http.ResponseWriter, rq *http.Request, name string) (file http.File, err error) {
-
+func (r *Resizer) OpenFile(rw http.ResponseWriter, rq *http.Request, name string,
+	imageQuality int) (file http.File, err error) {
 	file, err = os.Open(name)
 	if err != nil {
 		return
@@ -182,6 +194,12 @@ func OpenFile(rw http.ResponseWriter, rq *http.Request, name string) (file http.
 	w := param2float(params, "w")
 	h := param2float(params, "h")
 	q := param2float(params, "q")
+
+	// Hack: in case we did not get imagequality as queryparameter we can take it
+	if imageQuality > 0 {
+		q = float64(imageQuality)
+	}
+
 	if mw+mh+w+h+q == 0 {
 		return
 	}
@@ -197,7 +215,7 @@ func OpenFile(rw http.ResponseWriter, rq *http.Request, name string) (file http.
 		ch = mh
 	}
 	if cw != 0 && ch != 0 {
-		cf := cacheRead(file, uint(cw), uint(ch), uint(q))
+		cf := r.cacheRead(file, uint(cw), uint(ch), uint(q))
 		if cf != nil {
 			file.Close()
 			file = cf
@@ -205,18 +223,19 @@ func OpenFile(rw http.ResponseWriter, rq *http.Request, name string) (file http.
 		}
 	}
 
-	wand := imagick.NewMagickWand()
-
-	ow, oh := cacheReadInfo(file)
+	ow, oh := r.cacheReadInfo(file)
 	if ow == 0 || oh == 0 {
-		err = wand.PingImageFile(file.(*os.File))
-		ow = float64(wand.GetImageWidth())
-		oh = float64(wand.GetImageHeight())
+		img, _, err2 := image.Decode(file)
+		if err2 != nil {
+			return nil, err
+		}
+		ow = float64(img.Bounds().Dx())
+		oh = float64(img.Bounds().Dy())
 		file.Seek(0, 0)
-		if err != nil || oh == 0 || ow == 0 {
+		if ow == 0 || oh == 0 {
 			return
 		}
-		cacheWriteInfo(file, ow, oh)
+		r.cacheWriteInfo(file, ow, oh)
 	}
 
 	// if we do not have both wanted width and height,
@@ -254,7 +273,6 @@ func OpenFile(rw http.ResponseWriter, rq *http.Request, name string) (file http.
 			h = mh
 			w = mw
 		}
-
 	}
 
 	// image could be the right size and quality already.
@@ -264,25 +282,25 @@ func OpenFile(rw http.ResponseWriter, rq *http.Request, name string) (file http.
 	}
 
 	// now that we have all parameters, check cache once more.
-	cf := cacheRead(file, uint(w), uint(h), uint(q))
+	cf := r.cacheRead(file, uint(w), uint(h), uint(q))
 	if cf != nil {
 		file.Close()
 		file = cf
 		return
 	}
 
-	resizeMutexMapLock.Lock()
-	m, ok := resizeMutexMap[name]
+	r.resizeMutexMapLock.Lock()
+	m, ok := r.resizeMutexMap[name]
 	if !ok {
 		m = &sync.Mutex{}
-		resizeMutexMap[name] = m
+		r.resizeMutexMap[name] = m
 	}
-	resizeMutexMapLock.Unlock()
+	r.resizeMutexMapLock.Unlock()
 	m.Lock()
 	defer m.Unlock()
 
 	// read entire image.
-	err = wand.ReadImageFile(file.(*os.File))
+	img, _, err := image.Decode(file)
 	file.Seek(0, 0)
 	if err != nil {
 		return
@@ -290,42 +308,29 @@ func OpenFile(rw http.ResponseWriter, rq *http.Request, name string) (file http.
 
 	// resize.
 	if need_resize {
-		// err = wand.ResizeImage(uint(w), uint(h),
-		// imagick.FILTER_LANCZOS, 1)
-		err = wand.ThumbnailImage(uint(w), uint(h))
-		if err != nil {
-			return
-		}
+		img = imaging.Resize(img, int(w), int(h), imaging.Lanczos)
 	}
 
 	// set quality
-	if q != 0 {
-		err = wand.SetImageCompressionQuality(uint(q))
-		if err != nil {
-			return
-		}
-		// in case wand.ThumbnailImage() hasn't done this yet.
-		if !need_resize {
-			err = wand.StripImage()
-			if err != nil {
-				return
-			}
-		}
-	}
-
-	// Create "File"
-	format := wand.GetImageFormat()
-	wand.SetImageFormat(format)
 	var imageblob []byte
-	imageblob, err = wand.GetImageBlob()
+	if ctype == "jpg" {
+		var buf bytes.Buffer
+		err = jpeg.Encode(&buf, img, &jpeg.Options{Quality: int(q)})
+		imageblob = buf.Bytes()
+	} else if ctype == "png" {
+		var buf bytes.Buffer
+		err = png.Encode(&buf, img)
+		imageblob = buf.Bytes()
+	}
 	if err != nil {
 		return
 	}
+
+	// Create "File"
 	f := NewBlobBytesReader(imageblob, file)
-	f.wand = wand
 
 	// Write cache file.
-	cachefh := cacheWrite(file, f.blob, uint(w), uint(h), uint(q))
+	cachefh := r.cacheWrite(file, f.blob, uint(w), uint(h), uint(q))
 	if cachefh != nil {
 		f.Close()
 		file.Close()

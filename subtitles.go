@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/miquels/notflix-server/imageresize"
 )
 
 var utf8BOM = "\xef\xbb\xbf"
@@ -174,7 +176,7 @@ func OpenSub(rw http.ResponseWriter, rq *http.Request, name string) (file http.F
 		if err2 != nil {
 			jsonBytes = []byte{'[', ']', '\n'}
 		}
-		file = NewBlobBytesReader(jsonBytes, srtFile)
+		file = imageresize.NewBlobBytesReader(jsonBytes, srtFile)
 		srtFile.Close()
 		return
 	}
@@ -196,7 +198,7 @@ func OpenSub(rw http.ResponseWriter, rq *http.Request, name string) (file http.F
 		lines = append(lines, "")
 	}
 	blob := strings.Join(lines, "\n") + "\n"
-	file = NewBlobStringReader(blob, srtFile)
+	file = imageresize.NewBlobStringReader(blob, srtFile)
 	srtFile.Close()
 	return
 }

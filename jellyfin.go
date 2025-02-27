@@ -98,9 +98,10 @@ func systemInfoHandler(w http.ResponseWriter, r *http.Request) {
 		LocalAddress: "http://" + hostname + ":9090/",
 		// Jellyfin native client checks for exact productname :facepalm:
 		// https://github.com/jellyfin/jellyfin-expo/blob/7dedbc72fb53fc4b83c3967c9a8c6c071916425b/utils/ServerValidator.js#L82C49-L82C64
-		ProductName: "Jellyfin Server",
-		ServerName:  "jellyfin",
-		Version:     "10.10.3",
+		ProductName:            "Jellyfin Server",
+		ServerName:             "jellyfin",
+		Version:                "10.10.3",
+		StartupWizardCompleted: true,
 	}
 	serveJSON(response, w)
 }
@@ -128,7 +129,7 @@ func usersAuthenticateByNameHandler(w http.ResponseWriter, r *http.Request) {
 
 	user, err := dbUserValidate(request.Username, request.Pw)
 	if err != nil {
-		if err == ErrUserNotFound && config.AutoRegister {
+		if err == ErrUserNotFound && config.Jellyfin.AutoRegister {
 			user, err = dbUserInsert(request.Username, request.Pw)
 			if err != nil {
 				http.Error(w, "Failed to auto-register user", http.StatusInternalServerError)
@@ -674,6 +675,12 @@ func itemsDeleteHandler(w http.ResponseWriter, r *http.Request) {
 // curl -v 'http://127.0.0.1:9090/Items/2vx0ZYKeHxbh5iWhloIB/Images/Primary?tag=redirect_https://image.tmdb.org/t/p/original/3E4x5doNuuu6i9Mef6HPrlZjNb1.jpg'
 
 func itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
+	accessTokenDetails := getAccessTokenDetails(r)
+	if accessTokenDetails == nil {
+		http.Error(w, "accesstoken not found in context", http.StatusUnauthorized)
+		return
+	}
+
 	// handle tag-based redirects for item imagery that is external (e.g. external images of actors)
 	// for these we do not care about the provided item id
 	queryparams := r.URL.Query()
@@ -713,7 +720,9 @@ func itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			switch imageType {
 			case "Primary":
-				serveFile(w, r, c.Directory+"/"+item.Name+"/"+season.Poster)
+				w.Header().Set("cache-control", "max-age=2592000")
+				serveImage(w, r, c.Directory+"/"+item.Name+"/"+season.Poster,
+					config.Jellyfin.ImageQualityPoster)
 				return
 			default:
 				log.Printf("Image request %s, unknown type %s", itemId, imageType)
@@ -743,7 +752,7 @@ func itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 	switch vars["type"] {
 	case "Primary":
 		w.Header().Set("cache-control", "max-age=2592000")
-		serveFile(w, r, c.Directory+"/"+i.Name+"/"+i.Poster)
+		serveImage(w, r, c.Directory+"/"+i.Name+"/"+i.Poster, config.Jellyfin.ImageQualityPoster)
 		return
 	case "Backdrop":
 		w.Header().Set("cache-control", "max-age=2592000")
@@ -972,6 +981,22 @@ func playStateUpdate(userId, itemId string, positionTicks int, markAsWatched boo
 
 func serveFile(w http.ResponseWriter, r *http.Request, filename string) {
 	file, err := os.Open(filename)
+	if err != nil {
+		http.Error(w, "File not found", http.StatusNotFound)
+		return
+	}
+	defer file.Close()
+
+	fileStat, err := file.Stat()
+	if err != nil {
+		http.Error(w, "Could not retrieve file info", http.StatusInternalServerError)
+		return
+	}
+	http.ServeContent(w, r, fileStat.Name(), fileStat.ModTime(), file)
+}
+
+func serveImage(w http.ResponseWriter, r *http.Request, filename string, imageQuality int) {
+	file, err := resizer.OpenFile(w, r, filename, imageQuality)
 	if err != nil {
 		http.Error(w, "File not found", http.StatusNotFound)
 		return
