@@ -19,8 +19,8 @@ import (
 
 type Resizer struct {
 	cachedir           string
-	resizeMutexMap     map[string]*sync.Mutex
 	tmpExt             string
+	resizeMutexMap     map[string]*sync.Mutex
 	resizeMutexMapLock sync.Mutex
 }
 

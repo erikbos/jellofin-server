@@ -1,10 +1,21 @@
-package main
+package collection
 
 import (
-	"fmt"
 	"net/url"
 	"strconv"
+
+	"github.com/miquels/notflix-server/nfo"
 )
+
+var config CollectionRepo
+
+type CollectionRepo struct {
+	collections []Collection
+}
+
+func New(c []Collection) {
+	config.collections = c
+}
 
 type Collection struct {
 	SourceId  int     `json:"id"`
@@ -29,7 +40,7 @@ type Item struct {
 	SortName    string   `json:"sortName,omitempty"`
 	NfoPath     string   `json:"-"`
 	NfoTime     int64    `json:"-"`
-	Nfo         *Nfo     `json:"nfo,omitempty"`
+	Nfo         *nfo.Nfo `json:"nfo,omitempty"`
 	Banner      string   `json:"banner,omitempty"`
 	Fanart      string   `json:"fanart,omitempty"`
 	Folder      string   `json:"folder,omitempty"`
@@ -63,21 +74,21 @@ type Season struct {
 }
 
 type Episode struct {
-	Id        string `json:"id"`
-	Name      string `json:"name"`
-	SeasonNo  int    `json:"seasonno"`
-	EpisodeNo int    `json:"episodeno"`
-	Double    bool   `json:"double,omitempty"`
-	SortName  string `json:"sortName,omitempty"`
-	BaseName  string `json:"-"`
-	NfoPath   string `json:"-"`
-	NfoTime   int64  `json:"-"`
-	VideoTS   int64  `json:"-"`
-	Nfo       *Nfo   `json:"nfo,omitempty"`
-	Video     string `json:"video"`
-	Thumb     string `json:"thumb,omitempty"`
-	SrtSubs   []Subs `json:"srtsubs,omitempty"`
-	VttSubs   []Subs `json:"vttsubs,omitempty"`
+	Id        string   `json:"id"`
+	Name      string   `json:"name"`
+	SeasonNo  int      `json:"seasonno"`
+	EpisodeNo int      `json:"episodeno"`
+	Double    bool     `json:"double,omitempty"`
+	SortName  string   `json:"sortName,omitempty"`
+	BaseName  string   `json:"-"`
+	NfoPath   string   `json:"-"`
+	NfoTime   int64    `json:"-"`
+	VideoTS   int64    `json:"-"`
+	Nfo       *nfo.Nfo `json:"nfo,omitempty"`
+	Video     string   `json:"video"`
+	Thumb     string   `json:"thumb,omitempty"`
+	SrtSubs   []Subs   `json:"srtsubs,omitempty"`
+	VttSubs   []Subs   `json:"vttsubs,omitempty"`
 }
 
 type Subs struct {
@@ -125,47 +136,47 @@ func (p PathString) String() string {
 }
 
 const (
-	collectionMovies = "movies"
-	collectionShows  = "shows"
+	CollectionMovies = "movies"
+	CollectionShows  = "shows"
 )
 
-func updateCollections(pace int) {
-	id := 1
-	for i := range config.Collections {
-		c := &(config.Collections[i])
-		c.SourceId = id
-		c.BaseUrl = fmt.Sprintf("/data/%d", id)
-		switch c.Type {
-		case collectionMovies:
-			buildMovies(c, pace)
-		case collectionShows:
-			buildShows(c, pace)
-		}
-		id++
-	}
-}
+// func updateCollections(pace int) {
+// 	id := 1
+// 	for i := range config.Collections {
+// 		c := &(config.Collections[i])
+// 		c.SourceId = id
+// 		c.BaseUrl = fmt.Sprintf("/data/%d", id)
+// 		switch c.Type {
+// 		case CollectionMovies:
+// 			buildMovies(c, pace)
+// 		case CollectionShows:
+// 			buildShows(c, pace)
+// 		}
+// 		id++
+// 	}
+// }
 
-func initCollections() {
-	updateCollections(0)
-}
+// func initCollections() {
+// 	updateCollections(0)
+// }
 
-func getCollection(collName string) (c *Collection) {
+func GetCollection(collName string) (c *Collection) {
 	sourceId := -1
 	if n, err := strconv.Atoi(collName); err == nil {
 		sourceId = n
 	}
-	for n := range config.Collections {
-		if config.Collections[n].Name_ == collName ||
-			config.Collections[n].SourceId == sourceId {
-			c = &(config.Collections[n])
+	for n := range config.collections {
+		if config.collections[n].Name_ == collName ||
+			config.collections[n].SourceId == sourceId {
+			c = &(config.collections[n])
 			return
 		}
 	}
 	return
 }
 
-func getItem(collName string, itemName string) (i *Item) {
-	c := getCollection(collName)
+func GetItem(collName string, itemName string) (i *Item) {
+	c := GetCollection(collName)
 	if c == nil {
 		return
 	}
@@ -178,28 +189,72 @@ func getItem(collName string, itemName string) (i *Item) {
 	return
 }
 
-func getHlsServer(source string) (h string) {
+func GetItemByID(itemId string) (c *Collection, i *Item) {
+	for _, c := range config.collections {
+		if i = GetItem(c.Name_, itemId); i != nil {
+			return &c, i
+		}
+	}
+	return nil, nil
+}
+
+func GetSeasonByID(saesonId string) (*Collection, *Item, *Season) {
+	// fixme: wooho O(n^^3) "just temporarily.."
+	for _, c := range config.collections {
+		for _, i := range c.Items {
+			for _, s := range i.Seasons {
+				if s.Id == saesonId {
+					return &c, i, &s
+				}
+			}
+		}
+	}
+	return nil, nil, nil
+}
+
+const itemprefix_separator = "_"
+
+func GetEpisodeByID(episodeId string) (*Collection, *Item, *Season, *Episode) {
+	// episodeId = strings.TrimPrefix(episodeId, itemprefix_separator)
+
+	// fixme: wooho O(n^^4) "just temporarily.."
+	for _, c := range config.collections {
+		for _, i := range c.Items {
+			for _, s := range i.Seasons {
+				for _, e := range s.Episodes {
+					if e.Id == episodeId {
+						return &c, i, &s, &e
+					}
+
+				}
+			}
+		}
+	}
+	return nil, nil, nil, nil
+}
+
+func GetHlsServer(source string) (h string) {
 	id, err := strconv.ParseInt(source, 10, 64)
 	if err != nil {
 		return
 	}
-	for n, c := range config.Collections {
+	for n, c := range config.collections {
 		if int64(c.SourceId) == id {
-			h = config.Collections[n].HlsServer
+			h = config.collections[n].HlsServer
 			return
 		}
 	}
 	return
 }
 
-func getDataDir(source string) (d string) {
+func GetDataDir(source string) (d string) {
 	id, err := strconv.ParseInt(source, 10, 64)
 	if err != nil {
 		return
 	}
-	for n, c := range config.Collections {
+	for n, c := range config.collections {
 		if int64(c.SourceId) == id {
-			d = config.Collections[n].Directory
+			d = config.collections[n].Directory
 			return
 		}
 	}

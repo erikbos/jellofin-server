@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+
+	"github.com/miquels/notflix-server/collection"
 )
 
 // mosyly taken from https://gist.github.com/yowu/f7dc34bd4736a65ff28d
@@ -78,7 +80,7 @@ func hlsHandler(w http.ResponseWriter, r *http.Request) bool {
 	if !strings.Contains(path, ".mp4/") {
 		return false
 	}
-	hlsServer := getHlsServer(source)
+	hlsServer := collection.GetHlsServer(source)
 	if hlsServer == "" {
 		return false
 	}

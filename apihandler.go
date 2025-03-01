@@ -8,6 +8,9 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+
+	"github.com/miquels/notflix-server/collection"
+	"github.com/miquels/notflix-server/nfo"
 )
 
 func preCheck(w http.ResponseWriter, r *http.Request, keys ...string) (done bool) {
@@ -50,7 +53,7 @@ func collectionsHandler(w http.ResponseWriter, r *http.Request) {
 	if preCheck(w, r) {
 		return
 	}
-	cc := []Collection{}
+	cc := []collection.Collection{}
 	for _, c := range config.Collections {
 		c.Items = nil
 		cc = append(cc, c)
@@ -63,13 +66,13 @@ func collectionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	vars := mux.Vars(r)
-	c := getCollection(vars["coll"])
+	c := collection.GetCollection(vars["coll"])
 	if c == nil {
 		http.Error(w, "404 Not Found", http.StatusNotFound)
 		return
 	}
 	cc := *c
-	cc.Items = []*Item{}
+	cc.Items = []*collection.Item{}
 	serveJSON(cc, w)
 }
 
@@ -78,7 +81,7 @@ func itemsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	vars := mux.Vars(r)
-	c := getCollection(vars["coll"])
+	c := collection.GetCollection(vars["coll"])
 	if c == nil {
 		http.Error(w, "404 Not Found", http.StatusNotFound)
 		return
@@ -98,10 +101,10 @@ func itemsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// copy items
-	items := make([]Item, len(c.Items))
+	items := make([]collection.Item, len(c.Items))
 	for i := range c.Items {
 		items[i] = *c.Items[i]
-		items[i].Seasons = []Season{}
+		items[i].Seasons = []collection.Season{}
 		items[i].Nfo = nil
 	}
 
@@ -118,7 +121,7 @@ func itemHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	vars := mux.Vars(r)
-	i := getItem(vars["coll"], vars["item"])
+	i := collection.GetItem(vars["coll"], vars["item"])
 	if i == nil {
 		http.Error(w, "404 Not Found", http.StatusNotFound)
 		return
@@ -143,7 +146,7 @@ func itemHandler(w http.ResponseWriter, r *http.Request) {
 	if doNfo && i2.NfoPath != "" {
 		file, err := os.Open(i2.NfoPath)
 		if err == nil {
-			i2.Nfo = decodeNfo(file)
+			i2.Nfo = nfo.Decode(file)
 			file.Close()
 		}
 	}
@@ -159,7 +162,7 @@ func itemHandler(w http.ResponseWriter, r *http.Request) {
 					file, err := os.Open(ep.NfoPath)
 					if err == nil {
 						ep2 := ep
-						ep2.Nfo = decodeNfo(file)
+						ep2.Nfo = nfo.Decode(file)
 						file.Close()
 						i2.Seasons[si].Episodes[ei] = ep2
 					}
@@ -176,7 +179,7 @@ func genresHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	vars := mux.Vars(r)
-	c := getCollection(vars["coll"])
+	c := collection.GetCollection(vars["coll"])
 	if c == nil {
 		http.Error(w, "404 Not Found", http.StatusNotFound)
 		return

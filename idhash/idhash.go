@@ -1,4 +1,4 @@
-package main
+package idhash
 
 import (
 	"crypto/sha256"
@@ -8,7 +8,7 @@ import (
 // Hash a string with sha256.
 // Then take the first 119 bits, and convert that to base62.
 // Returns a 20-character long string.
-func idHash(name string) string {
+func IdHash(name string) string {
 	// Create hash from string.
 	hash256 := sha256.Sum256([]byte(name))
 

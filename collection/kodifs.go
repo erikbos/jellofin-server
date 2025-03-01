@@ -1,5 +1,5 @@
 // Support for `Kodi' style filesystem layout.
-package main
+package collection
 
 import (
 	//	"fmt"
@@ -10,6 +10,9 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/miquels/notflix-server/database"
+	"github.com/miquels/notflix-server/idhash"
 )
 
 var isVideo = regexp.MustCompile(`^(.*)\.(divx|mov|mp4|MP4|m4u|m4v)$`)
@@ -31,7 +34,7 @@ func escapePath(p string) string {
 	return u.EscapedPath()
 }
 
-func buildMovies(coll *Collection, pace int) (items []*Item) {
+func BuildMovies(coll *Collection, pace int) (items []*Item) {
 
 	f, err := OpenDir(coll.Directory)
 	if err != nil {
@@ -106,7 +109,7 @@ func buildMovie(coll *Collection, dir string) (movie *Item) {
 	}
 
 	movie = &Item{
-		Id:         idHash(mname),
+		Id:         idhash.IdHash(mname),
 		Name:       mname,
 		Year:       year,
 		BaseUrl:    coll.BaseUrl,
@@ -188,12 +191,19 @@ func buildMovie(coll *Collection, dir string) (movie *Item) {
 
 	copySrtVttSubs(movie.SrtSubs, &movie.VttSubs)
 
-	dbLoadItem(coll, movie)
+	dbItemMovie := &database.Item{
+		Id:    movie.Id,
+		Name:  movie.Name,
+		Year:  movie.Year,
+		Genre: strings.Join(movie.Genre, ","),
+	}
+
+	database.DbLoadItem(dbItemMovie)
 
 	return
 }
 
-func buildShows(coll *Collection, pace int) (items []*Item) {
+func BuildShows(coll *Collection, pace int) (items []*Item) {
 
 	f, err := OpenDir(coll.Directory)
 	if err != nil {
@@ -234,7 +244,7 @@ func getSeason(show *Item, seasonNo int) (s *Season) {
 
 	// insert new
 	sn := &Season{
-		Id:       idHash(fmt.Sprintf("%s-season-%d", show.Name, seasonNo)),
+		Id:       idhash.IdHash(fmt.Sprintf("%s-season-%d", show.Name, seasonNo)),
 		SeasonNo: seasonNo,
 	}
 	for i = 0; i < len(show.Seasons); i++ {
@@ -367,7 +377,7 @@ func showScanDir(baseDir string, dir string, seasonHint int, show *Item) {
 		s = isVideo.FindStringSubmatch(fn)
 		if len(s) > 0 {
 			ep := Episode{
-				Id:       idHash(s[0]),
+				Id:       idhash.IdHash(s[0]),
 				Video:    escapePath(path.Join(dir, fn)),
 				BaseName: s[1],
 			}
@@ -443,7 +453,7 @@ func showScanDir(baseDir string, dir string, seasonHint int, show *Item) {
 func buildShow(coll *Collection, dir string) (show *Item) {
 
 	item := &Item{
-		Id:      idHash(path.Base(dir)),
+		Id:      idhash.IdHash(path.Base(dir)),
 		Name:    path.Base(dir),
 		BaseUrl: coll.BaseUrl,
 		Path:    escapePath(dir),
@@ -512,8 +522,13 @@ func buildShow(coll *Collection, dir string) (show *Item) {
 	}
 	item.Year = year
 
-	dbLoadItem(coll, item)
-
+	dbItemShow := &database.Item{
+		Id:    item.Id,
+		Name:  item.Name,
+		Year:  item.Year,
+		Genre: strings.Join(item.Genre, ","),
+	}
+	database.DbLoadItem(dbItemShow)
 	return
 }
 

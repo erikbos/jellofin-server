@@ -15,7 +15,10 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 
+	"github.com/miquels/notflix-server/collection"
+	"github.com/miquels/notflix-server/database"
 	"github.com/miquels/notflix-server/imageresize"
+	"github.com/miquels/notflix-server/jellyfin"
 )
 
 var configFile = "notflix-server.cfg"
@@ -29,13 +32,8 @@ type cfgMain struct {
 	Cachedir    string
 	Dbdir       string
 	Logfile     string
-	Collections []Collection `cc:"collection"`
-	Jellyfin    struct {
-		// Indicates if we should auto-register Jellyfin users
-		AutoRegister bool
-		// JPEG quality for posters
-		ImageQualityPoster int
-	}
+	Collections []collection.Collection `cc:"collection"`
+	Jellyfin    jellyfin.Configuration
 }
 
 var config = cfgMain{
@@ -52,7 +50,7 @@ func dataHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	vars := mux.Vars(r)
-	dataDir := getDataDir(vars["source"])
+	dataDir := collection.GetDataDir(vars["source"])
 	if dataDir == "" {
 		http.Error(w, "404 Not Found", http.StatusNotFound)
 		return
@@ -117,16 +115,16 @@ func main() {
 		return
 	}
 
-	log.Printf("Parsing flags")
+	collection.New(config.Collections)
 
+	log.Printf("Parsing flags")
 	logfile := flag.String("logfile", config.Logfile,
 		"Path of logfile. Use 'syslog' for syslog, 'stdout' "+
 			"for standard output, or 'none' to disable logging.")
 	flag.Parse()
 
 	log.Printf("dbinit")
-
-	err = dbInit(path.Join(config.Dbdir, "tink-items.db"))
+	err = database.Init(path.Join(config.Dbdir, "tink-items.db"))
 	if err != nil {
 		log.Fatalf("dbInit: %s\n", err)
 	}
@@ -134,7 +132,7 @@ func main() {
 	resizer = imageresize.New(imageresize.ResizerConfig{
 		Cachedir: config.Cachedir,
 	})
-	PlayState.Init()
+	database.PlayState.Init()
 
 	log.Printf("setting logfile")
 
@@ -182,7 +180,8 @@ func main() {
 	r.Handle("/v", notFound)
 	r.PathPrefix("/v/").HandlerFunc(indexHandler)
 
-	registerJellyfinHandlers(r)
+	j := jellyfin.New(&config.Jellyfin, config.Collections, resizer)
+	j.RegisterHandlers(r)
 
 	r.PathPrefix("/").Handler(http.FileServer(http.Dir(config.Appdir)))
 
@@ -207,4 +206,24 @@ func main() {
 		log.Printf("Serving HTTP on %s", addr)
 		log.Fatal(http.ListenAndServe(addr, server))
 	}
+}
+
+func updateCollections(pace int) {
+	id := 1
+	for i := range config.Collections {
+		c := &(config.Collections[i])
+		c.SourceId = id
+		c.BaseUrl = fmt.Sprintf("/data/%d", id)
+		switch c.Type {
+		case collection.CollectionMovies:
+			collection.BuildMovies(c, pace)
+		case collection.CollectionShows:
+			collection.BuildShows(c, pace)
+		}
+		id++
+	}
+}
+
+func initCollections() {
+	updateCollections(0)
 }
