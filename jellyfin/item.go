@@ -18,7 +18,7 @@ import (
 
 func (j *Jellyfin) buildJFItemCollection(itemid string) (response JFItem, e error) {
 	collectionid := strings.TrimPrefix(itemid, itemprefix_collection)
-	c := collection.GetCollection(collectionid)
+	c := j.collections.GetCollection(collectionid)
 	if c == nil {
 		e = errors.New("collection not found")
 		return
@@ -121,7 +121,7 @@ func (j *Jellyfin) buildJFItem(userId string, i *collection.Item, parentId, coll
 		for _, s := range i.Seasons {
 			for _, e := range s.Episodes {
 				totalEpisodes++
-				episodePlaystate, err := database.PlayState.Get(userId, e.Id)
+				episodePlaystate, err := j.db.PlayStateGet(userId, e.Id)
 				if err == nil {
 					if episodePlaystate.Played {
 						playedEpisodes++
@@ -147,7 +147,7 @@ func (j *Jellyfin) buildJFItem(userId string, i *collection.Item, parentId, coll
 
 	j.enrichResponseWithNFO(&response, i.Nfo)
 
-	if playstate, err := database.PlayState.Get(userId, i.Id); err == nil {
+	if playstate, err := j.db.PlayStateGet(userId, i.Id); err == nil {
 		response.UserData = j.buildJFUserData(playstate)
 		response.UserData.Key = i.Id
 	}
@@ -156,7 +156,7 @@ func (j *Jellyfin) buildJFItem(userId string, i *collection.Item, parentId, coll
 
 // buildJFItemSeason builds season
 func (j *Jellyfin) buildJFItemSeason(userId, seasonId string) (response JFItem, err error) {
-	_, show, season := collection.GetSeasonByID(trimPrefix(seasonId))
+	_, show, season := j.collections.GetSeasonByID(trimPrefix(seasonId))
 	if season == nil {
 		err = errors.New("could not find season")
 		return
@@ -190,7 +190,7 @@ func (j *Jellyfin) buildJFItemSeason(userId, seasonId string) (response JFItem, 
 	var playedEpisodes int
 	var lastestPlayed time.Time
 	for _, e := range season.Episodes {
-		episodePlaystate, err := database.PlayState.Get(userId, e.Id)
+		episodePlaystate, err := j.db.PlayStateGet(userId, e.Id)
 		if err == nil {
 			if episodePlaystate.Played {
 				playedEpisodes++
@@ -215,7 +215,7 @@ func (j *Jellyfin) buildJFItemSeason(userId, seasonId string) (response JFItem, 
 
 // buildJFItemEpisode builds episode
 func (j *Jellyfin) buildJFItemEpisode(userId, episodeId string) (response JFItem, err error) {
-	_, show, _, episode := collection.GetEpisodeByID(trimPrefix(episodeId))
+	_, show, _, episode := j.collections.GetEpisodeByID(trimPrefix(episodeId))
 	if episode == nil {
 		err = errors.New("could not find episode")
 		return
@@ -263,7 +263,7 @@ func (j *Jellyfin) buildJFItemEpisode(userId, episodeId string) (response JFItem
 	// Add some generic mediasource to indicate "720p, stereo"
 	response.MediaSources = j.buildMediaSource(episode.Video, episode.Nfo)
 
-	if playstate, err := database.PlayState.Get(userId, episodeId); err == nil {
+	if playstate, err := j.db.PlayStateGet(userId, episodeId); err == nil {
 		response.UserData = j.buildJFUserData(playstate)
 		response.UserData.Key = episodeId
 	}

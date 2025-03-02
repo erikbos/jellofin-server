@@ -12,6 +12,20 @@ import (
 	"github.com/miquels/notflix-server/idhash"
 )
 
+type DatabaseOptions struct {
+	Filename string
+}
+
+type DatabaseRepo struct {
+	filename string
+
+	dbHandle *sqlx.DB
+
+	PlayState PlayStateRepo
+
+	AccessToken AccessTokenRepo
+}
+
 type Item struct {
 	Id         string
 	Name       string
@@ -24,19 +38,28 @@ type Item struct {
 	LastVideo  int64
 }
 
-var dbHandle *sqlx.DB
+func New(o *DatabaseOptions) *DatabaseRepo {
+	d := &DatabaseRepo{
+		filename: o.Filename,
+	}
+	d.PlayStateInit()
+	return d
+}
 
-func Init(dbFile string) (err error) {
-	dbHandle, err = sqlx.Connect("sqlite3", dbFile)
+func (d *DatabaseRepo) Connect() (err error) {
+	if d.filename == "" {
+		return fmt.Errorf("Database directory not set")
+	}
+	d.dbHandle, err = sqlx.Connect("sqlite3", d.filename)
 	if err != nil {
 		return
 	}
-	err = dbInitSchema()
+	err = d.dbInitSchema()
 	return
 }
 
-func dbInitSchema() error {
-	tx, err := dbHandle.Beginx()
+func (d *DatabaseRepo) dbInitSchema() error {
+	tx, err := d.dbHandle.Beginx()
 	if err != nil {
 		return err
 	}
@@ -86,7 +109,7 @@ timestamp DATETIME);`,
 }
 
 // Check NFO file.
-// func itemCheckNfo(item *collection.Item) (updated bool) {
+// func (d *Database) itemCheckNfo(item *collection.Item) (updated bool) {
 // 	if item.NfoPath == "" {
 // 		return
 // 	}
@@ -126,7 +149,7 @@ timestamp DATETIME);`,
 // 	return
 // }
 
-func dbInsertItem(tx *sqlx.Tx, item *Item) (err error) {
+func (d *DatabaseRepo) dbInsertItem(tx *sqlx.Tx, item *Item) (err error) {
 	// item.Genrestring = strings.Join(item.Genre, ",")
 	_, err = tx.NamedExec(
 		`INSERT INTO items(id, name, votes, genre, rating, year, nfotime, `+
@@ -136,7 +159,7 @@ func dbInsertItem(tx *sqlx.Tx, item *Item) (err error) {
 	return
 }
 
-func dbUpdateItem(tx *sqlx.Tx, item *Item) (err error) {
+func (d *DatabaseRepo) dbUpdateItem(tx *sqlx.Tx, item *Item) (err error) {
 	// item.Genrestring = strings.Join(item.Genre, ",")
 	_, err = tx.NamedExec(
 		`UPDATE items SET votes = :votes, genre = :genre, rating = :rating, `+
@@ -146,19 +169,19 @@ func dbUpdateItem(tx *sqlx.Tx, item *Item) (err error) {
 	return
 }
 
-func DbLoadItem(item *Item) {
+func (d *DatabaseRepo) DbLoadItem(item *Item) {
 	var data Item
 
 	// Find this item by name in the database.
-	tx, _ := dbHandle.Beginx()
-	err := dbHandle.Get(&data, "SELECT * FROM items WHERE name=? LIMIT 1", item.Name)
+	tx, _ := d.dbHandle.Beginx()
+	err := d.dbHandle.Get(&data, "SELECT * FROM items WHERE name=? LIMIT 1", item.Name)
 
 	// Not in database yet, insert
 	if err == sql.ErrNoRows {
 		// itemCheckNfo(item)
 		// fmt.Printf("dbLoadItem: add to database: %s\n", item.Name)
 		item.Id = idhash.IdHash(item.Name)
-		err = dbInsertItem(tx, item)
+		err = d.dbInsertItem(tx, item)
 		if err != nil {
 			// INSERT: error: UNIQUE constraint failed: items.id
 			// if strings.Contains(err.Error(), "UNIQUE constraint") {
@@ -210,7 +233,7 @@ func DbLoadItem(item *Item) {
 	// }
 
 	if needUpdate {
-		err = dbUpdateItem(tx, item)
+		err = d.dbUpdateItem(tx, item)
 		if err != nil {
 			fmt.Printf("dbLoadItem %s: update: %s\n", item.Name, err)
 			tx.Rollback()

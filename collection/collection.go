@@ -1,20 +1,32 @@
 package collection
 
 import (
+	"fmt"
 	"net/url"
 	"strconv"
 
+	"github.com/miquels/notflix-server/database"
 	"github.com/miquels/notflix-server/nfo"
 )
 
-var config CollectionRepo
+type CollectionOptions struct {
+	Collections []Collection
+	Db          *database.DatabaseRepo
+}
+
+// var config CollectionRepo
 
 type CollectionRepo struct {
 	collections []Collection
+	db          *database.DatabaseRepo
 }
 
-func New(c []Collection) {
-	config.collections = c
+func New(options *CollectionOptions) *CollectionRepo {
+	c := &CollectionRepo{
+		collections: options.Collections,
+		db:          options.Db,
+	}
+	return c
 }
 
 type Collection struct {
@@ -23,8 +35,8 @@ type Collection struct {
 	Type      string  `json:"type"`
 	Items     []*Item `json:"items,omitempty"`
 	Directory string  `json:"-"`
-	BaseUrl   string  `json:"-"`
-	HlsServer string  `json:"-"`
+	baseUrl   string  `json:"-"`
+	hlsServer string  `json:"-"`
 }
 
 // An 'item' can be a movie, a tv-show, a folder, etc.
@@ -140,43 +152,55 @@ const (
 	CollectionShows  = "shows"
 )
 
-// func updateCollections(pace int) {
-// 	id := 1
-// 	for i := range config.Collections {
-// 		c := &(config.Collections[i])
-// 		c.SourceId = id
-// 		c.BaseUrl = fmt.Sprintf("/data/%d", id)
-// 		switch c.Type {
-// 		case CollectionMovies:
-// 			buildMovies(c, pace)
-// 		case CollectionShows:
-// 			buildShows(c, pace)
-// 		}
-// 		id++
-// 	}
-// }
+func (cr *CollectionRepo) updateCollections(pace int) {
+	id := 1
+	for i := range cr.collections {
+		c := &(cr.collections[i])
+		c.SourceId = id
+		c.baseUrl = fmt.Sprintf("/data/%d", id)
+		switch c.Type {
+		case CollectionMovies:
+			cr.buildMovies(c, pace)
+		case CollectionShows:
+			cr.buildShows(c, pace)
+		}
+		id++
+	}
+}
 
-// func initCollections() {
-// 	updateCollections(0)
-// }
+// Init initalizes content collections
+func (cr *CollectionRepo) Init() {
+	cr.updateCollections(0)
+}
 
-func GetCollection(collName string) (c *Collection) {
+// Background keeps scanning content collections for changes continously
+func (cr *CollectionRepo) Background() {
+	for {
+		cr.updateCollections(1)
+	}
+}
+
+func (cr *CollectionRepo) GetCollections() []Collection {
+	return cr.collections
+}
+
+func (cr *CollectionRepo) GetCollection(collName string) (c *Collection) {
 	sourceId := -1
 	if n, err := strconv.Atoi(collName); err == nil {
 		sourceId = n
 	}
-	for n := range config.collections {
-		if config.collections[n].Name_ == collName ||
-			config.collections[n].SourceId == sourceId {
-			c = &(config.collections[n])
+	for n := range cr.collections {
+		if cr.collections[n].Name_ == collName ||
+			cr.collections[n].SourceId == sourceId {
+			c = &(cr.collections[n])
 			return
 		}
 	}
 	return
 }
 
-func GetItem(collName string, itemName string) (i *Item) {
-	c := GetCollection(collName)
+func (cr *CollectionRepo) GetItem(collName string, itemName string) (i *Item) {
+	c := cr.GetCollection(collName)
 	if c == nil {
 		return
 	}
@@ -189,18 +213,18 @@ func GetItem(collName string, itemName string) (i *Item) {
 	return
 }
 
-func GetItemByID(itemId string) (c *Collection, i *Item) {
-	for _, c := range config.collections {
-		if i = GetItem(c.Name_, itemId); i != nil {
+func (cr *CollectionRepo) GetItemByID(itemId string) (c *Collection, i *Item) {
+	for _, c := range cr.collections {
+		if i = cr.GetItem(c.Name_, itemId); i != nil {
 			return &c, i
 		}
 	}
 	return nil, nil
 }
 
-func GetSeasonByID(saesonId string) (*Collection, *Item, *Season) {
+func (cr *CollectionRepo) GetSeasonByID(saesonId string) (*Collection, *Item, *Season) {
 	// fixme: wooho O(n^^3) "just temporarily.."
-	for _, c := range config.collections {
+	for _, c := range cr.collections {
 		for _, i := range c.Items {
 			for _, s := range i.Seasons {
 				if s.Id == saesonId {
@@ -212,13 +236,9 @@ func GetSeasonByID(saesonId string) (*Collection, *Item, *Season) {
 	return nil, nil, nil
 }
 
-const itemprefix_separator = "_"
-
-func GetEpisodeByID(episodeId string) (*Collection, *Item, *Season, *Episode) {
-	// episodeId = strings.TrimPrefix(episodeId, itemprefix_separator)
-
+func (cr *CollectionRepo) GetEpisodeByID(episodeId string) (*Collection, *Item, *Season, *Episode) {
 	// fixme: wooho O(n^^4) "just temporarily.."
-	for _, c := range config.collections {
+	for _, c := range cr.collections {
 		for _, i := range c.Items {
 			for _, s := range i.Seasons {
 				for _, e := range s.Episodes {
@@ -233,30 +253,38 @@ func GetEpisodeByID(episodeId string) (*Collection, *Item, *Season, *Episode) {
 	return nil, nil, nil, nil
 }
 
-func GetHlsServer(source string) (h string) {
-	id, err := strconv.ParseInt(source, 10, 64)
-	if err != nil {
-		return
-	}
-	for n, c := range config.collections {
-		if int64(c.SourceId) == id {
-			h = config.collections[n].HlsServer
-			return
-		}
-	}
-	return
+func (c *Collection) GetHlsServer() string {
+	return c.hlsServer
 }
 
-func GetDataDir(source string) (d string) {
-	id, err := strconv.ParseInt(source, 10, 64)
-	if err != nil {
-		return
-	}
-	for n, c := range config.collections {
-		if int64(c.SourceId) == id {
-			d = config.collections[n].Directory
-			return
-		}
-	}
-	return
+func (c *Collection) GetDataDir() string {
+	return c.Directory
 }
+
+// func (cr *CollectionRepo) GetHlsServer(source string) (h string) {
+// 	id, err := strconv.ParseInt(source, 10, 64)
+// 	if err != nil {
+// 		return
+// 	}
+// 	for n, c := range cr.collections {
+// 		if int64(c.SourceId) == id {
+// 			h = cr.collections[n].HlsServer
+// 			return
+// 		}
+// 	}
+// 	return
+// }
+
+// func (cr *CollectionRepo) GetDataDir(source string) (d string) {
+// 	id, err := strconv.ParseInt(source, 10, 64)
+// 	if err != nil {
+// 		return
+// 	}
+// 	for n, c := range cr.collections {
+// 		if int64(c.SourceId) == id {
+// 			d = cr.collections[n].Directory
+// 			return
+// 		}
+// 	}
+// 	return
+// }

@@ -20,9 +20,9 @@ var (
 )
 
 // dbUserValidate checks if the user exists and the password is correct.
-func UserValidate(username, password *string) (user *User, err error) {
+func (d *DatabaseRepo) UserValidate(username, password *string) (user *User, err error) {
 	var data User
-	sqlerr := dbHandle.Get(&data, "SELECT * FROM users WHERE username=? LIMIT 1", username)
+	sqlerr := d.dbHandle.Get(&data, "SELECT * FROM users WHERE username=? LIMIT 1", username)
 	if sqlerr != nil {
 		return nil, ErrUserNotFound
 
@@ -34,8 +34,8 @@ func UserValidate(username, password *string) (user *User, err error) {
 	return &data, nil
 }
 
-// dbUserInsert inserts a new user into the database.
-func UserInsert(username, password string) (user *User, err error) {
+// UserInsert inserts a new user into the database.
+func (d *DatabaseRepo) UserInsert(username, password string) (user *User, err error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
 	if err != nil {
 		return nil, err
@@ -47,7 +47,7 @@ func UserInsert(username, password string) (user *User, err error) {
 		Password: string(hashedPassword),
 	}
 
-	tx, _ := dbHandle.Beginx()
+	tx, _ := d.dbHandle.Beginx()
 	_, err = tx.NamedExec(`INSERT INTO users (id, username, password) `+
 		`VALUES (:id, :username, :password)`, user)
 	if err != nil {
@@ -55,4 +55,15 @@ func UserInsert(username, password string) (user *User, err error) {
 	}
 	tx.Commit()
 	return
+}
+
+// UserGetById retrieves a user from the database by their ID.
+func (d *DatabaseRepo) UserGetById(id string) (user *User, err error) {
+	var data User
+	sqlerr := d.dbHandle.Get(&data, "SELECT * FROM users WHERE id=? LIMIT 1", id)
+	if sqlerr != nil {
+		return nil, ErrUserNotFound
+	}
+	data.Password = ""
+	return &data, nil
 }

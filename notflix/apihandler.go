@@ -1,17 +1,64 @@
-package main
+package notflix
 
 import (
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
+	"path"
+	"strings"
 	"time"
 
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 
 	"github.com/miquels/notflix-server/collection"
+	"github.com/miquels/notflix-server/database"
+	"github.com/miquels/notflix-server/imageresize"
 	"github.com/miquels/notflix-server/nfo"
 )
+
+type NotflixOptions struct {
+	Collections  *collection.CollectionRepo
+	Db           *database.DatabaseRepo
+	Imageresizer *imageresize.Resizer
+	Appdir       string
+}
+
+type Notflix struct {
+	collections  *collection.CollectionRepo
+	db           *database.DatabaseRepo
+	imageresizer *imageresize.Resizer
+	Appdir       string
+}
+
+func New(o *NotflixOptions) *Notflix {
+	return &Notflix{
+		collections:  o.Collections,
+		imageresizer: o.Imageresizer,
+		Appdir:       o.Appdir,
+	}
+}
+
+func (n *Notflix) RegisterHandlers(r *mux.Router) {
+	notFound := http.NotFoundHandler()
+	gzip := handlers.CompressHandler
+
+	r.Handle("/api", notFound)
+	s := r.PathPrefix("/api/").Subrouter()
+	s.HandleFunc("/collections", n.collectionsHandler)
+	s.HandleFunc("/collection/{coll}", n.collectionHandler)
+	s.HandleFunc("/collection/{coll}/genres", n.genresHandler)
+	s.Handle("/collection/{coll}/items", gzip(http.HandlerFunc(n.itemsHandler)))
+	s.Handle("/collection/{coll}/item/{item}", gzip(http.HandlerFunc(n.itemHandler)))
+
+	r.Handle("/data", notFound)
+	s = r.PathPrefix("/data/").Subrouter()
+	s.HandleFunc("/{source}/{path:.*}", n.dataHandler)
+
+	r.Handle("/v", notFound)
+	r.PathPrefix("/v/").HandlerFunc(n.indexHandler)
+}
 
 func preCheck(w http.ResponseWriter, r *http.Request, keys ...string) (done bool) {
 	fmt.Printf("precheck running\n")
@@ -49,24 +96,24 @@ func serveJSON(obj interface{}, w http.ResponseWriter) {
 	j.Encode(obj)
 }
 
-func collectionsHandler(w http.ResponseWriter, r *http.Request) {
+func (n *Notflix) collectionsHandler(w http.ResponseWriter, r *http.Request) {
 	if preCheck(w, r) {
 		return
 	}
 	cc := []collection.Collection{}
-	for _, c := range config.Collections {
+	for _, c := range n.collections.GetCollections() {
 		c.Items = nil
 		cc = append(cc, c)
 	}
 	serveJSON(cc, w)
 }
 
-func collectionHandler(w http.ResponseWriter, r *http.Request) {
+func (n *Notflix) collectionHandler(w http.ResponseWriter, r *http.Request) {
 	if preCheck(w, r, "coll") {
 		return
 	}
 	vars := mux.Vars(r)
-	c := collection.GetCollection(vars["coll"])
+	c := n.collections.GetCollection(vars["coll"])
 	if c == nil {
 		http.Error(w, "404 Not Found", http.StatusNotFound)
 		return
@@ -76,12 +123,12 @@ func collectionHandler(w http.ResponseWriter, r *http.Request) {
 	serveJSON(cc, w)
 }
 
-func itemsHandler(w http.ResponseWriter, r *http.Request) {
+func (n *Notflix) itemsHandler(w http.ResponseWriter, r *http.Request) {
 	if preCheck(w, r, "coll") {
 		return
 	}
 	vars := mux.Vars(r)
-	c := collection.GetCollection(vars["coll"])
+	c := n.collections.GetCollection(vars["coll"])
 	if c == nil {
 		http.Error(w, "404 Not Found", http.StatusNotFound)
 		return
@@ -116,12 +163,12 @@ func itemsHandler(w http.ResponseWriter, r *http.Request) {
 	serveJSON(itemsObj, w)
 }
 
-func itemHandler(w http.ResponseWriter, r *http.Request) {
+func (n *Notflix) itemHandler(w http.ResponseWriter, r *http.Request) {
 	if preCheck(w, r, "coll", "item") {
 		return
 	}
 	vars := mux.Vars(r)
-	i := collection.GetItem(vars["coll"], vars["item"])
+	i := n.collections.GetItem(vars["coll"], vars["item"])
 	if i == nil {
 		http.Error(w, "404 Not Found", http.StatusNotFound)
 		return
@@ -174,12 +221,12 @@ func itemHandler(w http.ResponseWriter, r *http.Request) {
 	serveJSON(&i2, w)
 }
 
-func genresHandler(w http.ResponseWriter, r *http.Request) {
+func (n *Notflix) genresHandler(w http.ResponseWriter, r *http.Request) {
 	if preCheck(w, r, "coll") {
 		return
 	}
 	vars := mux.Vars(r)
-	c := collection.GetCollection(vars["coll"])
+	c := n.collections.GetCollection(vars["coll"])
 	if c == nil {
 		http.Error(w, "404 Not Found", http.StatusNotFound)
 		return
@@ -200,4 +247,61 @@ func genresHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	serveJSON(gc, w)
+}
+
+func (n *Notflix) dataHandler(w http.ResponseWriter, r *http.Request) {
+	if n.hlsHandler(w, r) {
+		return
+	}
+
+	if preCheck(w, r, "source", "path") {
+		return
+	}
+	vars := mux.Vars(r)
+	c := n.collections.GetCollection(vars["source"])
+	if c == nil {
+		return
+	}
+	// dataDir := n.collections.GetDataDir(vars["source"])
+	// if dataDir == "" {
+	// 	http.Error(w, "404 Not Found", http.StatusNotFound)
+	// 	return
+	// }
+	fn := path.Clean(path.Join(c.GetDataDir(), "/", vars["path"]))
+
+	var err error
+	var file http.File
+
+	ext := ""
+	i := strings.LastIndex(fn, ".")
+	if i >= 0 {
+		ext = fn[i+1:]
+	}
+	if ext == "srt" || ext == "vtt" {
+		file, err = OpenSub(w, r, fn)
+	} else {
+		file, err = n.imageresizer.OpenFile(w, r, fn, 0)
+	}
+	defer file.Close()
+	if err != nil {
+		http.Error(w, "404 Not Found", http.StatusNotFound)
+		return
+	}
+
+	fi, _ := file.Stat()
+	if !fi.Mode().IsRegular() {
+		http.Error(w, "403 Access denied", http.StatusForbidden)
+		return
+	}
+
+	w.Header().Set("cache-control", "max-age=86400, stale-while-revalidate=300")
+	if checkEtag(w, r, file) {
+		return
+	}
+
+	http.ServeContent(w, r, fn, fi.ModTime(), file)
+}
+
+func (n *Notflix) indexHandler(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, path.Join(n.Appdir, "index.html"))
 }

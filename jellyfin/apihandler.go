@@ -22,7 +22,14 @@ import (
 	"github.com/miquels/notflix-server/imageresize"
 )
 
-type Configuration struct {
+// API definitions: https://swagger.emby.media/ & https://api.jellyfin.org/
+// Docs: https://github.com/mediabrowser/emby/wiki
+
+type JellyfinOptions struct {
+	Collections  *collection.CollectionRepo
+	Db           *database.DatabaseRepo
+	Imageresizer *imageresize.Resizer
+
 	// Indicates if we should auto-register Jellyfin users
 	AutoRegister bool
 	// JPEG quality for posters
@@ -30,21 +37,29 @@ type Configuration struct {
 }
 
 type Jellyfin struct {
-	config       *Configuration
-	Collections  []collection.Collection
+	collections  *collection.CollectionRepo
+	db           *database.DatabaseRepo
 	imageresizer *imageresize.Resizer
+
+	// Indicates if we should auto-register Jellyfin users
+	autoRegister bool
+	// JPEG quality for posters
+	imageQualityPoster int
 }
 
 // API definitions: https://swagger.emby.media/ & https://api.jellyfin.org/
 // Docs: https://github.com/mediabrowser/emby/wiki
 
-func New(conf *Configuration, collection []collection.Collection,
-	ir *imageresize.Resizer) *Jellyfin {
-	return &Jellyfin{
-		config:       conf,
-		Collections:  collection,
-		imageresizer: ir,
+func New(o *JellyfinOptions) *Jellyfin {
+	j := &Jellyfin{
+		collections:        o.Collections,
+		db:                 o.Db,
+		imageresizer:       o.Imageresizer,
+		autoRegister:       o.AutoRegister,
+		imageQualityPoster: o.ImageQualityPoster,
 	}
+	j.db.AccessToken.Init()
+	return j
 }
 
 func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
@@ -152,10 +167,10 @@ func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	user, err := database.UserValidate(request.Username, request.Pw)
+	user, err := j.db.UserValidate(request.Username, request.Pw)
 	if err != nil {
-		if err == database.ErrUserNotFound && j.config.AutoRegister {
-			user, err = database.UserInsert(*request.Username, *request.Pw)
+		if err == database.ErrUserNotFound && j.autoRegister {
+			user, err = j.db.UserInsert(*request.Username, *request.Pw)
 			if err != nil {
 				http.Error(w, "Failed to auto-register user", http.StatusInternalServerError)
 				return
@@ -181,7 +196,7 @@ func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http
 		IsActive:           true,
 	}
 
-	accesstoken := AccessTokens.New(session)
+	accesstoken := j.db.AccessToken.New(user.Id)
 
 	response := JFAuthenticateByNameResponse{
 		AccessToken: accesstoken,
@@ -214,7 +229,7 @@ func (j *Jellyfin) authmiddleware(next http.Handler) http.Handler {
 		// log.Printf("authMiddleware: Token=%s, Client=%s, Device=%s, DeviceId=%s, Version=%s",
 		// 	embyHeader.token, embyHeader.client, embyHeader.device, embyHeader.deviceID, embyHeader.version)
 
-		tokendetails := AccessTokens.Lookup(embyHeader.token)
+		tokendetails := j.db.AccessToken.Lookup(embyHeader.token)
 		if tokendetails == nil {
 			http.Error(w, "invalid access token", http.StatusUnauthorized)
 			return
@@ -226,9 +241,9 @@ func (j *Jellyfin) authmiddleware(next http.Handler) http.Handler {
 }
 
 // getAccessTokenDetails returns access token details of a request in flight
-func (j *Jellyfin) getAccessTokenDetails(r *http.Request) *AccessToken {
+func (j *Jellyfin) getAccessTokenDetails(r *http.Request) *database.AccessToken {
 	// This should have been populated by authmiddleware(j.)
-	details, ok := r.Context().Value(contextAccessTokenDetails).(*AccessToken)
+	details, ok := r.Context().Value(contextAccessTokenDetails).(*database.AccessToken)
 	if ok {
 		return details
 	} else {
@@ -316,15 +331,17 @@ func (j *Jellyfin) usersHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vars := mux.Vars(r)
-	if vars["user"] != accessTokenDetails.session.UserId {
+	if vars["user"] != accessTokenDetails.UserId {
 		http.Error(w, "invalid user id", http.StatusNotFound)
 		return
 	}
 
+	dbuser, _ := j.db.UserGetById(accessTokenDetails.UserId)
+
 	user := JFUser{
-		Id:                        accessTokenDetails.session.UserId,
+		Id:                        dbuser.Id,
+		Name:                      dbuser.Username,
 		ServerId:                  serverID,
-		Name:                      accessTokenDetails.session.UserName,
 		HasPassword:               true,
 		HasConfiguredPassword:     true,
 		HasConfiguredEasyPassword: false,
@@ -338,7 +355,7 @@ func (j *Jellyfin) usersHandler(w http.ResponseWriter, r *http.Request) {
 // curl -v 'http://127.0.0.1:9090/Users/2b1ec0a52b09456c9823a367d84ac9e5/Views?IncludeExternalContent=false'
 func (j *Jellyfin) usersViewsHandler(w http.ResponseWriter, r *http.Request) {
 	items := []JFItem{}
-	for _, c := range j.Collections {
+	for _, c := range j.collections.GetCollections() {
 		if item, err := j.buildJFItemCollection(genCollectionID(c.SourceId)); err == nil {
 			items = append(items, item)
 		}
@@ -354,7 +371,7 @@ func (j *Jellyfin) usersViewsHandler(w http.ResponseWriter, r *http.Request) {
 // curl -v http://127.0.0.1:9090/Users/2b1ec0a52b09456c9823a367d84ac9e5/GroupingOptions
 func (j *Jellyfin) usersGroupingOptionsHandler(w http.ResponseWriter, r *http.Request) {
 	collections := []JFCollection{}
-	for _, c := range j.Collections {
+	for _, c := range j.collections.GetCollections() {
 		collectionItem, _ := j.buildJFItemCollection(genCollectionID(c.SourceId))
 		collection := JFCollection{
 			Name: c.Name_,
@@ -400,7 +417,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 			serveJSON(collectionItem, w)
 			return
 		case "season":
-			seasonItem, err := j.buildJFItemSeason(accessTokenDetails.session.UserId, itemId)
+			seasonItem, err := j.buildJFItemSeason(accessTokenDetails.UserId, itemId)
 			if err != nil {
 				http.Error(w, "Could not find season", http.StatusNotFound)
 				return
@@ -408,7 +425,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 			serveJSON(seasonItem, w)
 			return
 		case "episode":
-			episodeItem, err := j.buildJFItemEpisode(accessTokenDetails.session.UserId, itemId)
+			episodeItem, err := j.buildJFItemEpisode(accessTokenDetails.UserId, itemId)
 			if err != nil {
 				http.Error(w, "Could not find episode", http.StatusNotFound)
 				return
@@ -423,12 +440,12 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Try to find individual item
-	c, i := collection.GetItemByID(itemId)
+	c, i := j.collections.GetItemByID(itemId)
 	if i == nil {
 		http.Error(w, "Item not found", http.StatusNotFound)
 		return
 	}
-	serveJSON(j.buildJFItem(accessTokenDetails.session.UserId, i, idhash.IdHash(c.Name_), c.Type, false), w)
+	serveJSON(j.buildJFItem(accessTokenDetails.UserId, i, idhash.IdHash(c.Name_), c.Type, false), w)
 }
 
 // curl -v 'http://127.0.0.1:9090/Users/2b1ec0a52b09456c9823a367d84ac9e5/Items?ExcludeLocationTypes=Virtual&Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount&ParentId=f137a2dd21bbc1b99aa5c0f6bf02a805&SortBy=SortName,ProductionYear&SortOrder=Ascending&IncludeItemTypes=Movie&Recursive=true&StartIndex=0&Limit=50'
@@ -455,11 +472,11 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 	var searchC *collection.Collection
 	if searchCollection != "" {
 		collectionid := strings.TrimPrefix(searchCollection, itemprefix_collection)
-		searchC = collection.GetCollection(collectionid)
+		searchC = j.collections.GetCollection(collectionid)
 	}
 
 	items := []JFItem{}
-	for _, c := range j.Collections {
+	for _, c := range j.collections.GetCollections() {
 		// Skip if we are searching in one particular collection
 		if searchC != nil && searchC.SourceId != c.SourceId {
 			continue
@@ -471,7 +488,7 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 				if i.SortName == "" {
 					i.SortName = i.Name
 				}
-				items = append(items, j.buildJFItem(accessTokenDetails.session.UserId, i, idhash.IdHash(c.Name_), c.Type, true))
+				items = append(items, j.buildJFItem(accessTokenDetails.UserId, i, idhash.IdHash(c.Name_), c.Type, true))
 			}
 		}
 	}
@@ -558,17 +575,17 @@ func (j *Jellyfin) usersItemsLatestHandler(w http.ResponseWriter, r *http.Reques
 	var searchC *collection.Collection
 	if searchCollection != "" {
 		collectionid := strings.TrimPrefix(searchCollection, itemprefix_collection)
-		searchC = collection.GetCollection(collectionid)
+		searchC = j.collections.GetCollection(collectionid)
 	}
 
 	items := []JFItem{}
-	for _, c := range j.Collections {
+	for _, c := range j.collections.GetCollections() {
 		// Skip if we are searching in one particular collection
 		if searchC != nil && searchC.SourceId != c.SourceId {
 			continue
 		}
 		for _, i := range c.Items {
-			items = append(items, j.buildJFItem(accessTokenDetails.session.UserId, i, idhash.IdHash(c.Name_), c.Type, true))
+			items = append(items, j.buildJFItem(accessTokenDetails.UserId, i, idhash.IdHash(c.Name_), c.Type, true))
 		}
 	}
 
@@ -593,7 +610,7 @@ func (j *Jellyfin) usersItemsLatestHandler(w http.ResponseWriter, r *http.Reques
 // curl -v http://127.0.0.1:9090/Library/VirtualFolders
 func (j *Jellyfin) libraryVirtualFoldersHandler(w http.ResponseWriter, r *http.Request) {
 	libraries := []JFMediaLibrary{}
-	for _, c := range j.Collections {
+	for _, c := range j.collections.GetCollections() {
 		collectionItem, _ := j.buildJFItemCollection(genCollectionID(c.SourceId))
 		l := JFMediaLibrary{
 			Name:               c.Name_,
@@ -624,7 +641,7 @@ func (j *Jellyfin) showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	showId := vars["show"]
-	_, i := collection.GetItemByID(showId)
+	_, i := j.collections.GetItemByID(showId)
 	if i == nil {
 		http.Error(w, "Show not found", http.StatusNotFound)
 		return
@@ -632,7 +649,7 @@ func (j *Jellyfin) showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
 	// Create API response
 	seasons := []JFItem{}
 	for _, s := range i.Seasons {
-		season, err := j.buildJFItemSeason(accessTokenDetails.session.UserId, s.Id)
+		season, err := j.buildJFItemSeason(accessTokenDetails.UserId, s.Id)
 		if err != nil {
 			log.Printf("buildJFItemSeason returned error %s", err)
 			continue
@@ -657,7 +674,7 @@ func (j *Jellyfin) showsEpisodesHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	vars := mux.Vars(r)
-	_, i := collection.GetItemByID(vars["show"])
+	_, i := j.collections.GetItemByID(vars["show"])
 	if i == nil {
 		http.Error(w, "Show not found", http.StatusNotFound)
 		return
@@ -675,7 +692,7 @@ func (j *Jellyfin) showsEpisodesHandler(w http.ResponseWriter, r *http.Request) 
 		}
 		for _, e := range s.Episodes {
 			episodeId := itemprefix_episode + e.Id
-			episode, err := j.buildJFItemEpisode(accessTokenDetails.session.UserId, episodeId)
+			episode, err := j.buildJFItemEpisode(accessTokenDetails.UserId, episodeId)
 			if err != nil {
 				log.Printf("buildJFItemEpisode returned error %s", err)
 				continue
@@ -740,7 +757,7 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 		// 	serveJSON(collectionItem, w)
 		// 	return
 		case "season":
-			c, item, season := collection.GetSeasonByID(trimPrefix(itemId))
+			c, item, season := j.collections.GetSeasonByID(trimPrefix(itemId))
 			if season == nil {
 				http.Error(w, "Could not find season", http.StatusNotFound)
 				return
@@ -749,14 +766,14 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 			case "Primary":
 				w.Header().Set("cache-control", "max-age=2592000")
 				j.serveImage(w, r, c.Directory+"/"+item.Name+"/"+season.Poster,
-					j.config.ImageQualityPoster)
+					j.imageQualityPoster)
 				return
 			default:
 				log.Printf("Image request %s, unknown type %s", itemId, imageType)
 				return
 			}
 		case "episode":
-			c, item, _, episode := collection.GetEpisodeByID(trimPrefix(itemId))
+			c, item, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemId))
 			if episode == nil {
 				http.Error(w, "Item not found (could not find episode)", http.StatusNotFound)
 				return
@@ -770,7 +787,7 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	c, i := collection.GetItemByID(itemId)
+	c, i := j.collections.GetItemByID(itemId)
 	if i == nil {
 		http.Error(w, "Item not found", http.StatusNotFound)
 		return
@@ -779,7 +796,7 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 	switch vars["type"] {
 	case "Primary":
 		w.Header().Set("cache-control", "max-age=2592000")
-		j.serveImage(w, r, c.Directory+"/"+i.Name+"/"+i.Poster, j.config.ImageQualityPoster)
+		j.serveImage(w, r, c.Directory+"/"+i.Name+"/"+i.Poster, j.imageQualityPoster)
 		return
 	case "Backdrop":
 		w.Header().Set("cache-control", "max-age=2592000")
@@ -832,7 +849,7 @@ func (j *Jellyfin) videoStreamHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Is episode?
 	if strings.HasPrefix(itemId, itemprefix_episode) {
-		c, item, _, episode := collection.GetEpisodeByID(trimPrefix(itemId))
+		c, item, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemId))
 		if episode == nil {
 			http.Error(w, "Could not find episode", http.StatusNotFound)
 			return
@@ -841,7 +858,7 @@ func (j *Jellyfin) videoStreamHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c, i := collection.GetItemByID(vars["item"])
+	c, i := j.collections.GetItemByID(vars["item"])
 	if i == nil || i.Video == "" {
 		http.Error(w, "Item not found", http.StatusNotFound)
 		return
@@ -868,10 +885,10 @@ func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c, i := collection.GetItemByID("rVFG3EzPthk2wowNkqUl")
+	c, i := j.collections.GetItemByID("rVFG3EzPthk2wowNkqUl")
 	response := JFShowsNextUpResponse{
 		Items: []JFItem{
-			j.buildJFItem(accessTokenDetails.session.UserId, i, idhash.IdHash(c.Name_), c.Type, true),
+			j.buildJFItem(accessTokenDetails.UserId, i, idhash.IdHash(c.Name_), c.Type, true),
 		},
 		TotalRecordCount: 1,
 		StartIndex:       0,
@@ -879,6 +896,7 @@ func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 	serveJSON(response, w)
 }
 
+// usersPlayedItemsPostHandler marks item as played.
 func (j *Jellyfin) usersPlayedItemsPostHandler(w http.ResponseWriter, r *http.Request) {
 	accessTokenDetails := j.getAccessTokenDetails(r)
 	if accessTokenDetails == nil {
@@ -889,10 +907,11 @@ func (j *Jellyfin) usersPlayedItemsPostHandler(w http.ResponseWriter, r *http.Re
 	vars := mux.Vars(r)
 	itemId := vars["item"]
 
-	j.playStateUpdate(accessTokenDetails.session.UserId, itemId, 0, true)
+	j.playStateUpdate(accessTokenDetails.UserId, itemId, 0, true)
 	w.WriteHeader(http.StatusOK)
 }
 
+// usersPlayedItemsPostHandler marks item as not played.
 func (j *Jellyfin) usersPlayedItemsDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	accessTokenDetails := j.getAccessTokenDetails(r)
 	if accessTokenDetails == nil {
@@ -903,7 +922,7 @@ func (j *Jellyfin) usersPlayedItemsDeleteHandler(w http.ResponseWriter, r *http.
 	vars := mux.Vars(r)
 	itemId := vars["item"]
 
-	j.playStateUpdate(accessTokenDetails.session.UserId, itemId, 0, false)
+	j.playStateUpdate(accessTokenDetails.UserId, itemId, 0, false)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -924,8 +943,8 @@ func (j *Jellyfin) sessionsPlayingHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 	// log.Printf("\nsessionsPlayingHandler UserId: %s, ItemId: %s, Progress: %d seconds\n\n",
-	// 	accessTokenDetails.session.UserId, request.ItemId, request.PositionTicks/TicsToSeconds)
-	j.playStateUpdate(accessTokenDetails.session.UserId, request.ItemId, request.PositionTicks, false)
+	// 	accessTokenDetails.UserId, request.ItemId, request.PositionTicks/TicsToSeconds)
+	j.playStateUpdate(accessTokenDetails.UserId, request.ItemId, request.PositionTicks, false)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -943,8 +962,8 @@ func (j *Jellyfin) sessionsPlayingProgressHandler(w http.ResponseWriter, r *http
 		return
 	}
 	// log.Printf("\nsessionsPlayingProgressHandler UserId: %s, ItemId: %s, Progress: %d seconds\n\n",
-	// 	accessTokenDetails.session.UserId, request.ItemId, request.PositionTicks/TicsToSeconds)
-	j.playStateUpdate(accessTokenDetails.session.UserId, request.ItemId, request.PositionTicks, false)
+	// 	accessTokenDetails.UserId, request.ItemId, request.PositionTicks/TicsToSeconds)
+	j.playStateUpdate(accessTokenDetails.UserId, request.ItemId, request.PositionTicks, false)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -962,8 +981,8 @@ func (j *Jellyfin) sessionsPlayingStoppedHandler(w http.ResponseWriter, r *http.
 		return
 	}
 	// log.Printf("\nsessionsPlayingStoppedHandler UserId: %s, ItemId: %s, Progress: %d seconds, canSeek: %t\n\n",
-	// 	accessTokenDetails.session.UserId, request.ItemId, request.PositionTicks/TicsToSeconds, request.CanSeek)
-	j.playStateUpdate(accessTokenDetails.session.UserId, request.ItemId, request.PositionTicks, false)
+	// 	accessTokenDetails.UserId, request.ItemId, request.PositionTicks/TicsToSeconds, request.CanSeek)
+	j.playStateUpdate(accessTokenDetails.UserId, request.ItemId, request.PositionTicks, false)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -973,14 +992,14 @@ func (j *Jellyfin) playStateUpdate(userId, itemId string, positionTicks int, mar
 
 	var duration int
 	if strings.HasPrefix(itemId, itemprefix_episode) {
-		_, _, _, episode := collection.GetEpisodeByID(trimPrefix(itemId))
+		_, _, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemId))
 
 		// fix me: we should not have to load NFO here
 		j.lazyLoadNFO(&episode.Nfo, episode.NfoPath)
 
 		duration = episode.Nfo.FileInfo.StreamDetails.Video.DurationInSeconds
 	} else {
-		_, item := collection.GetItemByID(itemId)
+		_, item := j.collections.GetItemByID(itemId)
 		duration = item.Nfo.Runtime * 60
 	}
 
@@ -1002,7 +1021,7 @@ func (j *Jellyfin) playStateUpdate(userId, itemId string, positionTicks int, mar
 		playstate.Played = false
 	}
 
-	database.PlayState.Update(userId, itemId, playstate)
+	j.db.PlaystateUpdate(userId, trimPrefix(itemId), playstate)
 	return nil
 }
 
