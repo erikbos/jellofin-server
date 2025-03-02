@@ -1,5 +1,5 @@
 // Support for `Kodi' style filesystem layout.
-package main
+package collection
 
 import (
 	//	"fmt"
@@ -10,6 +10,9 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/miquels/notflix-server/database"
+	"github.com/miquels/notflix-server/idhash"
 )
 
 var isVideo = regexp.MustCompile(`^(.*)\.(divx|mov|mp4|MP4|m4u|m4v)$`)
@@ -31,8 +34,7 @@ func escapePath(p string) string {
 	return u.EscapedPath()
 }
 
-func buildMovies(coll *Collection, pace int) (items []*Item) {
-
+func (cr *CollectionRepo) buildMovies(coll *Collection, pace int) (items []*Item) {
 	f, err := OpenDir(coll.Directory)
 	if err != nil {
 		return
@@ -48,7 +50,7 @@ func buildMovies(coll *Collection, pace int) (items []*Item) {
 			(len(name) > 1 && name[:2] == "+ ") {
 			continue
 		}
-		m := buildMovie(coll, name)
+		m := cr.buildMovie(coll, name)
 		if m != nil {
 			items = append(items, m)
 		}
@@ -61,8 +63,7 @@ func buildMovies(coll *Collection, pace int) (items []*Item) {
 	return
 }
 
-func buildMovie(coll *Collection, dir string) (movie *Item) {
-
+func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Item) {
 	d := path.Join(coll.Directory, dir)
 	f, err := OpenDir(d)
 	if err != nil {
@@ -106,7 +107,7 @@ func buildMovie(coll *Collection, dir string) (movie *Item) {
 	}
 
 	movie = &Item{
-		Id:         idHash(mname),
+		Id:         idhash.IdHash(mname),
 		Name:       mname,
 		Year:       year,
 		BaseUrl:    coll.BaseUrl,
@@ -186,15 +187,21 @@ func buildMovie(coll *Collection, dir string) (movie *Item) {
 		}
 	}
 
-	copySrtVttSubs(movie.SrtSubs, &movie.VttSubs)
+	cr.copySrtVttSubs(movie.SrtSubs, &movie.VttSubs)
 
-	dbLoadItem(coll, movie)
+	dbItemMovie := &database.Item{
+		Id:    movie.Id,
+		Name:  movie.Name,
+		Year:  movie.Year,
+		Genre: strings.Join(movie.Genre, ","),
+	}
+
+	cr.db.DbLoadItem(dbItemMovie)
 
 	return
 }
 
-func buildShows(coll *Collection, pace int) (items []*Item) {
-
+func (cr *CollectionRepo) buildShows(coll *Collection, pace int) (items []*Item) {
 	f, err := OpenDir(coll.Directory)
 	if err != nil {
 		return
@@ -210,7 +217,7 @@ func buildShows(coll *Collection, pace int) (items []*Item) {
 			(len(name) > 1 && name[:2] == "+ ") {
 			continue
 		}
-		m := buildShow(coll, name)
+		m := cr.buildShow(coll, name)
 		if m != nil {
 			items = append(items, m)
 		}
@@ -223,7 +230,7 @@ func buildShows(coll *Collection, pace int) (items []*Item) {
 	return
 }
 
-func getSeason(show *Item, seasonNo int) (s *Season) {
+func (cr *CollectionRepo) getSeason(show *Item, seasonNo int) (s *Season) {
 	// find
 	var i int
 	for i = 0; i < len(show.Seasons); i++ {
@@ -234,7 +241,7 @@ func getSeason(show *Item, seasonNo int) (s *Season) {
 
 	// insert new
 	sn := &Season{
-		Id:       idHash(fmt.Sprintf("%s-season-%d", show.Name, seasonNo)),
+		Id:       idhash.IdHash(fmt.Sprintf("%s-season-%d", show.Name, seasonNo)),
 		SeasonNo: seasonNo,
 	}
 	for i = 0; i < len(show.Seasons); i++ {
@@ -265,7 +272,7 @@ func epMatch(epMap map[string]epMapType, s []string) (ep *Episode, aux, ext stri
 	return
 }
 
-func showScanDir(baseDir string, dir string, seasonHint int, show *Item) {
+func (cr *CollectionRepo) showScanDir(baseDir string, dir string, seasonHint int, show *Item) {
 
 	d := path.Join(baseDir, dir)
 	f, err := OpenDir(d)
@@ -291,7 +298,7 @@ func showScanDir(baseDir string, dir string, seasonHint int, show *Item) {
 			s := isShowSubdir.FindStringSubmatch(fn)
 			if len(s) > 0 {
 				sn := parseInt(s[1])
-				showScanDir(d, fn, sn, show)
+				cr.showScanDir(d, fn, sn, show)
 				continue
 			}
 
@@ -331,11 +338,11 @@ func showScanDir(baseDir string, dir string, seasonHint int, show *Item) {
 				p := escapePath(path.Join(dir, fn))
 				switch s[1] {
 				case "banner":
-					season := getSeason(show, seasonHint)
+					season := cr.getSeason(show, seasonHint)
 					season.Banner = p
 					c = true
 				case "poster":
-					season := getSeason(show, seasonHint)
+					season := cr.getSeason(show, seasonHint)
 					season.Poster = p
 					c = true
 				}
@@ -349,7 +356,7 @@ func showScanDir(baseDir string, dir string, seasonHint int, show *Item) {
 		s := isSeasonImg.FindStringSubmatch(fn)
 		if len(s) > 0 {
 			sn := parseInt(s[1])
-			season := getSeason(show, sn)
+			season := cr.getSeason(show, sn)
 			p := escapePath(path.Join(dir, fn))
 			switch s[2] {
 			case "poster":
@@ -367,13 +374,13 @@ func showScanDir(baseDir string, dir string, seasonHint int, show *Item) {
 		s = isVideo.FindStringSubmatch(fn)
 		if len(s) > 0 {
 			ep := Episode{
-				Id:       idHash(s[0]),
+				Id:       idhash.IdHash(s[0]),
 				Video:    escapePath(path.Join(dir, fn)),
 				BaseName: s[1],
 			}
 			ep.VideoTS = f.CreatetimeMS()
 			if parseEpisodeName(s[1], seasonHint, &ep) {
-				season := getSeason(show, ep.SeasonNo)
+				season := cr.getSeason(show, ep.SeasonNo)
 				season.Episodes =
 					append(season.Episodes, ep)
 				epIndex := len(season.Episodes) - 1
@@ -440,17 +447,17 @@ func showScanDir(baseDir string, dir string, seasonHint int, show *Item) {
 	}
 }
 
-func buildShow(coll *Collection, dir string) (show *Item) {
+func (cr *CollectionRepo) buildShow(coll *Collection, dir string) (show *Item) {
 
 	item := &Item{
-		Id:      idHash(path.Base(dir)),
+		Id:      idhash.IdHash(path.Base(dir)),
 		Name:    path.Base(dir),
 		BaseUrl: coll.BaseUrl,
 		Path:    escapePath(dir),
 		Type:    `show`,
 	}
 	d := path.Join(coll.Directory, dir)
-	showScanDir(d, "", -1, item)
+	cr.showScanDir(d, "", -1, item)
 
 	for i := range item.Seasons {
 		s := &(item.Seasons[i])
@@ -512,12 +519,17 @@ func buildShow(coll *Collection, dir string) (show *Item) {
 	}
 	item.Year = year
 
-	dbLoadItem(coll, item)
-
+	dbItemShow := &database.Item{
+		Id:    item.Id,
+		Name:  item.Name,
+		Year:  item.Year,
+		Genre: strings.Join(item.Genre, ","),
+	}
+	cr.db.DbLoadItem(dbItemShow)
 	return
 }
 
-func copySrtVttSubs(srt []Subs, vtt *[]Subs) {
+func (cr *CollectionRepo) copySrtVttSubs(srt []Subs, vtt *[]Subs) {
 	for i := range srt {
 		sub := Subs{Lang: srt[i].Lang}
 		path := srt[i].Path

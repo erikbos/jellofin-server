@@ -1,11 +1,11 @@
 // Read `Kodi' style .NFO files
-
-package main
+package nfo
 
 import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 )
 
@@ -81,7 +81,7 @@ type AudioDetails struct {
 	Language string `xml:"language,omitempty" json:"language,omitempty"`
 }
 
-func decodeNfo(r io.ReadSeeker) (nfo *Nfo) {
+func Decode(r io.ReadSeeker) (nfo *Nfo) {
 	// this is a really dirty hack to partially support <xbmcmultiepisode>
 	// for now. It just skips the tag and as a result parses just
 	// the first episode in the multiepisode list.
@@ -131,7 +131,7 @@ func decodeNfo(r io.ReadSeeker) (nfo *Nfo) {
 		data.Genre = genre
 	}
 
-	data.Genre = normalizeGenres(data.Genre)
+	data.Genre = NormalizeGenres(data.Genre)
 
 	// Some non-string fields can be fscked up and explode the
 	// XML decoder, so decode them after the fact.
@@ -140,5 +140,21 @@ func decodeNfo(r io.ReadSeeker) (nfo *Nfo) {
 	data.Year = parseInt(data.YearString)
 
 	nfo = data
+	return
+}
+
+func parseInt(s string) (i int) {
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err == nil {
+		i = int(n)
+	}
+	return
+}
+
+func parseFloat32(s string) (i float32) {
+	n, err := strconv.ParseFloat(s, 64)
+	if err == nil {
+		i = float32(n)
+	}
 	return
 }

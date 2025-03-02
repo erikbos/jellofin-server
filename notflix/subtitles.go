@@ -1,7 +1,7 @@
 // Detect subtitle file encoding
 // Convert .srt subtitles to .vtt or JSON.
 
-package main
+package notflix
 
 import (
 	"bufio"

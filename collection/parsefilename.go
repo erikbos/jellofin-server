@@ -1,6 +1,6 @@
 // Parse filename for season / epside info.
 // Example: easy.s01e04.mp4 -> season 1, episode .
-package main
+package collection
 
 import (
 	"fmt"
@@ -28,13 +28,13 @@ func parseInt(s string) (i int) {
 	return
 }
 
-func parseFloat32(s string) (i float32) {
-	n, err := strconv.ParseFloat(s, 64)
-	if err == nil {
-		i = float32(n)
-	}
-	return
-}
+// func parseFloat32(s string) (i float32) {
+// 	n, err := strconv.ParseFloat(s, 64)
+// 	if err == nil {
+// 		i = float32(n)
+// 	}
+// 	return
+// }
 
 func parseEpisodeName(name string, seasonHint int, ep *Episode) (ok bool) {
 

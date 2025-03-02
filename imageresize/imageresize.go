@@ -17,18 +17,17 @@ import (
 	"github.com/disintegration/imaging"
 )
 
+type ResizerOptions struct {
+	Cachedir string
+}
 type Resizer struct {
 	cachedir           string
-	resizeMutexMap     map[string]*sync.Mutex
 	tmpExt             string
+	resizeMutexMap     map[string]*sync.Mutex
 	resizeMutexMapLock sync.Mutex
 }
 
-type ResizerConfig struct {
-	Cachedir string
-}
-
-func New(config ResizerConfig) *Resizer {
+func New(config ResizerOptions) *Resizer {
 	r := &Resizer{
 		cachedir:       config.Cachedir,
 		resizeMutexMap: make(map[string]*sync.Mutex),

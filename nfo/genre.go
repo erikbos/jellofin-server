@@ -1,4 +1,4 @@
-package main
+package nfo
 
 import (
 	"strings"
@@ -80,7 +80,7 @@ func contains(a []string, s string) bool {
 	return false
 }
 
-func normalizeGenres(genres []string) (res []string) {
+func NormalizeGenres(genres []string) (res []string) {
 	for _, g := range genres {
 		m := normalizeGenre(g)
 		if !contains(res, m) && len(m) > 1 {

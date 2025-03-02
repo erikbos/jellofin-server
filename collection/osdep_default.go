@@ -1,6 +1,6 @@
 //go:build !freebsd && !linux
 
-package main
+package collection
 
 func (fi *FileInfo) setCreatetime() {
 	fi.createtime = fi.modtime

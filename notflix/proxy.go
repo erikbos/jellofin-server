@@ -1,4 +1,4 @@
-package main
+package notflix
 
 import (
 	"fmt"
@@ -65,7 +65,7 @@ func buildUrl(server string, path string) (*url.URL, error) {
 	return url.ParseRequestURI(u)
 }
 
-func hlsHandler(w http.ResponseWriter, r *http.Request) bool {
+func (n *Notflix) hlsHandler(w http.ResponseWriter, r *http.Request) bool {
 	vars := mux.Vars(r)
 	path, pathOk := vars["path"]
 	if !pathOk {
@@ -78,10 +78,15 @@ func hlsHandler(w http.ResponseWriter, r *http.Request) bool {
 	if !strings.Contains(path, ".mp4/") {
 		return false
 	}
-	hlsServer := getHlsServer(source)
-	if hlsServer == "" {
+	c := n.collections.GetCollection(source)
+	if c == nil {
 		return false
 	}
+	hlsServer := c.GetHlsServer()
+	// hlsServer := n.collections.GetHlsServer(source)
+	// if hlsServer == "" {
+	// 	return false
+	// }
 	url, err := buildUrl(hlsServer, path)
 	if err != nil {
 		http.Error(w, "Server Error", http.StatusInternalServerError)

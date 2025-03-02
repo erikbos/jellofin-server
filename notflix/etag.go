@@ -1,4 +1,4 @@
-package main
+package notflix
 
 import (
 	"crypto/md5"

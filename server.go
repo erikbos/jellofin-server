@@ -3,19 +3,21 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"log/syslog"
 	"net/http"
 	"os"
 	"path"
-	"strings"
 
 	"github.com/XS4ALL/curlyconf-go"
-	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 
+	"github.com/miquels/notflix-server/collection"
+	"github.com/miquels/notflix-server/database"
 	"github.com/miquels/notflix-server/imageresize"
+	"github.com/miquels/notflix-server/jellyfin"
+	"github.com/miquels/notflix-server/notflix"
 )
 
 var configFile = "notflix-server.cfg"
@@ -29,7 +31,7 @@ type cfgMain struct {
 	Cachedir    string
 	Dbdir       string
 	Logfile     string
-	Collections []Collection `cc:"collection"`
+	Collections []collection.Collection `cc:"collection"`
 	Jellyfin    struct {
 		// Indicates if we should auto-register Jellyfin users
 		AutoRegister bool
@@ -41,66 +43,6 @@ type cfgMain struct {
 var config = cfgMain{
 	Listen:  "127.0.0.1:8060",
 	Logfile: "stdout",
-}
-
-func dataHandler(w http.ResponseWriter, r *http.Request) {
-	if hlsHandler(w, r) {
-		return
-	}
-
-	if preCheck(w, r, "source", "path") {
-		return
-	}
-	vars := mux.Vars(r)
-	dataDir := getDataDir(vars["source"])
-	if dataDir == "" {
-		http.Error(w, "404 Not Found", http.StatusNotFound)
-		return
-	}
-
-	fn := path.Clean(path.Join(dataDir, "/", vars["path"]))
-
-	var err error
-	var file http.File
-
-	ext := ""
-	i := strings.LastIndex(fn, ".")
-	if i >= 0 {
-		ext = fn[i+1:]
-	}
-	if ext == "srt" || ext == "vtt" {
-		file, err = OpenSub(w, r, fn)
-	} else {
-		file, err = resizer.OpenFile(w, r, fn, 0)
-	}
-	defer file.Close()
-	if err != nil {
-		http.Error(w, "404 Not Found", http.StatusNotFound)
-		return
-	}
-
-	fi, _ := file.Stat()
-	if !fi.Mode().IsRegular() {
-		http.Error(w, "403 Access denied", http.StatusForbidden)
-		return
-	}
-
-	w.Header().Set("cache-control", "max-age=86400, stale-while-revalidate=300")
-	if checkEtag(w, r, file) {
-		return
-	}
-
-	http.ServeContent(w, r, fn, fi.ModTime(), file)
-}
-
-func indexHandler(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, path.Join(config.Appdir, "index.html"))
-}
-
-func backgroundTasks() {
-	for {
-		updateCollections(1)
-	}
 }
 
 var resizer *imageresize.Resizer
@@ -118,26 +60,12 @@ func main() {
 	}
 
 	log.Printf("Parsing flags")
-
 	logfile := flag.String("logfile", config.Logfile,
 		"Path of logfile. Use 'syslog' for syslog, 'stdout' "+
 			"for standard output, or 'none' to disable logging.")
 	flag.Parse()
 
-	log.Printf("dbinit")
-
-	err = dbInit(path.Join(config.Dbdir, "tink-items.db"))
-	if err != nil {
-		log.Fatalf("dbInit: %s\n", err)
-	}
-
-	resizer = imageresize.New(imageresize.ResizerConfig{
-		Cachedir: config.Cachedir,
-	})
-	PlayState.Init()
-
 	log.Printf("setting logfile")
-
 	switch *logfile {
 	case "syslog":
 		logw, err := syslog.New(syslog.LOG_NOTICE, "notflix")
@@ -146,7 +74,7 @@ func main() {
 		}
 		log.SetOutput(logw)
 	case "none":
-		log.SetOutput(ioutil.Discard)
+		log.SetOutput(io.Discard)
 	case "stdout":
 	default:
 		f, err := os.OpenFile(*logfile,
@@ -159,30 +87,44 @@ func main() {
 	}
 	log.SetFlags(0)
 
+	log.Printf("dbinit")
+	database := database.New(&database.DatabaseOptions{
+		Filename: path.Join(config.Dbdir, "tink-items.db"),
+	})
+	if err = database.Connect(); err != nil {
+		log.Fatalf("dbConnect: %s\n", err)
+	}
+	go database.BackgroundJobs()
+
+	collection := collection.New(&collection.CollectionOptions{
+		Collections: config.Collections,
+		Db:          database,
+	})
+
+	resizer = imageresize.New(imageresize.ResizerOptions{
+		Cachedir: config.Cachedir,
+	})
+
 	log.Printf("building mux")
 
 	r := mux.NewRouter()
-	notFound := http.NotFoundHandler()
-	gzip := handlers.CompressHandler
 
-	r.Handle("/api", notFound)
-	s := r.PathPrefix("/api/").Subrouter()
-	s.HandleFunc("/collections", collectionsHandler)
-	s.HandleFunc("/collection/{coll}", collectionHandler)
-	s.HandleFunc("/collection/{coll}/genres", genresHandler)
-	s.Handle("/collection/{coll}/items",
-		gzip(http.HandlerFunc(itemsHandler)))
-	s.Handle("/collection/{coll}/item/{item}",
-		gzip(http.HandlerFunc(itemHandler)))
+	n := notflix.New(&notflix.NotflixOptions{
+		Collections:  collection,
+		Db:           database,
+		Imageresizer: resizer,
+		Appdir:       config.Appdir,
+	})
+	n.RegisterHandlers(r)
 
-	r.Handle("/data", notFound)
-	s = r.PathPrefix("/data/").Subrouter()
-	s.HandleFunc("/{source}/{path:.*}", dataHandler)
-
-	r.Handle("/v", notFound)
-	r.PathPrefix("/v/").HandlerFunc(indexHandler)
-
-	registerJellyfinHandlers(r)
+	j := jellyfin.New(&jellyfin.JellyfinOptions{
+		Collections:        collection,
+		Db:                 database,
+		Imageresizer:       resizer,
+		AutoRegister:       config.Jellyfin.AutoRegister,
+		ImageQualityPoster: config.Jellyfin.ImageQualityPoster,
+	})
+	j.RegisterHandlers(r)
 
 	r.PathPrefix("/").Handler(http.FileServer(http.Dir(config.Appdir)))
 
@@ -195,9 +137,8 @@ func main() {
 	// }
 
 	log.Printf("Initializing collections..")
-	initCollections()
-
-	go backgroundTasks()
+	collection.Init()
+	go collection.Background()
 
 	if config.Tls {
 		log.Printf("Serving HTTPS on %s", addr)

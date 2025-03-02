@@ -1,6 +1,6 @@
 // OpenDir is like Open(), but the Readdir() os.FileInfo
 // results are lazy-loaded.
-package main
+package collection
 
 import (
 	"errors"
