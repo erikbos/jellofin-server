@@ -1,6 +1,8 @@
 module github.com/miquels/notflix-server
 
-go 1.19
+go 1.24
+
+toolchain go1.24.0
 
 require (
 	github.com/XS4ALL/curlyconf-go v0.0.0-20170223151126-b30538366f69
@@ -9,10 +11,10 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/mattn/go-sqlite3 v1.14.24
-	golang.org/x/crypto v0.33.0
+	golang.org/x/crypto v0.36.0
 )
 
 require (
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	golang.org/x/image v0.0.0-20191009234506-e7c1f5e7dbb8 // indirect
+	golang.org/x/image v0.25.0 // indirect
 )
