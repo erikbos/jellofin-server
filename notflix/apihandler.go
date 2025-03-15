@@ -18,7 +18,7 @@ import (
 	"github.com/miquels/notflix-server/nfo"
 )
 
-type NotflixOptions struct {
+type Options struct {
 	Collections  *collection.CollectionRepo
 	Db           *database.DatabaseRepo
 	Imageresizer *imageresize.Resizer
@@ -32,7 +32,7 @@ type Notflix struct {
 	Appdir       string
 }
 
-func New(o *NotflixOptions) *Notflix {
+func New(o *Options) *Notflix {
 	return &Notflix{
 		collections:  o.Collections,
 		imageresizer: o.Imageresizer,

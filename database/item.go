@@ -3,7 +3,6 @@ package database
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/jmoiron/sqlx"
@@ -12,22 +11,18 @@ import (
 	"github.com/miquels/notflix-server/idhash"
 )
 
-type DatabaseOptions struct {
-	Filename string
+type ItemStorage struct {
+	dbHandle *sqlx.DB
 }
 
-type DatabaseRepo struct {
-	filename string
-
-	dbHandle *sqlx.DB
-
-	PlayState PlayStateRepo
-
-	AccessToken AccessTokenRepo
+func NewItemStorage(d *sqlx.DB) *ItemStorage {
+	return &ItemStorage{
+		dbHandle: d,
+	}
 }
 
 type Item struct {
-	Id         string
+	ID         string
 	Name       string
 	Votes      int
 	Genre      string
@@ -38,118 +33,7 @@ type Item struct {
 	LastVideo  int64
 }
 
-func New(o *DatabaseOptions) *DatabaseRepo {
-	d := &DatabaseRepo{
-		filename: o.Filename,
-	}
-	d.PlayStateInit()
-	return d
-}
-
-func (d *DatabaseRepo) Connect() (err error) {
-	if d.filename == "" {
-		return fmt.Errorf("Database directory not set")
-	}
-	d.dbHandle, err = sqlx.Connect("sqlite3", d.filename)
-	if err != nil {
-		return
-	}
-	err = d.dbInitSchema()
-	return
-}
-
-func (d *DatabaseRepo) dbInitSchema() error {
-	tx, err := d.dbHandle.Beginx()
-	if err != nil {
-		return err
-	}
-
-	schema := []string{
-		`CREATE TABLE IF NOT EXISTS items (
-id TEXT NOT NULL PRIMARY KEY,
-name TEXT NOT NULL,
-votes INTEGER,
-year INTEGER,
-genre TEXT NOT NULL,
-rating REAL,
-nfotime INTEGER NOT NULL,
-firstvideo INTEGER NOT NULL,
-lastvideo INTEGER NOT NULL);`,
-
-		`CREATE INDEX IF NOT EXISTS items_name_idx ON items (name);`,
-
-		`CREATE TABLE IF NOT EXISTS users (
-id TEXT NOT NULL PRIMARY KEY,
-username TEXT NOT NULL,
-password TEXT NOT NULL);`,
-
-		`CREATE UNIQUE INDEX IF NOT EXISTS users_name_idx ON users (username);`,
-
-		`CREATE TABLE IF NOT EXISTS playstate (
-userid TEXT NOT NULL,
-itemid TEXT NOT NULL,
-position INTEGER,
-playedpercentage INTEGER,
-played BOOLEAN,
-timestamp DATETIME);`,
-
-		`CREATE UNIQUE INDEX IF NOT EXISTS userid_itemid_idx ON playstate (userid, itemid);`,
-	}
-
-	for _, query := range schema {
-		if _, err = tx.Exec(query); err != nil {
-			log.Printf("dbInitSchema error: %s\n", err)
-			tx.Rollback()
-			return err
-		}
-	}
-
-	tx.Commit()
-	return err
-}
-
-// Check NFO file.
-// func (d *Database) itemCheckNfo(item *collection.Item) (updated bool) {
-// 	if item.NfoPath == "" {
-// 		return
-// 	}
-// 	if item.NfoTime > 0 {
-// 		fi, err := os.Stat(item.NfoPath)
-// 		if err == nil && TimeToUnixMS(fi.ModTime()) == item.NfoTime {
-// 			return
-// 		}
-// 	}
-
-// 	fh, err := os.Open(item.NfoPath)
-// 	if err != nil {
-// 		fmt.Printf("XXX DEBUG open %s: %s\n", item.NfoPath, err)
-// 		return
-// 	}
-// 	nfo := nfo.DecodeNfo(fh)
-// 	ftime := int64(0)
-// 	fi, err := fh.Stat()
-// 	if err == nil {
-// 		ftime = TimeToUnixMS(fi.ModTime())
-// 	}
-// 	fh.Close()
-// 	if nfo == nil {
-// 		fmt.Printf("XXX DEBUG XML failed %s\n", item.Name)
-// 		return
-// 	}
-// 	otime := item.NfoTime
-
-// 	item.NfoTime = ftime
-// 	item.Genre = nfo.Genre
-// 	item.Rating = nfo.Rating
-// 	item.Votes = nfo.Votes
-// 	if nfo.Year != 0 {
-// 		item.Year = nfo.Year
-// 	}
-// 	updated = ftime > otime
-// 	return
-// }
-
-func (d *DatabaseRepo) dbInsertItem(tx *sqlx.Tx, item *Item) (err error) {
+func (i *ItemStorage) dbInsertItem(tx *sqlx.Tx, item *Item) (err error) {
 	// item.Genrestring = strings.Join(item.Genre, ",")
 	_, err = tx.NamedExec(
 		`INSERT INTO items(id, name, votes, genre, rating, year, nfotime, `+
@@ -159,7 +43,7 @@ func (d *DatabaseRepo) dbInsertItem(tx *sqlx.Tx, item *Item) (err error) {
 	return
 }
 
-func (d *DatabaseRepo) dbUpdateItem(tx *sqlx.Tx, item *Item) (err error) {
+func (i *ItemStorage) dbUpdateItem(tx *sqlx.Tx, item *Item) (err error) {
 	// item.Genrestring = strings.Join(item.Genre, ",")
 	_, err = tx.NamedExec(
 		`UPDATE items SET votes = :votes, genre = :genre, rating = :rating, `+
@@ -169,23 +53,23 @@ func (d *DatabaseRepo) dbUpdateItem(tx *sqlx.Tx, item *Item) (err error) {
 	return
 }
 
-func (d *DatabaseRepo) DbLoadItem(item *Item) {
+func (i *ItemStorage) DbLoadItem(item *Item) {
 	var data Item
 
 	// Find this item by name in the database.
-	tx, _ := d.dbHandle.Beginx()
-	err := d.dbHandle.Get(&data, "SELECT * FROM items WHERE name=? LIMIT 1", item.Name)
+	tx, _ := i.dbHandle.Beginx()
+	err := i.dbHandle.Get(&data, "SELECT * FROM items WHERE name=? LIMIT 1", item.Name)
 
 	// Not in database yet, insert
 	if err == sql.ErrNoRows {
 		// itemCheckNfo(item)
 		// fmt.Printf("dbLoadItem: add to database: %s\n", item.Name)
-		item.Id = idhash.IdHash(item.Name)
-		err = d.dbInsertItem(tx, item)
+		item.ID = idhash.IdHash(item.Name)
+		err = i.dbInsertItem(tx, item)
 		if err != nil {
 			// INSERT: error: UNIQUE constraint failed: items.id
 			// if strings.Contains(err.Error(), "UNIQUE constraint") {
-			fmt.Printf("dbLoadItem: INSERT: name=%s, id=%s: error: %s\n", item.Name, item.Id, err)
+			fmt.Printf("dbLoadItem: INSERT: name=%s, id=%s: error: %s\n", item.Name, item.ID, err)
 			os.Exit(1)
 			tx.Rollback()
 			return
@@ -233,7 +117,7 @@ func (d *DatabaseRepo) DbLoadItem(item *Item) {
 	// }
 
 	if needUpdate {
-		err = d.dbUpdateItem(tx, item)
+		err = i.dbUpdateItem(tx, item)
 		if err != nil {
 			fmt.Printf("dbLoadItem %s: update: %s\n", item.Name, err)
 			tx.Rollback()
@@ -243,3 +127,44 @@ func (d *DatabaseRepo) DbLoadItem(item *Item) {
 
 	tx.Commit()
 }
+
+// Check NFO file.
+// func (d *Database) itemCheckNfo(item *collection.Item) (updated bool) {
+// 	if item.NfoPath == "" {
+// 		return
+// 	}
+// 	if item.NfoTime > 0 {
+// 		fi, err := os.Stat(item.NfoPath)
+// 		if err == nil && TimeToUnixMS(fi.ModTime()) == item.NfoTime {
+// 			return
+// 		}
+// 	}
+
+// 	fh, err := os.Open(item.NfoPath)
+// 	if err != nil {
+// 		fmt.Printf("XXX DEBUG open %s: %s\n", item.NfoPath, err)
+// 		return
+// 	}
+// 	nfo := nfo.DecodeNfo(fh)
+// 	ftime := int64(0)
+// 	fi, err := fh.Stat()
+// 	if err == nil {
+// 		ftime = TimeToUnixMS(fi.ModTime())
+// 	}
+// 	fh.Close()
+// 	if nfo == nil {
+// 		fmt.Printf("XXX DEBUG XML failed %s\n", item.Name)
+// 		return
+// 	}
+// 	otime := item.NfoTime
+
+// 	item.NfoTime = ftime
+// 	item.Genre = nfo.Genre
+// 	item.Rating = nfo.Rating
+// 	item.Votes = nfo.Votes
+// 	if nfo.Year != 0 {
+// 		item.Year = nfo.Year
+// 	}
+// 	updated = ftime > otime
+// 	return
+// }

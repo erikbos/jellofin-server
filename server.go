@@ -88,28 +88,32 @@ func main() {
 	log.SetFlags(0)
 
 	log.Printf("dbinit")
-	database := database.New(&database.DatabaseOptions{
+	database, err := database.New(&database.Options{
 		Filename: path.Join(config.Dbdir, "tink-items.db"),
 	})
-	if err = database.Connect(); err != nil {
-		log.Fatalf("dbConnect: %s\n", err)
+	if err != nil {
+		log.Fatalf("database.New: %s", err)
 	}
 	go database.BackgroundJobs()
 
-	collection := collection.New(&collection.CollectionOptions{
+	collection := collection.New(&collection.Options{
 		Collections: config.Collections,
 		Db:          database,
 	})
 
-	resizer = imageresize.New(imageresize.ResizerOptions{
+	resizer = imageresize.New(imageresize.Options{
 		Cachedir: config.Cachedir,
 	})
+	// XXX FIXME
+	// if config.cachedir != "" {
+	// 	go cleanCache(*datadir, config.cachedir, time.Hour)
+	// }
 
 	log.Printf("building mux")
 
 	r := mux.NewRouter()
 
-	n := notflix.New(&notflix.NotflixOptions{
+	n := notflix.New(&notflix.Options{
 		Collections:  collection,
 		Db:           database,
 		Imageresizer: resizer,
@@ -117,7 +121,7 @@ func main() {
 	})
 	n.RegisterHandlers(r)
 
-	j := jellyfin.New(&jellyfin.JellyfinOptions{
+	j := jellyfin.New(&jellyfin.Options{
 		Collections:        collection,
 		Db:                 database,
 		Imageresizer:       resizer,
@@ -130,11 +134,6 @@ func main() {
 
 	server := HttpLog(r)
 	addr := config.Listen
-
-	// XXX FIXME
-	// if config.cachedir != "" {
-	// 	go cleanCache(*datadir, config.cachedir, time.Hour)
-	// }
 
 	log.Printf("Initializing collections..")
 	collection.Init()

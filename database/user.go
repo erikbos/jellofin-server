@@ -3,13 +3,24 @@ package database
 import (
 	"errors"
 
+	"github.com/jmoiron/sqlx"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/miquels/notflix-server/idhash"
 )
 
+type UserStorage struct {
+	dbHandle *sqlx.DB
+}
+
+func NewUserStorage(d *sqlx.DB) *UserStorage {
+	return &UserStorage{
+		dbHandle: d,
+	}
+}
+
 type User struct {
-	Id       string
+	ID       string
 	Username string
 	Password string
 }
@@ -19,51 +30,53 @@ var (
 	ErrInvalidPassword = errors.New("invalid password")
 )
 
-// dbUserValidate checks if the user exists and the password is correct.
-func (d *DatabaseRepo) UserValidate(username, password *string) (user *User, err error) {
+// Validate checks if the user exists and the password is correct.
+func (u *UserStorage) Validate(username, password string) (user *User, err error) {
 	var data User
-	sqlerr := d.dbHandle.Get(&data, "SELECT * FROM users WHERE username=? LIMIT 1", username)
+	sqlerr := u.dbHandle.Get(&data, "SELECT * FROM users WHERE username=? LIMIT 1", username)
 	if sqlerr != nil {
 		return nil, ErrUserNotFound
-
 	}
-	err = bcrypt.CompareHashAndPassword([]byte(data.Password), []byte(*password))
+
+	err = bcrypt.CompareHashAndPassword([]byte(data.Password), []byte(password))
 	if err != nil {
 		return nil, ErrInvalidPassword
 	}
 	return &data, nil
 }
 
-// UserInsert inserts a new user into the database.
-func (d *DatabaseRepo) UserInsert(username, password string) (user *User, err error) {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
+// Insert inserts a new user into the database.
+func (u *UserStorage) Insert(username, password string) (user *User, err error) {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, err
 	}
 
 	user = &User{
-		Id:       idhash.IdHash(username),
+		ID:       idhash.IdHash(username),
 		Username: username,
 		Password: string(hashedPassword),
 	}
 
-	tx, _ := d.dbHandle.Beginx()
+	tx, _ := u.dbHandle.Beginx()
+	defer tx.Rollback()
+
 	_, err = tx.NamedExec(`INSERT INTO users (id, username, password) `+
 		`VALUES (:id, :username, :password)`, user)
 	if err != nil {
-		tx.Rollback()
+		return
 	}
 	tx.Commit()
 	return
 }
 
-// UserGetById retrieves a user from the database by their ID.
-func (d *DatabaseRepo) UserGetById(id string) (user *User, err error) {
+// GetById retrieves a user from the database by their ID.
+func (u *UserStorage) GetById(userID string) (user *User, err error) {
 	var data User
-	sqlerr := d.dbHandle.Get(&data, "SELECT * FROM users WHERE id=? LIMIT 1", id)
-	if sqlerr != nil {
+	if err := u.dbHandle.Get(&data, "SELECT * FROM users WHERE id=? LIMIT 1", userID); err != nil {
 		return nil, ErrUserNotFound
 	}
+	// No need to return hashed pw
 	data.Password = ""
 	return &data, nil
 }

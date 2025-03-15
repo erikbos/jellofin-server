@@ -2,56 +2,52 @@ package database
 
 import (
 	"crypto/rand"
-	"encoding/hex"
+	"errors"
 	"sync"
 )
 
 // in-memory access token store for now
 
-type AccessTokenRepo struct {
+type AccessTokenStorage struct {
 	mu sync.Mutex
 	db map[string]*AccessToken
 }
 
+// NewAccessTokenStorage initializes access token issuer
+func NewAccessTokenStorage() *AccessTokenStorage {
+	return &AccessTokenStorage{
+		db: make(map[string]*AccessToken),
+	}
+}
+
+// AccessToken holds token and userid of a authenticated user
 type AccessToken struct {
-	Accesstoken string
-	UserId      string
+	Token  string
+	UserID string
 }
 
-// Init initializes access token issuer
-func (s *AccessTokenRepo) Init() {
-	s.db = make(map[string]*AccessToken)
-}
-
-// New generates new token
-func (s *AccessTokenRepo) New(userId string) string {
+// Generate generates new token
+func (s *AccessTokenStorage) Generate(userID string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	bytes := make([]byte, 8)
-	if _, err := rand.Read(bytes); err != nil {
-		panic(err)
-	}
-	token := hex.EncodeToString(bytes)
-	// Requires Go 1.24
-	// token := rand.Text()
-
+	token := rand.Text()
 	t := &AccessToken{
-		UserId:      userId,
-		Accesstoken: token,
+		Token:  token,
+		UserID: userID,
 	}
 	s.db[token] = t
 
 	return token
 }
 
-// Lookup accesstoken details by tokenid
-func (s *AccessTokenRepo) Lookup(token string) *AccessToken {
+// Get accesstoken details by tokenid
+func (s *AccessTokenStorage) Get(token string) (*AccessToken, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if at, ok := s.db[token]; ok {
-		return at
+		return at, nil
 	}
-	return nil
+	return nil, errors.New("token not found")
 }

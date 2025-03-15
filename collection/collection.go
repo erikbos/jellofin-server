@@ -9,7 +9,7 @@ import (
 	"github.com/miquels/notflix-server/nfo"
 )
 
-type CollectionOptions struct {
+type Options struct {
 	Collections []Collection
 	Db          *database.DatabaseRepo
 }
@@ -21,7 +21,7 @@ type CollectionRepo struct {
 	db          *database.DatabaseRepo
 }
 
-func New(options *CollectionOptions) *CollectionRepo {
+func New(options *Options) *CollectionRepo {
 	c := &CollectionRepo{
 		collections: options.Collections,
 		db:          options.Db,

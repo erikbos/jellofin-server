@@ -95,9 +95,8 @@ type JFUserPolicy struct {
 }
 
 type JFAuthenticateUserByName struct {
-	Username *string `json:"Username"`
-
-	Pw *string `json:"Pw"`
+	Username string `json:"Username"`
+	Pw       string `json:"Pw"`
 }
 type JFAuthenticateByNameResponse struct {
 	User        JFUser         `json:"User"`

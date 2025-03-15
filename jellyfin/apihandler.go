@@ -1,11 +1,8 @@
 package jellyfin
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"sort"
@@ -25,7 +22,7 @@ import (
 // API definitions: https://swagger.emby.media/ & https://api.jellyfin.org/
 // Docs: https://github.com/mediabrowser/emby/wiki
 
-type JellyfinOptions struct {
+type Options struct {
 	Collections  *collection.CollectionRepo
 	Db           *database.DatabaseRepo
 	Imageresizer *imageresize.Resizer
@@ -50,7 +47,7 @@ type Jellyfin struct {
 // API definitions: https://swagger.emby.media/ & https://api.jellyfin.org/
 // Docs: https://github.com/mediabrowser/emby/wiki
 
-func New(o *JellyfinOptions) *Jellyfin {
+func New(o *Options) *Jellyfin {
 	j := &Jellyfin{
 		collections:        o.Collections,
 		db:                 o.Db,
@@ -58,7 +55,6 @@ func New(o *JellyfinOptions) *Jellyfin {
 		autoRegister:       o.AutoRegister,
 		imageQualityPoster: o.ImageQualityPoster,
 	}
-	j.db.AccessToken.Init()
 	return j
 }
 
@@ -75,15 +71,15 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 
 	// Endpoints with auth and gzip middleware
 	r.Handle("/DisplayPreferences/usersettings", middleware(j.displayPreferencesHandler))
+	r.Handle("/Users", middleware(j.usersAllHandler))
 	r.Handle("/Users/{user}", middleware(j.usersHandler))
 	r.Handle("/Users/{user}/Views", middleware(j.usersViewsHandler))
 	r.Handle("/Users/{user}/GroupingOptions", middleware(j.usersGroupingOptionsHandler))
+
 	r.Handle("/Users/{user}/Items", middleware(j.usersItemsHandler))
 	r.Handle("/Users/{user}/Items/Latest", middleware(j.usersItemsLatestHandler))
 	r.Handle("/Users/{user}/Items/{item}", middleware(j.usersItemHandler))
 	r.Handle("/Users/{user}/Items/Resume", middleware(j.usersItemsResumeHandler))
-	r.Handle("/Users/{user}/PlayedItems/{item}", middleware(j.usersPlayedItemsPostHandler)).Methods("POST")
-	r.Handle("/Users/{user}/PlayedItems/{item}", middleware(j.usersPlayedItemsDeleteHandler)).Methods("DELETE")
 
 	r.Handle("/Library/VirtualFolders", middleware(j.libraryVirtualFoldersHandler))
 	r.Handle("/Shows/NextUp", middleware(j.showsNextUpHandler))
@@ -98,9 +94,25 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 
 	r.Handle("/Persons", middleware(j.personsHandler))
 
+	// playstate
+	r.Handle("/Users/{user}/PlayedItems/{item}", middleware(j.usersPlayedItemsPostHandler)).Methods("POST")
+	r.Handle("/Users/{user}/PlayedItems/{item}", middleware(j.usersPlayedItemsDeleteHandler)).Methods("DELETE")
 	r.Handle("/Sessions/Playing", middleware(j.sessionsPlayingHandler)).Methods("POST")
 	r.Handle("/Sessions/Playing/Progress", middleware(j.sessionsPlayingProgressHandler)).Methods("POST")
 	r.Handle("/Sessions/Playing/Stopped", middleware(j.sessionsPlayingStoppedHandler)).Methods("POST")
+
+	// playlists
+	r.Handle("/Playlists", middleware(j.createPlaylistHandler)).Methods("POST")
+	r.Handle("/Playlists/{playlist}", middleware(j.getPlaylistHandler)).Methods("GET")
+	r.Handle("/Playlists/{playlist}", middleware(j.updatePlaylistHandler)).Methods("POST")
+	r.Handle("/Playlists/{playlist}/Items", middleware(j.getPlaylistItemsHandler)).Methods("GET")
+	r.Handle("/Playlists/{playlist}/Items", middleware(j.addPlaylistItemsHandler)).Methods("POST")
+	// Infuse posts to path ending with /
+	r.Handle("/Playlists/{playlist}/Items/", middleware(j.addPlaylistItemsHandler)).Methods("POST")
+	r.Handle("/Playlists/{playlist}/Items", middleware(j.deletePlaylistItemsHandler)).Methods("DELETE")
+	r.Handle("/Playlists/{playlist}/Items/{item}/Move/{index}", middleware(j.movePlaylistItemHandler)).Methods("GET")
+	r.Handle("/Playlists/{playlist}/Users", middleware(j.getPlaylistAllUsersHandler)).Methods("GET")
+	r.Handle("/Playlists/{playlist}/Users/{user}", middleware(j.getPlaylistUsersHandler)).Methods("GET")
 }
 
 type contextKey string
@@ -109,16 +121,20 @@ const (
 	// Misc IDs for api responses
 	serverID             = "2b11644442754f02a0c1e45d2a9f5c71"
 	collectionRootID     = "e9d5075a555c1cbc394eec4cef295274"
+	playlistCollectionID = "2f0340563593c4d98b97c9bfa21ce23c"
 	displayPreferencesID = "f137a2dd21bbc1b99aa5c0f6bf02a805"
 	CollectionMovies     = "movies"
 	CollectionTVShows    = "tvshows"
+	CollectionPlaylists  = "playlists"
 
 	// itemid prefixes
-	itemprefix_separator  = "_"
-	itemprefix_collection = "collection_"
-	itemprefix_show       = "show_"
-	itemprefix_season     = "season_"
-	itemprefix_episode    = "episode_"
+	itemprefix_separator           = "_"
+	itemprefix_collection          = "collection_"
+	itemprefix_collection_playlist = "collectionplaylist_"
+	itemprefix_show                = "show_"
+	itemprefix_season              = "season_"
+	itemprefix_episode             = "episode_"
+	itemprefix_playlist            = "playlist_"
 
 	// imagetag prefix will get HTTP-redirected
 	tagprefix_redirect = "redirect_"
@@ -146,157 +162,6 @@ func (j *Jellyfin) systemInfoHandler(w http.ResponseWriter, r *http.Request) {
 	serveJSON(response, w)
 }
 
-// curl -v -X POST http://127.0.0.1:9090/Users/AuthenticateByName
-// Authenticates a user by name.
-// (POST /Users/AuthenticateByName)
-func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http.Request) {
-	var request JFAuthenticateUserByName
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		http.Error(w, "Invalid request", http.StatusUnauthorized)
-		return
-	}
-
-	if len(*request.Username) == 0 || len(*request.Pw) == 0 {
-		http.Error(w, "username and password required", http.StatusUnauthorized)
-		return
-	}
-
-	embyHeader, err := j.parseAuthHeader(r)
-	if err != nil || embyHeader == nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
-		return
-	}
-
-	user, err := j.db.UserValidate(request.Username, request.Pw)
-	if err != nil {
-		if err == database.ErrUserNotFound && j.autoRegister {
-			user, err = j.db.UserInsert(*request.Username, *request.Pw)
-			if err != nil {
-				http.Error(w, "Failed to auto-register user", http.StatusInternalServerError)
-				return
-			}
-		} else {
-			http.Error(w, "Invalid username/password", http.StatusUnauthorized)
-			return
-		}
-	}
-
-	remoteAddress, _, _ := net.SplitHostPort(r.RemoteAddr)
-
-	session := &JFSessionInfo{
-		Id:                 "e3a869b7a901f8894de8ee65688db6c0",
-		UserId:             user.Id,
-		UserName:           user.Username,
-		Client:             embyHeader.client,
-		DeviceName:         embyHeader.device,
-		DeviceId:           embyHeader.deviceId,
-		ApplicationVersion: embyHeader.version,
-		RemoteEndPoint:     remoteAddress,
-		LastActivityDate:   time.Now().UTC(),
-		IsActive:           true,
-	}
-
-	accesstoken := j.db.AccessToken.New(user.Id)
-
-	response := JFAuthenticateByNameResponse{
-		AccessToken: accesstoken,
-		SessionInfo: session,
-		ServerId:    serverID,
-		User: JFUser{
-			ServerId:                  serverID,
-			Id:                        user.Id,
-			Name:                      user.Username,
-			HasPassword:               true,
-			HasConfiguredPassword:     true,
-			HasConfiguredEasyPassword: false,
-			EnableAutoLogin:           false,
-			LastLoginDate:             time.Now().UTC(),
-			LastActivityDate:          time.Now().UTC(),
-		},
-	}
-	serveJSON(response, w)
-}
-
-// authMiddleware extracts and processes emby authorization header
-func (j *Jellyfin) authmiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		embyHeader, err := j.parseAuthHeader(r)
-		if err != nil || embyHeader == nil {
-			http.Error(w, err.Error(), http.StatusUnauthorized)
-			return
-		}
-
-		// log.Printf("authMiddleware: Token=%s, Client=%s, Device=%s, DeviceId=%s, Version=%s",
-		// 	embyHeader.token, embyHeader.client, embyHeader.device, embyHeader.deviceID, embyHeader.version)
-
-		tokendetails := j.db.AccessToken.Lookup(embyHeader.token)
-		if tokendetails == nil {
-			http.Error(w, "invalid access token", http.StatusUnauthorized)
-			return
-		}
-
-		ctx := context.WithValue(r.Context(), contextAccessTokenDetails, tokendetails)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
-
-// getAccessTokenDetails returns access token details of a request in flight
-func (j *Jellyfin) getAccessTokenDetails(r *http.Request) *database.AccessToken {
-	// This should have been populated by authmiddleware(j.)
-	details, ok := r.Context().Value(contextAccessTokenDetails).(*database.AccessToken)
-	if ok {
-		return details
-	} else {
-		return nil
-	}
-}
-
-// AuthHeaderValues holds parsed x-emby-authorization header
-type AuthHeaderValues struct {
-	device   string
-	deviceId string
-	token    string
-	client   string
-	version  string
-}
-
-// parseAuthHeader parses x-emby-authorization header
-func (j *Jellyfin) parseAuthHeader(r *http.Request) (*AuthHeaderValues, error) {
-	errEmbyAuthHeader := errors.New("invalid or no emby-authorization header provided")
-
-	authHeader := r.Header.Get("x-emby-authorization")
-	authHeader = strings.TrimPrefix(authHeader, "MediaBrowser ")
-	if authHeader == "" {
-		return nil, errEmbyAuthHeader
-	}
-
-	// MediaBrowser Client="Jellyfin%20Media%20Player", Device="mbp", DeviceId="0dabe147-5d08-4e70-adde-d6b778b725aa", Version="1.11.1", Token="aea78abca5744378b2a2badf710e7307"
-	// MediaBrowser Device="Mac", DeviceId="0dabe147-5d08-4e70-adde-d6b778b725aa", Token="826c2aa3596b47f2a386dd2811248649", Client="Infuse-Direct", Version="8.0.9"
-
-	var result AuthHeaderValues
-	for _, part := range strings.Split(authHeader, ",") {
-		kv := strings.SplitN(strings.TrimSpace(part), "=", 2)
-		if len(kv) == 2 {
-			v := strings.Trim(kv[1], "\"")
-			switch kv[0] {
-			case "Device":
-				result.device = v
-			case "DeviceId":
-				result.deviceId = v
-			case "Token":
-				result.token = v
-			case "Client":
-				result.client = v
-			case "Version":
-				result.version = v
-			}
-		} else {
-			return nil, errEmbyAuthHeader
-		}
-	}
-	return &result, nil
-}
-
 // curl -v 'http://127.0.0.1:9090/DisplayPreferences/usersettings?userId=2b1ec0a52b09456c9823a367d84ac9e5&client=emby'
 func (j *Jellyfin) displayPreferencesHandler(w http.ResponseWriter, r *http.Request) {
 	serveJSON(DisplayPreferencesResponse{
@@ -322,44 +187,26 @@ func (j *Jellyfin) displayPreferencesHandler(w http.ResponseWriter, r *http.Requ
 	}, w)
 }
 
-// curl -v http://127.0.0.1:9090/Users/2b1ec0a52b09456c9823a367d84ac9e5
-func (j *Jellyfin) usersHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(r)
-	if accessTokenDetails == nil {
-		http.Error(w, "accesstoken context not found", http.StatusUnauthorized)
-		return
-	}
-
-	vars := mux.Vars(r)
-	if vars["user"] != accessTokenDetails.UserId {
-		http.Error(w, "invalid user id", http.StatusNotFound)
-		return
-	}
-
-	dbuser, _ := j.db.UserGetById(accessTokenDetails.UserId)
-
-	user := JFUser{
-		Id:                        dbuser.Id,
-		Name:                      dbuser.Username,
-		ServerId:                  serverID,
-		HasPassword:               true,
-		HasConfiguredPassword:     true,
-		HasConfiguredEasyPassword: false,
-		EnableAutoLogin:           false,
-		LastLoginDate:             time.Now().UTC(),
-		LastActivityDate:          time.Now().UTC(),
-	}
-	serveJSON(user, w)
-}
-
 // curl -v 'http://127.0.0.1:9090/Users/2b1ec0a52b09456c9823a367d84ac9e5/Views?IncludeExternalContent=false'
 func (j *Jellyfin) usersViewsHandler(w http.ResponseWriter, r *http.Request) {
+	accessTokenDetails := j.getAccessTokenDetails(r)
+	if accessTokenDetails == nil {
+		http.Error(w, "accesstoken not found in context", http.StatusUnauthorized)
+		return
+	}
+
 	items := []JFItem{}
 	for _, c := range j.collections.GetCollections() {
 		if item, err := j.buildJFItemCollection(genCollectionID(c.SourceId)); err == nil {
 			items = append(items, item)
 		}
 	}
+
+	playlistCollection, err := j.buildJFItemCollectionPlaylist(accessTokenDetails.UserID)
+	if err == nil {
+		items = append(items, playlistCollection)
+	}
+
 	response := JFUserViewsResponse{
 		Items:            items,
 		TotalRecordCount: len(items),
@@ -406,8 +253,9 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 
 	splitted := strings.Split(itemId, "_")
 	if len(splitted) == 2 {
+		splitted[0] += "_"
 		switch splitted[0] {
-		case "collection":
+		case itemprefix_collection:
 			collectionItem, err := j.buildJFItemCollection(itemId)
 			if err != nil {
 				http.Error(w, "Could not find collection", http.StatusNotFound)
@@ -416,21 +264,38 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			serveJSON(collectionItem, w)
 			return
-		case "season":
-			seasonItem, err := j.buildJFItemSeason(accessTokenDetails.UserId, itemId)
+		case itemprefix_collection_playlist:
+			collectionItem, err := j.buildJFItemCollectionPlaylist(accessTokenDetails.UserID)
+			if err != nil {
+				http.Error(w, "Could not find playlist collection", http.StatusNotFound)
+				return
+
+			}
+			serveJSON(collectionItem, w)
+			return
+		case itemprefix_season:
+			seasonItem, err := j.buildJFItemSeason(accessTokenDetails.UserID, itemId)
 			if err != nil {
 				http.Error(w, "Could not find season", http.StatusNotFound)
 				return
 			}
 			serveJSON(seasonItem, w)
 			return
-		case "episode":
-			episodeItem, err := j.buildJFItemEpisode(accessTokenDetails.UserId, itemId)
+		case itemprefix_episode:
+			episodeItem, err := j.buildJFItemEpisode(accessTokenDetails.UserID, itemId)
 			if err != nil {
 				http.Error(w, "Could not find episode", http.StatusNotFound)
 				return
 			}
 			serveJSON(episodeItem, w)
+			return
+		case itemprefix_playlist:
+			playlistItem, err := j.buildJFItemPlaylist(accessTokenDetails.UserID, itemId)
+			if err != nil {
+				http.Error(w, "Could not find playlist", http.StatusNotFound)
+				return
+			}
+			serveJSON(playlistItem, w)
 			return
 		default:
 			log.Print("Item request for unknown prefix!")
@@ -445,7 +310,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Item not found", http.StatusNotFound)
 		return
 	}
-	serveJSON(j.buildJFItem(accessTokenDetails.UserId, i, idhash.IdHash(c.Name_), c.Type, false), w)
+	serveJSON(j.buildJFItem(accessTokenDetails.UserID, i, idhash.IdHash(c.Name_), c.Type, false), w)
 }
 
 // curl -v 'http://127.0.0.1:9090/Users/2b1ec0a52b09456c9823a367d84ac9e5/Items?ExcludeLocationTypes=Virtual&Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount&ParentId=f137a2dd21bbc1b99aa5c0f6bf02a805&SortBy=SortName,ProductionYear&SortOrder=Ascending&IncludeItemTypes=Movie&Recursive=true&StartIndex=0&Limit=50'
@@ -469,6 +334,14 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 	searchTerm := queryparams.Get("SearchTerm")
 
 	searchCollection := queryparams.Get("ParentId")
+
+	// Return playlist collection if requested
+	if strings.HasPrefix(searchCollection, itemprefix_collection_playlist) {
+		response, _ := j.buildJFItemPlaylistOverview(accessTokenDetails.UserID)
+		serveJSON(response, w)
+		return
+	}
+
 	var searchC *collection.Collection
 	if searchCollection != "" {
 		collectionid := strings.TrimPrefix(searchCollection, itemprefix_collection)
@@ -488,7 +361,7 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 				if i.SortName == "" {
 					i.SortName = i.Name
 				}
-				items = append(items, j.buildJFItem(accessTokenDetails.UserId, i, idhash.IdHash(c.Name_), c.Type, true))
+				items = append(items, j.buildJFItem(accessTokenDetails.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
 			}
 		}
 	}
@@ -585,7 +458,7 @@ func (j *Jellyfin) usersItemsLatestHandler(w http.ResponseWriter, r *http.Reques
 			continue
 		}
 		for _, i := range c.Items {
-			items = append(items, j.buildJFItem(accessTokenDetails.UserId, i, idhash.IdHash(c.Name_), c.Type, true))
+			items = append(items, j.buildJFItem(accessTokenDetails.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
 		}
 	}
 
@@ -619,12 +492,6 @@ func (j *Jellyfin) libraryVirtualFoldersHandler(w http.ResponseWriter, r *http.R
 			Locations:          []string{"/"},
 			CollectionType:     collectionItem.Type,
 		}
-		// switch c.Type {
-		// case collection.CollectionMovies:
-		// 	l.CollectionType = CollectionMovies
-		// case collection.CollectionShows:
-		// 	l.CollectionType = CollectionTVShows
-		// }
 		libraries = append(libraries, l)
 	}
 	serveJSON(libraries, w)
@@ -649,7 +516,7 @@ func (j *Jellyfin) showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
 	// Create API response
 	seasons := []JFItem{}
 	for _, s := range i.Seasons {
-		season, err := j.buildJFItemSeason(accessTokenDetails.UserId, s.Id)
+		season, err := j.buildJFItemSeason(accessTokenDetails.UserID, s.Id)
 		if err != nil {
 			log.Printf("buildJFItemSeason returned error %s", err)
 			continue
@@ -692,7 +559,7 @@ func (j *Jellyfin) showsEpisodesHandler(w http.ResponseWriter, r *http.Request) 
 		}
 		for _, e := range s.Episodes {
 			episodeId := itemprefix_episode + e.Id
-			episode, err := j.buildJFItemEpisode(accessTokenDetails.UserId, episodeId)
+			episode, err := j.buildJFItemEpisode(accessTokenDetails.UserID, episodeId)
 			if err != nil {
 				log.Printf("buildJFItemEpisode returned error %s", err)
 				continue
@@ -888,141 +755,12 @@ func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 	c, i := j.collections.GetItemByID("rVFG3EzPthk2wowNkqUl")
 	response := JFShowsNextUpResponse{
 		Items: []JFItem{
-			j.buildJFItem(accessTokenDetails.UserId, i, idhash.IdHash(c.Name_), c.Type, true),
+			j.buildJFItem(accessTokenDetails.UserID, i, idhash.IdHash(c.Name_), c.Type, true),
 		},
 		TotalRecordCount: 1,
 		StartIndex:       0,
 	}
 	serveJSON(response, w)
-}
-
-// usersPlayedItemsPostHandler marks item as played.
-func (j *Jellyfin) usersPlayedItemsPostHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(r)
-	if accessTokenDetails == nil {
-		http.Error(w, "accesstoken not found in context", http.StatusUnauthorized)
-		return
-	}
-
-	vars := mux.Vars(r)
-	itemId := vars["item"]
-
-	j.playStateUpdate(accessTokenDetails.UserId, itemId, 0, true)
-	w.WriteHeader(http.StatusOK)
-}
-
-// usersPlayedItemsPostHandler marks item as not played.
-func (j *Jellyfin) usersPlayedItemsDeleteHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(r)
-	if accessTokenDetails == nil {
-		http.Error(w, "accesstoken not found in context", http.StatusUnauthorized)
-		return
-	}
-
-	vars := mux.Vars(r)
-	itemId := vars["item"]
-
-	j.playStateUpdate(accessTokenDetails.UserId, itemId, 0, false)
-	w.WriteHeader(http.StatusOK)
-}
-
-// PositionTicks are in micro seconds
-const TicsToSeconds = 10000000
-
-func (j *Jellyfin) sessionsPlayingHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(r)
-	if accessTokenDetails == nil {
-		http.Error(w, "accesstoken not found in context", http.StatusUnauthorized)
-		return
-	}
-
-	var request JFPlayState
-	err := json.NewDecoder(r.Body).Decode(&request)
-	if err != nil {
-		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
-		return
-	}
-	// log.Printf("\nsessionsPlayingHandler UserId: %s, ItemId: %s, Progress: %d seconds\n\n",
-	// 	accessTokenDetails.UserId, request.ItemId, request.PositionTicks/TicsToSeconds)
-	j.playStateUpdate(accessTokenDetails.UserId, request.ItemId, request.PositionTicks, false)
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (j *Jellyfin) sessionsPlayingProgressHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(r)
-	if accessTokenDetails == nil {
-		http.Error(w, "accesstoken context not found", http.StatusUnauthorized)
-		return
-	}
-
-	var request JFPlayState
-	err := json.NewDecoder(r.Body).Decode(&request)
-	if err != nil {
-		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
-		return
-	}
-	// log.Printf("\nsessionsPlayingProgressHandler UserId: %s, ItemId: %s, Progress: %d seconds\n\n",
-	// 	accessTokenDetails.UserId, request.ItemId, request.PositionTicks/TicsToSeconds)
-	j.playStateUpdate(accessTokenDetails.UserId, request.ItemId, request.PositionTicks, false)
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (j *Jellyfin) sessionsPlayingStoppedHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(r)
-	if accessTokenDetails == nil {
-		http.Error(w, "accesstoken context not found", http.StatusUnauthorized)
-		return
-	}
-
-	var request JFPlayState
-	err := json.NewDecoder(r.Body).Decode(&request)
-	if err != nil {
-		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
-		return
-	}
-	// log.Printf("\nsessionsPlayingStoppedHandler UserId: %s, ItemId: %s, Progress: %d seconds, canSeek: %t\n\n",
-	// 	accessTokenDetails.UserId, request.ItemId, request.PositionTicks/TicsToSeconds, request.CanSeek)
-	j.playStateUpdate(accessTokenDetails.UserId, request.ItemId, request.PositionTicks, false)
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (j *Jellyfin) playStateUpdate(userId, itemId string, positionTicks int, markAsWatched bool) (err error) {
-	log.Printf("playStateUpdate UserId: %s, ItemId: %s, Progress: %d sec\n",
-		userId, itemId, positionTicks/TicsToSeconds)
-
-	var duration int
-	if strings.HasPrefix(itemId, itemprefix_episode) {
-		_, _, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemId))
-
-		// fix me: we should not have to load NFO here
-		j.lazyLoadNFO(&episode.Nfo, episode.NfoPath)
-
-		duration = episode.Nfo.FileInfo.StreamDetails.Video.DurationInSeconds
-	} else {
-		_, item := j.collections.GetItemByID(itemId)
-		duration = item.Nfo.Runtime * 60
-	}
-
-	playstate := database.PlayStateEntry{
-		Timestamp: time.Now().UTC(),
-	}
-
-	position := positionTicks / TicsToSeconds
-	playedPercentage := 100 * position / duration
-
-	// Mark as watched in case > 98% of the item is played
-	if markAsWatched || playedPercentage >= 98 {
-		playstate.Position = 0
-		playstate.PlayedPercentage = 0
-		playstate.Played = true
-	} else {
-		playstate.Position = position
-		playstate.PlayedPercentage = playedPercentage
-		playstate.Played = false
-	}
-
-	j.db.PlaystateUpdate(userId, trimPrefix(itemId), playstate)
-	return nil
 }
 
 func (j *Jellyfin) serveFile(w http.ResponseWriter, r *http.Request, filename string) {

@@ -31,6 +31,7 @@ func (j *Jellyfin) buildJFItemCollection(itemid string) (response JFItem, e erro
 		ID:                       itemID,
 		Etag:                     idhash.IdHash(itemID),
 		DateCreated:              time.Now().UTC(),
+		PremiereDate:             time.Now().UTC(),
 		Type:                     "CollectionFolder",
 		IsFolder:                 true,
 		EnableMediaSourceDisplay: true,
@@ -48,8 +49,6 @@ func (j *Jellyfin) buildJFItemCollection(itemid string) (response JFItem, e erro
 		CanDelete:                false,
 		CanDownload:              true,
 		SpecialFeatureCount:      0,
-		// PremiereDate should be set based upon most recent item in collection
-		PremiereDate: time.Now().UTC(),
 		// TODO: we do not support images for a collection
 		// ImageTags: &JFImageTags{
 		// 	Primary: "collection",
@@ -62,6 +61,51 @@ func (j *Jellyfin) buildJFItemCollection(itemid string) (response JFItem, e erro
 		response.CollectionType = CollectionTVShows
 	}
 	response.SortName = response.CollectionType
+	return
+}
+
+func (j *Jellyfin) buildJFItemCollectionPlaylist(userid string) (response JFItem, e error) {
+	playlistIDs, err := j.db.PlaylistRepo.GetPlaylists(userid)
+
+	// In case of no playlists, we still want to return a collection item
+	var itemCount int
+	if err == nil {
+		itemCount = len(playlistIDs)
+	}
+	id := itemprefix_collection_playlist + playlistCollectionID
+
+	response = JFItem{
+		Name:                     "Playlists",
+		ServerID:                 serverID,
+		ID:                       id,
+		Etag:                     idhash.IdHash(id),
+		DateCreated:              time.Now().UTC(),
+		PremiereDate:             time.Now().UTC(),
+		CollectionType:           CollectionPlaylists,
+		SortName:                 CollectionPlaylists,
+		Type:                     "UserView",
+		IsFolder:                 true,
+		EnableMediaSourceDisplay: true,
+		ChildCount:               itemCount,
+		DisplayPreferencesID:     displayPreferencesID,
+		ExternalUrls:             []JFExternalUrls{},
+		PlayAccess:               "Full",
+		PrimaryImageAspectRatio:  1.7777777777777777,
+		RemoteTrailers:           []JFRemoteTrailers{},
+		LocationType:             "FileSystem",
+		Path:                     "/collection",
+		LockData:                 false,
+		MediaType:                "Unknown",
+		ParentID:                 collectionRootID,
+		CanDelete:                false,
+		CanDownload:              true,
+		SpecialFeatureCount:      0,
+		// PremiereDate should be set based upon most recent item in collection
+		// TODO: we do not support images for a collection
+		// ImageTags: &JFImageTags{
+		// 	Primary: "collection",
+		// },
+	}
 	return
 }
 
@@ -121,7 +165,7 @@ func (j *Jellyfin) buildJFItem(userId string, i *collection.Item, parentId, coll
 		for _, s := range i.Seasons {
 			for _, e := range s.Episodes {
 				totalEpisodes++
-				episodePlaystate, err := j.db.PlayStateGet(userId, e.Id)
+				episodePlaystate, err := j.db.PlayStateRepo.Get(userId, e.Id)
 				if err == nil {
 					if episodePlaystate.Played {
 						playedEpisodes++
@@ -147,7 +191,7 @@ func (j *Jellyfin) buildJFItem(userId string, i *collection.Item, parentId, coll
 
 	j.enrichResponseWithNFO(&response, i.Nfo)
 
-	if playstate, err := j.db.PlayStateGet(userId, i.Id); err == nil {
+	if playstate, err := j.db.PlayStateRepo.Get(userId, i.Id); err == nil {
 		response.UserData = j.buildJFUserData(playstate)
 		response.UserData.Key = i.Id
 	}
@@ -190,7 +234,7 @@ func (j *Jellyfin) buildJFItemSeason(userId, seasonId string) (response JFItem, 
 	var playedEpisodes int
 	var lastestPlayed time.Time
 	for _, e := range season.Episodes {
-		episodePlaystate, err := j.db.PlayStateGet(userId, e.Id)
+		episodePlaystate, err := j.db.PlayStateRepo.Get(userId, e.Id)
 		if err == nil {
 			if episodePlaystate.Played {
 				playedEpisodes++
@@ -263,14 +307,71 @@ func (j *Jellyfin) buildJFItemEpisode(userId, episodeId string) (response JFItem
 	// Add some generic mediasource to indicate "720p, stereo"
 	response.MediaSources = j.buildMediaSource(episode.Video, episode.Nfo)
 
-	if playstate, err := j.db.PlayStateGet(userId, episodeId); err == nil {
+	if playstate, err := j.db.PlayStateRepo.Get(userId, episodeId); err == nil {
 		response.UserData = j.buildJFUserData(playstate)
 		response.UserData.Key = episodeId
 	}
 	return response, nil
 }
 
-func (j *Jellyfin) buildJFUserData(p database.PlayStateEntry) (response *JFUserData) {
+func (j *Jellyfin) buildJFItemPlaylistOverview(userId string) (response UserItemsResponse, err error) {
+	playlistIDs, err := j.db.PlaylistRepo.GetPlaylists(userId)
+
+	log.Printf("buildJFItemPlaylistOverview: %+v", playlistIDs)
+
+	// In case we have playlists populate, otherwise leave empty list
+	items := []JFItem{}
+	if err == nil {
+		for _, playlistID := range playlistIDs {
+			item, err := j.buildJFItemPlaylist(userId, playlistID)
+			if err == nil {
+				items = append(items, item)
+			}
+		}
+	}
+
+	response = UserItemsResponse{
+		Items:            items,
+		TotalRecordCount: len(items),
+		StartIndex:       0,
+	}
+	return
+}
+
+func (j *Jellyfin) buildJFItemPlaylist(userId, playlistId string) (response JFItem, err error) {
+	playlist, err := j.db.PlaylistRepo.GetPlaylist(trimPrefix(playlistId))
+	if playlist == nil {
+		err = errors.New("could not find playlist")
+		return
+	}
+
+	id := itemprefix_playlist + playlist.ID
+	response = JFItem{
+		Type:                     "Playlist",
+		ID:                       id,
+		ServerID:                 serverID,
+		ParentID:                 "1071671e7bffa0532e930debee501d2e",
+		Name:                     playlist.Name,
+		Etag:                     idhash.IdHash(id),
+		DateCreated:              time.Now().UTC(),
+		CanDelete:                true,
+		CanDownload:              true,
+		SortName:                 userId,
+		Path:                     "/playlist",
+		IsFolder:                 true,
+		PlayAccess:               "Full",
+		RecursiveItemCount:       len(playlist.ItemIDs),
+		ChildCount:               len(playlist.ItemIDs),
+		LocationType:             "FileSystem",
+		MediaType:                "Video",
+		DisplayPreferencesID:     displayPreferencesID,
+		EnableMediaSourceDisplay: true,
+	}
+
+	return
+}
+
+func (j *Jellyfin) buildJFUserData(p database.PlayState) (response *JFUserData) {
 	response = &JFUserData{
 		PlaybackPositionTicks: p.Position * TicsToSeconds,
 		PlayedPercentage:      p.PlayedPercentage,
@@ -460,6 +561,9 @@ func (j *Jellyfin) buildMediaSource(filename string, n *nfo.Nfo) (mediasources [
 	case "hevc":
 		videostream.Codec = "hevc"
 		videostream.CodecTag = "hvc1"
+	case "vc1":
+		videostream.Codec = "vc1"
+		videostream.CodecTag = "wvc1"
 	default:
 		log.Printf("Nfo of %s has unknown video codec %s", filename, NfoVideo.Codec)
 	}
@@ -506,6 +610,9 @@ func (j *Jellyfin) buildMediaSource(filename string, n *nfo.Nfo) (mediasources [
 	case 6:
 		audiostream.Title = "5.1 Channel"
 		audiostream.ChannelLayout = "5.1"
+	case 8:
+		audiostream.Title = "7.1 Channel"
+		audiostream.ChannelLayout = "7.1"
 	default:
 		log.Printf("Nfo of %s has unknown audio channel configuration %d", filename, NfoAudio.Channels)
 	}
@@ -517,6 +624,8 @@ func (j *Jellyfin) buildMediaSource(filename string, n *nfo.Nfo) (mediasources [
 	case "aac":
 		audiostream.Codec = "aac"
 		audiostream.CodecTag = "mp4a"
+	case "wma":
+		audiostream.Codec = "wmapro"
 	default:
 		log.Printf("Nfo of %s has unknown audio codec %s", filename, NfoAudio.Codec)
 	}

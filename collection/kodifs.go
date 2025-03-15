@@ -190,7 +190,7 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Item)
 	cr.copySrtVttSubs(movie.SrtSubs, &movie.VttSubs)
 
 	dbItemMovie := &database.Item{
-		Id:    movie.Id,
+		ID:    movie.Id,
 		Name:  movie.Name,
 		Year:  movie.Year,
 		Genre: strings.Join(movie.Genre, ","),
@@ -520,7 +520,7 @@ func (cr *CollectionRepo) buildShow(coll *Collection, dir string) (show *Item) {
 	item.Year = year
 
 	dbItemShow := &database.Item{
-		Id:    item.Id,
+		ID:    item.Id,
 		Name:  item.Name,
 		Year:  item.Year,
 		Genre: strings.Join(item.Genre, ","),
