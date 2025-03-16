@@ -7,6 +7,8 @@ import (
 	"os"
 	"path"
 	"time"
+
+	"github.com/djherbis/times"
 )
 
 type Dir struct {
@@ -21,7 +23,6 @@ type FileInfo struct {
 	mode       os.FileMode
 	modtime    time.Time
 	createtime time.Time
-	sys        interface{}
 	isdir      bool
 	didstat    bool
 }
@@ -117,20 +118,18 @@ func (fi *FileInfo) stat() {
 	if err != nil {
 		return
 	}
-	fi.set(s)
-}
 
-func (fi *FileInfo) set(s os.FileInfo) {
 	fi.size = s.Size()
 	fi.mode = s.Mode()
 	fi.modtime = s.ModTime()
 	fi.isdir = s.IsDir()
-	fi.sys = s.Sys()
-	fi.setCreatetime()
-	fi.didstat = true
-}
 
-func (fi *FileInfo) Sys() interface{} {
-	fi.stat()
-	return fi.sys
+	fileTimestamp, err := times.Stat(p)
+	if err != nil {
+		return
+	}
+	fi.createtime = fileTimestamp.BirthTime()
+	fi.modtime = fileTimestamp.ModTime()
+
+	fi.didstat = true
 }
