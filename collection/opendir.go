@@ -128,7 +128,7 @@ func (fi *FileInfo) stat() {
 	if err != nil {
 		return
 	}
-	fi.createtime = fileTimestamp.BirthTime()
+	fi.createtime = fileTimestamp.ChangeTime()
 	fi.modtime = fileTimestamp.ModTime()
 
 	fi.didstat = true
