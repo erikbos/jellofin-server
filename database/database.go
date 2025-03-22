@@ -5,7 +5,7 @@ import (
 	"log"
 
 	"github.com/jmoiron/sqlx"
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 type (
@@ -66,7 +66,7 @@ func New(o *Options) (*DatabaseRepo, error) {
 	if o.Filename == "" {
 		return nil, fmt.Errorf("database directory not set")
 	}
-	dbHandle, err := sqlx.Connect("sqlite3", o.Filename)
+	dbHandle, err := sqlx.Open("sqlite", o.Filename)
 	if err != nil {
 		return nil, err
 	}
