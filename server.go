@@ -94,7 +94,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("database.New: %s", err)
 	}
-	go database.BackgroundJobs()
+	go database.AccessTokenRepo.BackgroundJobs()
+	go database.PlayStateRepo.BackgroundJobs()
 
 	collection := collection.New(&collection.Options{
 		Collections: config.Collections,

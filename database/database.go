@@ -1,6 +1,7 @@
 package database
 
 import (
+	"errors"
 	"fmt"
 	"log"
 
@@ -36,6 +37,8 @@ type (
 		Get(token string) (*AccessToken, error)
 		// Generate generates new token
 		Generate(UserID string) string
+		// BackgroundJobs writes changed accesstokens to database every 3 seconds.
+		BackgroundJobs()
 	}
 
 	ItemRepo interface {
@@ -62,6 +65,10 @@ type (
 	}
 )
 
+var (
+	ErrNoDbHandle = errors.New("db connection not available")
+)
+
 func New(o *Options) (*DatabaseRepo, error) {
 	if o.Filename == "" {
 		return nil, fmt.Errorf("database directory not set")
@@ -75,7 +82,7 @@ func New(o *Options) (*DatabaseRepo, error) {
 	}
 	d := &DatabaseRepo{
 		UserRepo:        NewUserStorage(dbHandle),
-		AccessTokenRepo: NewAccessTokenStorage(),
+		AccessTokenRepo: NewAccessTokenStorage(dbHandle),
 		ItemRepo:        NewItemStorage(dbHandle),
 		PlayStateRepo:   NewPlayStateStorage(dbHandle),
 		PlaylistRepo:    NewPlaylistStorage(dbHandle),
@@ -109,6 +116,13 @@ username TEXT NOT NULL,
 password TEXT NOT NULL);`,
 
 		`CREATE UNIQUE INDEX IF NOT EXISTS users_name_idx ON users (username);`,
+
+		`CREATE TABLE IF NOT EXISTS accesstokens (
+userid TEXT NOT NULL,
+token TEXT NOT NULL,
+lastused DATETIME);`,
+
+		`CREATE UNIQUE INDEX IF NOT EXISTS accesstokens_idx ON accesstokens (userid, token);`,
 
 		`CREATE TABLE IF NOT EXISTS playstate (
 userid TEXT NOT NULL,

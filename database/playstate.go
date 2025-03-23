@@ -85,7 +85,7 @@ func (p *PlayStateStorage) Get(userID, itemID string) (details PlayState, err er
 // LoadPlayStateFromDB loads playstate table into memory.
 func (p *PlayStateStorage) LoadStateFromDB() error {
 	if p.dbHandle == nil {
-		return nil
+		return errors.New("db connection not available")
 	}
 
 	var playStates []struct {
@@ -117,13 +117,13 @@ func (p *PlayStateStorage) LoadStateFromDB() error {
 	return nil
 }
 
-// writePlayStateToDB writes all changed entries in PlayStateRepo.state to the SQLite table playstate.
+// writePlayStateToDB writes all changed entries in PlayStateRepo.state to db.
 func (p *PlayStateStorage) writeStateToDB() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	if p.dbHandle == nil {
-		return nil
+		return ErrNoDbHandle
 	}
 
 	tx, err := p.dbHandle.Beginx()
@@ -158,11 +158,11 @@ func (p *PlayStateStorage) writeStateToDB() error {
 // BackgroundJobs loads state and writes changed play state to database every 3 seconds.
 func (p *PlayStateStorage) BackgroundJobs() {
 	if p.dbHandle == nil {
-		log.Fatal("StartBackgroundJobs called without db connection")
+		log.Fatal(ErrNoDbHandle)
 	}
 
 	p.LoadStateFromDB()
-	p.lastDBSyncTime = time.Now().UTC()
+	p.lastDBSyncTime = time.Now()
 
 	for {
 		if err := p.writeStateToDB(); err != nil {
