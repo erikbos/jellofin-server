@@ -9,6 +9,8 @@ bin/*
 # Test binary, built with `go test -c`
 *.test
 
+Makefile
+
 .vscode/
 todo.txt
 

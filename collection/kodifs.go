@@ -24,6 +24,11 @@ var isExt1 = regexp.MustCompile(`^(.*)()\.(png|jpg|jpeg|tbn|nfo|srt)$`)
 var isExt2 = regexp.MustCompile(`^(.*)[.-]([a-z]+)\.(png|jpg|jpeg|tbn|nfo|srt)$`)
 var isYear = regexp.MustCompile(` \(([0-9]+)\)$`)
 
+const (
+	ItemTypeMovie = `movie`
+	ItemTypeShow  = `show`
+)
+
 type epMapType struct {
 	eps *[]Episode
 	idx int
@@ -115,7 +120,7 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Item)
 		Video:      escapePath(video),
 		FirstVideo: created,
 		LastVideo:  created,
-		Type:       `movie`,
+		Type:       ItemTypeMovie,
 	}
 
 	for _, f := range fi {
@@ -454,7 +459,7 @@ func (cr *CollectionRepo) buildShow(coll *Collection, dir string) (show *Item) {
 		Name:    path.Base(dir),
 		BaseUrl: coll.BaseUrl,
 		Path:    escapePath(dir),
-		Type:    `show`,
+		Type:    ItemTypeShow,
 	}
 	d := path.Join(coll.Directory, dir)
 	cr.showScanDir(d, "", -1, item)

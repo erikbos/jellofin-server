@@ -3,6 +3,7 @@ package collection
 import (
 	"fmt"
 	"net/url"
+	"sort"
 	"strconv"
 
 	"github.com/miquels/notflix-server/database"
@@ -17,7 +18,7 @@ type Options struct {
 // var config CollectionRepo
 
 type CollectionRepo struct {
-	collections []Collection
+	collections Collections
 	db          *database.DatabaseRepo
 }
 
@@ -38,6 +39,16 @@ type Collection struct {
 	BaseUrl   string  `json:"-"`
 	HlsServer string  `json:"-"`
 }
+
+// CollectionDetails contains details about a collection
+type CollectionDetails struct {
+	Genres          []string
+	Tags            []string
+	OfficialRatings []string
+	Years           []int
+}
+
+type Collections []Collection
 
 // An 'item' can be a movie, a tv-show, a folder, etc.
 type Item struct {
@@ -180,8 +191,23 @@ func (cr *CollectionRepo) Background() {
 	}
 }
 
-func (cr *CollectionRepo) GetCollections() []Collection {
+func (cr *CollectionRepo) GetCollections() Collections {
 	return cr.collections
+}
+
+func (cr *CollectionRepo) GetCollectionItems(collName string) []Item {
+	items := make([]Item, 0)
+
+	for _, c := range cr.collections {
+		// Skip if we are searching in one particular collection?
+		if collName != "" && collName != c.Name_ {
+			continue
+		}
+		for _, i := range c.Items {
+			items = append(items, *i)
+		}
+	}
+	return items
 }
 
 func (cr *CollectionRepo) GetCollection(collName string) (c *Collection) {
@@ -261,30 +287,83 @@ func (c *Collection) GetDataDir() string {
 	return c.Directory
 }
 
-// func (cr *CollectionRepo) GetHlsServer(source string) (h string) {
-// 	id, err := strconv.ParseInt(source, 10, 64)
-// 	if err != nil {
-// 		return
-// 	}
-// 	for n, c := range cr.collections {
-// 		if int64(c.SourceId) == id {
-// 			h = cr.collections[n].HlsServer
-// 			return
-// 		}
-// 	}
-// 	return
-// }
+// Details returns collection details such as genres, tags, ratings, etc.
+func (c *CollectionRepo) Details() CollectionDetails {
+	genre := make(map[string]bool)
+	tags := make(map[string]bool)
+	ratings := make(map[string]bool)
+	years := make(map[int]bool)
 
-// func (cr *CollectionRepo) GetDataDir(source string) (d string) {
-// 	id, err := strconv.ParseInt(source, 10, 64)
-// 	if err != nil {
-// 		return
-// 	}
-// 	for n, c := range cr.collections {
-// 		if int64(c.SourceId) == id {
-// 			d = cr.collections[n].Directory
-// 			return
-// 		}
-// 	}
-// 	return
-// }
+	for _, c := range c.collections {
+		for _, i := range c.Items {
+			// Fixme: i.Genre is not populated
+			// if i.Genre != nil {
+			// 	for _, g := range i.Genre {
+			// 		genre[g] = true
+			// 	}
+			// }
+			// if i.Rating != 0 {
+			// 	ratings[i.Rating] = true
+			// }
+			if i.Year != 0 {
+				years[i.Year] = true
+			}
+		}
+	}
+
+	details := CollectionDetails{
+		Genres:          returnStringArray(genre),
+		Tags:            returnStringArray(tags),
+		OfficialRatings: returnStringArray(ratings),
+		Years:           returnIntArray(years),
+	}
+	return details
+}
+
+// Details returns collection details such as genres, tags, ratings, etc.
+func (c *Collection) Details() CollectionDetails {
+	genre := make(map[string]bool)
+	tags := make(map[string]bool)
+	ratings := make(map[string]bool)
+	years := make(map[int]bool)
+
+	for _, i := range c.Items {
+		// Fixme: i.Genre is not populated
+		// if i.Genre != nil {
+		// 	for _, g := range i.Genre {
+		// 		genre[g] = true
+		// 	}
+		// }
+		// if i.Rating != 0 {
+		// 	ratings[i.Rating] = true
+		// }
+		if i.Year != 0 {
+			years[i.Year] = true
+		}
+	}
+
+	details := CollectionDetails{
+		Genres:          returnStringArray(genre),
+		Tags:            returnStringArray(tags),
+		OfficialRatings: returnStringArray(ratings),
+		Years:           returnIntArray(years),
+	}
+	return details
+}
+
+func returnStringArray(m map[string]bool) []string {
+	result := []string{}
+	for k := range m {
+		result = append(result, k)
+	}
+	return result
+}
+
+func returnIntArray(m map[int]bool) []int {
+	result := []int{}
+	for k := range m {
+		result = append(result, k)
+	}
+	sort.Ints(result)
+	return result
+}

@@ -17,6 +17,17 @@ type JFSystemInfoResponse struct {
 	StartupWizardCompleted bool   `json:"StartupWizardCompleted"`
 }
 
+type JFPluginResponse struct {
+	Name                  string `json:"Name"`
+	Version               string `json:"Version"`
+	ConfigurationFileName string `json:"ConfigurationFileName"`
+	Description           string `json:"Description"`
+	Id                    string `json:"Id"`
+	CanUninstall          bool   `json:"CanUninstall"`
+	HasImage              bool   `json:"HasImage"`
+	Status                string `json:"Status"`
+}
+
 type JFUser struct {
 	Name                      string              `json:"Name"`
 	ServerId                  string              `json:"ServerId"`
@@ -94,7 +105,7 @@ type JFUserPolicy struct {
 	SyncPlayAccess                   string   `json:"SyncPlayAccess"`
 }
 
-type JFAuthenticateUserByName struct {
+type JFAuthenticateUserByNameRequest struct {
 	Username string `json:"Username"`
 	Pw       string `json:"Pw"`
 }
@@ -205,7 +216,7 @@ type JFItem struct {
 	Type                     string             `json:"Type,omitempty"`
 	People                   []JFPeople         `json:"People,omitempty"`
 	Studios                  []JFStudios        `json:"Studios,omitempty"`
-	GenreItems               []JFGenreItems     `json:"GenreItems,omitempty"`
+	GenreItems               []JFGenreItem      `json:"GenreItems,omitempty"`
 	LocalTrailerCount        int                `json:"LocalTrailerCount,omitempty"`
 	UserData                 *JFUserData        `json:"UserData,omitempty"`
 	SpecialFeatureCount      int                `json:"SpecialFeatureCount,omitempty"`
@@ -300,6 +311,7 @@ type JFMediaSources struct {
 	ETag                    string                `json:"ETag"`
 	RunTimeTicks            int64                 `json:"RunTimeTicks"`
 	ReadAtNativeFramerate   bool                  `json:"ReadAtNativeFramerate"`
+	HasSegments             bool                  `json:"HasSegments"`
 	IgnoreDts               bool                  `json:"IgnoreDts"`
 	IgnoreIndex             bool                  `json:"IgnoreIndex"`
 	GenPtsInput             bool                  `json:"GenPtsInput"`
@@ -361,7 +373,7 @@ type JFStudios struct {
 	ID   string `json:"Id"`
 }
 
-type JFGenreItems struct {
+type JFGenreItem struct {
 	Name string `json:"Name"`
 	ID   string `json:"Id"`
 }
@@ -386,6 +398,11 @@ type JFImageTags struct {
 type UserItemsResponse struct {
 	Items            []JFItem `json:"Items"`
 	StartIndex       int      `json:"StartIndex"`
+	TotalRecordCount int      `json:"TotalRecordCount"`
+}
+
+type SearchHintsResponse struct {
+	SearchHints      []JFItem `json:"SearchHints"`
 	TotalRecordCount int      `json:"TotalRecordCount"`
 }
 
@@ -476,4 +493,42 @@ type JFPlayState struct {
 	PlaylistLength int  `json:"PlaylistLength"`
 	PlaylistIndex  int  `json:"PlaylistIndex"`
 	IsPaused       bool `json:"IsPaused"`
+}
+
+// Localization
+type JFCountry struct {
+	DisplayName              string `json:"DisplayName"`
+	Name                     string `json:"Name"`
+	ThreeLetterISORegionName string `json:"ThreeLetterISORegionName"`
+	TwoLetterISORegionName   string `json:"TwoLetterISORegionName"`
+}
+
+type JFLanguage struct {
+	DisplayName                 string   `json:"DisplayName"`
+	Name                        string   `json:"Name"`
+	ThreeLetterISOLanguageName  string   `json:"ThreeLetterISOLanguageName"`
+	ThreeLetterISOLanguageNames []string `json:"ThreeLetterISOLanguageNames"`
+	TwoLetterISOLanguageName    string   `json:"TwoLetterISOLanguageName"`
+}
+
+type JFLocalizationOptions struct {
+	Name  string `json:"Name"`
+	Value string `json:"Value"`
+}
+
+type JFLocalizationParentalRatings struct {
+	Name  string `json:"Name"`
+	Value int    `json:"Value"`
+}
+
+type JFItemFilterResponse struct {
+	Genres          []string `json:"Genres"`
+	Tags            []string `json:"Tags"`
+	OfficialRatings []string `json:"OfficialRatings"`
+	Years           []int    `json:"Years"`
+}
+
+type JFItemFilter2Response struct {
+	Genres []JFGenreItem `json:"Genres"`
+	Tags   []string      `json:"Tags"`
 }

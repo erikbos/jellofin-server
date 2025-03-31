@@ -12,19 +12,13 @@ import (
 	"github.com/miquels/notflix-server/database"
 )
 
-// func (j *Jellyfin) registerHandlersPlayState(r *mux.Router, middleware func(http.HandlerFunc) http.Handler) {
-// 	r.Handle("/Users/{user}/PlayedItems/{item}", middleware(j.usersPlayedItemsPostHandler)).Methods("POST")
-// 	r.Handle("/Users/{user}/PlayedItems/{item}", middleware(j.usersPlayedItemsDeleteHandler)).Methods("DELETE")
-// 	r.Handle("/Sessions/Playing", middleware(j.sessionsPlayingHandler)).Methods("POST")
-// 	r.Handle("/Sessions/Playing/Progress", middleware(j.sessionsPlayingProgressHandler)).Methods("POST")
-// 	r.Handle("/Sessions/Playing/Stopped", middleware(j.sessionsPlayingStoppedHandler)).Methods("POST")
-// }
-
-// usersPlayedItemsPostHandler marks item as played.
+// POST /UserPlayedItems/{item}
+// POST /Users/{user}/PlayedItems/{item}
+//
+// usersPlayedItemsPostHandler marks an item as played.
 func (j *Jellyfin) usersPlayedItemsPostHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(r)
+	accessTokenDetails := j.getAccessTokenDetails(w, r)
 	if accessTokenDetails == nil {
-		http.Error(w, "accesstoken not found in context", http.StatusUnauthorized)
 		return
 	}
 
@@ -35,11 +29,13 @@ func (j *Jellyfin) usersPlayedItemsPostHandler(w http.ResponseWriter, r *http.Re
 	w.WriteHeader(http.StatusOK)
 }
 
-// usersPlayedItemsPostHandler marks item as not played.
+// DELETE /UserPlayedItems/{item}
+// DELETE /Users/{user}/PlayedItems/{item}
+//
+// // usersPlayedItemsPostHandler marks an item as not played.
 func (j *Jellyfin) usersPlayedItemsDeleteHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(r)
+	accessTokenDetails := j.getAccessTokenDetails(w, r)
 	if accessTokenDetails == nil {
-		http.Error(w, "accesstoken not found in context", http.StatusUnauthorized)
 		return
 	}
 
@@ -54,9 +50,8 @@ func (j *Jellyfin) usersPlayedItemsDeleteHandler(w http.ResponseWriter, r *http.
 const TicsToSeconds = 10000000
 
 func (j *Jellyfin) sessionsPlayingHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(r)
+	accessTokenDetails := j.getAccessTokenDetails(w, r)
 	if accessTokenDetails == nil {
-		http.Error(w, "accesstoken not found in context", http.StatusUnauthorized)
 		return
 	}
 
@@ -73,9 +68,8 @@ func (j *Jellyfin) sessionsPlayingHandler(w http.ResponseWriter, r *http.Request
 }
 
 func (j *Jellyfin) sessionsPlayingProgressHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(r)
+	accessTokenDetails := j.getAccessTokenDetails(w, r)
 	if accessTokenDetails == nil {
-		http.Error(w, "accesstoken context not found", http.StatusUnauthorized)
 		return
 	}
 
@@ -92,9 +86,8 @@ func (j *Jellyfin) sessionsPlayingProgressHandler(w http.ResponseWriter, r *http
 }
 
 func (j *Jellyfin) sessionsPlayingStoppedHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(r)
+	accessTokenDetails := j.getAccessTokenDetails(w, r)
 	if accessTokenDetails == nil {
-		http.Error(w, "accesstoken context not found", http.StatusUnauthorized)
 		return
 	}
 
@@ -119,7 +112,7 @@ func (j *Jellyfin) playStateUpdate(userID, itemID string, positionTicks int, mar
 		_, _, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemID))
 
 		// fix me: we should not have to load NFO here
-		j.lazyLoadNFO(&episode.Nfo, episode.NfoPath)
+		j.loadNFO(&episode.Nfo, episode.NfoPath)
 
 		duration = episode.Nfo.FileInfo.StreamDetails.Video.DurationInSeconds
 	} else {

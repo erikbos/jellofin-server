@@ -37,9 +37,8 @@ type JFPlaylistAccess struct {
 //
 // createPlaylistHandler creates a new playlist
 func (j *Jellyfin) createPlaylistHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(r)
+	accessTokenDetails := j.getAccessTokenDetails(w, r)
 	if accessTokenDetails == nil {
-		http.Error(w, "accesstoken not found in context", http.StatusUnauthorized)
 		return
 	}
 
@@ -112,9 +111,8 @@ func (j *Jellyfin) updatePlaylistHandler(w http.ResponseWriter, r *http.Request)
 //
 // getPlaylistHandler retrieves a playlist by ID
 func (j *Jellyfin) getPlaylistHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(r)
+	accessTokenDetails := j.getAccessTokenDetails(w, r)
 	if accessTokenDetails == nil {
-		http.Error(w, "accesstoken not found in context", http.StatusUnauthorized)
 		return
 	}
 
@@ -140,9 +138,8 @@ func (j *Jellyfin) getPlaylistHandler(w http.ResponseWriter, r *http.Request) {
 //
 // getPlaylistItemsHandler retrieves items in a playlist
 func (j *Jellyfin) getPlaylistItemsHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(r)
+	accessTokenDetails := j.getAccessTokenDetails(w, r)
 	if accessTokenDetails == nil {
-		http.Error(w, "accesstoken not found in context", http.StatusUnauthorized)
 		return
 	}
 
@@ -159,7 +156,7 @@ func (j *Jellyfin) getPlaylistItemsHandler(w http.ResponseWriter, r *http.Reques
 	for _, itemID := range playlist.ItemIDs {
 		c, i := j.collections.GetItemByID(itemID)
 		if c != nil || i != nil {
-			items = append(items, j.buildJFItem(accessTokenDetails.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
+			items = append(items, j.makeJFItem(accessTokenDetails.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
 		}
 	}
 	response := UserItemsResponse{
@@ -174,9 +171,8 @@ func (j *Jellyfin) getPlaylistItemsHandler(w http.ResponseWriter, r *http.Reques
 //
 // addPlaylistItemsHandler Adds items to a playlist
 func (j *Jellyfin) addPlaylistItemsHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(r)
+	accessTokenDetails := j.getAccessTokenDetails(w, r)
 	if accessTokenDetails == nil {
-		http.Error(w, "accesstoken not found in context", http.StatusUnauthorized)
 		return
 	}
 
@@ -243,9 +239,8 @@ func (j *Jellyfin) deletePlaylistItemsHandler(w http.ResponseWriter, r *http.Req
 //
 // getPlaylistAllUsersHandler retrieves users with access to a playlist. Always returns the current user.
 func (j *Jellyfin) getPlaylistAllUsersHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(r)
+	accessTokenDetails := j.getAccessTokenDetails(w, r)
 	if accessTokenDetails == nil {
-		http.Error(w, "accesstoken not found in context", http.StatusUnauthorized)
 		return
 	}
 	response := []JFPlaylistAccess{
@@ -261,9 +256,8 @@ func (j *Jellyfin) getPlaylistAllUsersHandler(w http.ResponseWriter, r *http.Req
 //
 // getPlaylistUsersHandler retrieves users with access to a playlist. Always returns the current user.
 func (j *Jellyfin) getPlaylistUsersHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(r)
+	accessTokenDetails := j.getAccessTokenDetails(w, r)
 	if accessTokenDetails == nil {
-		http.Error(w, "accesstoken not found in context", http.StatusUnauthorized)
 		return
 	}
 	response := JFPlaylistAccess{

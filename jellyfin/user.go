@@ -14,12 +14,11 @@ import (
 	"github.com/miquels/notflix-server/database"
 )
 
-// curl -v -X POST http://127.0.0.1:9090/Users/AuthenticateByName
 // POST /Users/AuthenticateByName
 //
 // usersAuthenticateByNameHandler authenticates a user by name
 func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http.Request) {
-	var request JFAuthenticateUserByName
+	var request JFAuthenticateUserByNameRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		http.Error(w, "Invalid request", http.StatusUnauthorized)
 		return
@@ -121,14 +120,17 @@ func (j *Jellyfin) authmiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// getAccessTokenDetails returns access token details from the request context.
-// This gets populated by authmiddleware()
-func (j *Jellyfin) getAccessTokenDetails(r *http.Request) *database.AccessToken {
+// getAccessTokenDetails returns access token details from the
+// request context populated by authmiddleware()
+//
+// if not found sends an HTTP unauthorized error
+func (j *Jellyfin) getAccessTokenDetails(w http.ResponseWriter, r *http.Request) *database.AccessToken {
 	// Ctx should have been populated by authmiddleware()
 	details, ok := r.Context().Value(contextAccessTokenDetails).(*database.AccessToken)
 	if ok {
 		return details
 	}
+	http.Error(w, "access token not found", http.StatusUnauthorized)
 	return nil
 }
 
@@ -163,7 +165,7 @@ func (j *Jellyfin) parseAuthHeader(r *http.Request) (*authHeaderValues, error) {
 
 	var result authHeaderValues
 	authHeader = strings.TrimPrefix(authHeader, "MediaBrowser ")
-	for _, part := range strings.Split(authHeader, ",") {
+	for part := range strings.SplitSeq(authHeader, ",") {
 		kv := strings.SplitN(strings.TrimSpace(part), "=", 2)
 		if len(kv) == 2 {
 			v := strings.Trim(kv[1], "\"")
@@ -190,9 +192,8 @@ func (j *Jellyfin) parseAuthHeader(r *http.Request) (*authHeaderValues, error) {
 //
 // usersAllHandler returns all users, we return only the current user
 func (j *Jellyfin) usersAllHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(r)
+	accessTokenDetails := j.getAccessTokenDetails(w, r)
 	if accessTokenDetails == nil {
-		http.Error(w, "accesstoken context not found", http.StatusUnauthorized)
 		return
 	}
 
@@ -207,13 +208,29 @@ func (j *Jellyfin) usersAllHandler(w http.ResponseWriter, r *http.Request) {
 	serveJSON(response, w)
 }
 
+// GET /Users/Me
+//
+// usersMeHandler returns the current user
+func (j *Jellyfin) usersMeHandler(w http.ResponseWriter, r *http.Request) {
+	accessTokenDetails := j.getAccessTokenDetails(w, r)
+	if accessTokenDetails == nil {
+		return
+	}
+	dbuser, err := j.db.UserRepo.GetById(accessTokenDetails.UserID)
+	if err != nil {
+		http.Error(w, "invalid user id", http.StatusNotFound)
+		return
+	}
+	response := genJFUser(dbuser)
+	serveJSON(response, w)
+}
+
 // GET /Users/{user}
 //
-// usersHandler returns a user
+// usersHandler returns a user, we always return the current user
 func (j *Jellyfin) usersHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(r)
+	accessTokenDetails := j.getAccessTokenDetails(w, r)
 	if accessTokenDetails == nil {
-		http.Error(w, "accesstoken context not found", http.StatusUnauthorized)
 		return
 	}
 
@@ -229,6 +246,14 @@ func (j *Jellyfin) usersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response := genJFUser(dbuser)
+	serveJSON(response, w)
+}
+
+// GET /Users/Public
+//
+// usersHandler returns list of public users, none
+func (j *Jellyfin) usersPublicHandler(w http.ResponseWriter, r *http.Request) {
+	response := []JFUser{}
 	serveJSON(response, w)
 }
 
