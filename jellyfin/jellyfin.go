@@ -21,6 +21,10 @@ type Options struct {
 	Db           *database.DatabaseRepo
 	Imageresizer *imageresize.Resizer
 
+	// ServerName is name of server returned in info responses
+	ServerName string
+	// ServerPort is the port of the server
+	ServerPort int
 	// Indicates if we should auto-register Jellyfin users
 	AutoRegister bool
 	// JPEG quality for posters
@@ -32,6 +36,10 @@ type Jellyfin struct {
 	db           *database.DatabaseRepo
 	imageresizer *imageresize.Resizer
 
+	// serverName is name of server returned in info responses
+	serverName string
+	// ServerPort is the port of the server
+	serverPort int
 	// Indicates if we should auto-register Jellyfin users
 	autoRegister bool
 	// JPEG quality for posters
@@ -45,9 +53,14 @@ func New(o *Options) *Jellyfin {
 	j := &Jellyfin{
 		collections:        o.Collections,
 		db:                 o.Db,
+		serverName:         o.ServerName,
+		serverPort:         o.ServerPort,
 		imageresizer:       o.Imageresizer,
 		autoRegister:       o.AutoRegister,
 		imageQualityPoster: o.ImageQualityPoster,
+	}
+	if j.serverName == "" {
+		j.serverName = "Jellyfin"
 	}
 	return j
 }
@@ -72,17 +85,18 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 
 	r.Handle("/Users", middleware(j.usersAllHandler))
 	r.Handle("/Users/Me", middleware(j.usersMeHandler))
+
 	r.Handle("/Users/{user}", middleware(j.usersHandler))
 	r.Handle("/Users/{user}/Views", middleware(j.usersViewsHandler))
 	r.Handle("/Users/{user}/GroupingOptions", middleware(j.usersGroupingOptionsHandler))
 	r.Handle("/Users/{user}/Items", middleware(j.usersItemsHandler))
 	r.Handle("/Users/{user}/Items/Latest", middleware(j.usersItemsLatestHandler))
-	// r.Handle("/Users/{user}/Items/Resume", middleware(j.usersItemsResumeHandler))
+	r.Handle("/Users/{user}/Items/Resume", middleware(j.usersItemsResumeHandler))
 	r.Handle("/Users/{user}/Items/Suggestions", middleware(j.usersItemsSuggestionsHandler))
 	r.Handle("/Users/{user}/Items/{item}", middleware(j.usersItemHandler))
 
 	r.Handle("/UserViews", middleware(j.usersViewsHandler))
-	// r.Handle("/UserItems/Resume", middleware(j.usersItemsResumeHandler))
+	r.Handle("/UserItems/Resume", middleware(j.usersItemsResumeHandler))
 
 	r.Handle("/Library/VirtualFolders", middleware(j.libraryVirtualFoldersHandler))
 	r.Handle("/Shows/NextUp", middleware(j.showsNextUpHandler))
@@ -107,6 +121,7 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 
 	r.Handle("/MediaSegments/{item}", middleware(j.mediaSegmentsHandler))
 	r.Handle("/Videos/{item}/stream", middleware(j.videoStreamHandler))
+	r.Handle("/Videos/{item}/stream.{container}", middleware(j.videoStreamHandler))
 
 	r.Handle("/Persons", http.HandlerFunc(j.personsHandler))
 

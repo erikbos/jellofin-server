@@ -55,7 +55,7 @@ func (p *PlayStateStorage) Update(userID, itemID string, details PlayState) {
 
 	details.Timestamp = time.Now().UTC()
 
-	log.Printf("sessionUpdate: userID: %s, itemID: %s, data: %+v\n", userID, itemID, details)
+	// log.Printf("sessionUpdate: userID: %s, itemID: %s, data: %+v\n", userID, itemID, details)
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -168,6 +168,6 @@ func (p *PlayStateStorage) BackgroundJobs() {
 		if err := p.writeStateToDB(); err != nil {
 			log.Printf("Error writing play state to db: %s\n", err)
 		}
-		time.Sleep(3 * time.Second)
+		time.Sleep(10 * time.Second)
 	}
 }

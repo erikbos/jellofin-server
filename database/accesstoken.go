@@ -87,7 +87,7 @@ func (s *AccessTokenStorage) Get(token string) (*AccessToken, error) {
 	return nil, ErrAccessTokenNotFound
 }
 
-// BackgroundJobs writes changed accesstokens to database every 3 seconds.
+// BackgroundJobs writes changed accesstokens to database.
 func (s *AccessTokenStorage) BackgroundJobs() {
 	if s.dbHandle == nil {
 		log.Fatal(ErrNoDbHandle)
@@ -98,7 +98,7 @@ func (s *AccessTokenStorage) BackgroundJobs() {
 		if err := s.writeChangedAccessTokensToDB(); err != nil {
 			log.Printf("Error writing access tokens to db: %s\n", err)
 		}
-		time.Sleep(3 * time.Second)
+		time.Sleep(60 * time.Second)
 	}
 }
 

@@ -17,71 +17,6 @@ import (
 	"github.com/miquels/notflix-server/idhash"
 )
 
-// /System/Info/Public
-//
-// systemInfoHandler returns basic server info
-func (j *Jellyfin) systemInfoHandler(w http.ResponseWriter, r *http.Request) {
-	hostname, _ := os.Hostname()
-
-	response := JFSystemInfoResponse{
-		Id:           serverID,
-		LocalAddress: "http://" + hostname + ":9090/",
-		// Jellyfin native client checks for exact productname :facepalm:
-		// https://github.com/jellyfin/jellyfin-expo/blob/7dedbc72fb53fc4b83c3967c9a8c6c071916425b/utils/ServerValidator.js#L82C49-L82C64
-		ProductName:            "Jellyfin Server",
-		ServerName:             "jellyfin",
-		Version:                "10.10.3",
-		StartupWizardCompleted: true,
-	}
-	serveJSON(response, w)
-}
-
-// /Plugins
-//
-// pluginsHandler returns emply plugin list, we do not support plugins
-func (j *Jellyfin) pluginsHandler(w http.ResponseWriter, r *http.Request) {
-	// We do not list InfuseSync plugin as Infuse should be configured to use direct mode
-	response := []JFPluginResponse{
-		// {
-		// 	Name:         "InfuseSync",
-		// 	Version:      "1.5.0.0",
-		// 	Description:  "Plugin for fast synchronization with Infuse.",
-		// 	Id:           "022a3003993f45f1856587d12af2e12a",
-		// 	CanUninstall: true,
-		// 	HasImage:     true,
-		// 	Status:       "Disabled",
-		// },
-	}
-	serveJSON(response, w)
-}
-
-// /DisplayPreferences/usersettings?userId=2b1ec0a52b09456c9823a367d84ac9e5&client=emby'
-//
-// displayPreferencesHandler returns the display preferences for the user
-func (j *Jellyfin) displayPreferencesHandler(w http.ResponseWriter, r *http.Request) {
-	serveJSON(DisplayPreferencesResponse{
-		ID:                 "3ce5b65d-e116-d731-65d1-efc4a30ec35c",
-		SortBy:             "SortName",
-		RememberIndexing:   false,
-		PrimaryImageHeight: 250,
-		PrimaryImageWidth:  250,
-		CustomPrefs: DisplayPreferencesCustomPrefs{
-			ChromecastVersion:          "stable",
-			SkipForwardLength:          "30000",
-			SkipBackLength:             "10000",
-			EnableNextVideoInfoOverlay: "False",
-			Tvhome:                     "null",
-			DashboardTheme:             "null",
-		},
-		ScrollDirection: "Horizontal",
-		ShowBackdrop:    true,
-		RememberSorting: false,
-		SortOrder:       "Ascending",
-		ShowSidebar:     false,
-		Client:          "emby",
-	}, w)
-}
-
 // curl -v 'http://127.0.0.1:9090/Users/2b1ec0a52b09456c9823a367d84ac9e5/Views?IncludeExternalContent=false'
 // and
 // /UserViews
@@ -398,15 +333,18 @@ func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 	serveJSON(response, w)
 }
 
-// curl -v 'http://127.0.0.1:9090/Users/2b1ec0a52b09456c9823a367d84ac9e5/Items/Resume?Limit=12&MediaTypes=Video&Recursive=true&Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount'
-// func (j *Jellyfin) usersItemsResumeHandler(w http.ResponseWriter, r *http.Request) {
-// 	response := JFUsersItemsResumeResponse{
-// 		Items:            []string{},
-// 		TotalRecordCount: 0,
-// 		StartIndex:       0,
-// 	}
-// 	serveJSON(response, w)
-// }
+// /UserItems/Resume?userId=XAOVn7iqiBujnIQY8sd0&enableImageTypes=Primary&enableImageTypes=Backdrop&enableImageTypes=Thumb&includeItemTypes=Movie&includeItemTypes=Series&includeItemTypes=Episode
+// /Users/2b1ec0a52b09456c9823a367d84ac9e5/Items/Resume?Limit=12&MediaTypes=Video&Recursive=true&Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount'
+//
+// usersItemsResumeHandler returns a list of items that are resumable
+func (j *Jellyfin) usersItemsResumeHandler(w http.ResponseWriter, r *http.Request) {
+	response := JFUsersItemsResumeResponse{
+		Items:            []string{},
+		TotalRecordCount: 0,
+		StartIndex:       0,
+	}
+	serveJSON(response, w)
+}
 
 // /Items/Similar
 //
@@ -788,18 +726,27 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 
 // curl -v 'http://127.0.0.1:9090/Items/68d73f6f48efedb7db697bf9fee580cb/PlaybackInfo?UserId=2b1ec0a52b09456c9823a367d84ac9e5'
 func (j *Jellyfin) itemsPlaybackInfoHandler(w http.ResponseWriter, r *http.Request) {
-	// vars := mux.Vars(r)
-	// itemId := vars["item"]
+	vars := mux.Vars(r)
+	itemId := vars["item"]
 
-	// c, i := getItemByID(itemId)
-	// if i == nil || i.Video == "" {
-	// 	http.Error(w, "Item not found", http.StatusNotFound)
-	// 	return
-	// }
-	// item := buildJFItem(c, i, true)
+	var mediaSource []JFMediaSources
 
-	response := JFUsersPlaybackInfoResponse{
-		MediaSources: j.makeMediaSource("test.mp4", nil),
+	if _, i := j.collections.GetItemByID(itemId); i != nil {
+		mediaSource = j.makeMediaSource(i.Video, i.Nfo)
+	}
+
+	if strings.HasPrefix(itemId, itemprefix_episode) {
+		if _, _, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemId)); episode != nil {
+			mediaSource = j.makeMediaSource(episode.Video, episode.Nfo)
+		}
+	}
+	if mediaSource == nil {
+		http.Error(w, "Could not find item", http.StatusNotFound)
+		return
+	}
+
+	response := JFPlaybackInfoResponse{
+		MediaSources: mediaSource,
 		// TODO this static id should be generated based upon authenticated user
 		// this id is used when submitting playstate via /Sessions/Playing endpoints
 		PlaySessionID: "fc3b27127bf84ed89a300c6285d697e2",

@@ -23,16 +23,20 @@ import (
 var configFile = "notflix-server.cfg"
 
 type cfgMain struct {
-	Listen      string
-	Tls         bool
-	TlsCert     string
-	TlsKey      string
+	Listen struct {
+		Port    int
+		Tls     bool
+		TlsCert string
+		TlsKey  string
+	}
 	Appdir      string
 	Cachedir    string
 	Dbdir       string
 	Logfile     string
 	Collections []collection.Collection `cc:"collection"`
 	Jellyfin    struct {
+		// ServerName is name of server returned in info responses
+		ServerName string
 		// Indicates if we should auto-register Jellyfin users
 		AutoRegister bool
 		// JPEG quality for posters
@@ -40,16 +44,20 @@ type cfgMain struct {
 	}
 }
 
-var config = cfgMain{
-	Listen:  "127.0.0.1:8060",
-	Logfile: "stdout",
-}
-
 var resizer *imageresize.Resizer
 
 func main() {
 	log.Printf("Parsing config file")
-
+	config := cfgMain{
+		Listen: struct {
+			Port    int
+			Tls     bool
+			TlsCert string
+			TlsKey  string
+		}{
+			Port: 8080,
+		},
+	}
 	p, err := curlyconf.NewParser(configFile, curlyconf.ParserNL)
 	if err == nil {
 		err = p.Parse(&config)
@@ -75,6 +83,8 @@ func main() {
 		log.SetOutput(logw)
 	case "none":
 		log.SetOutput(io.Discard)
+	case "":
+		fallthrough
 	case "stdout":
 	default:
 		f, err := os.OpenFile(*logfile,
@@ -126,6 +136,8 @@ func main() {
 		Collections:        collection,
 		Db:                 database,
 		Imageresizer:       resizer,
+		ServerPort:         config.Listen.Port,
+		ServerName:         config.Jellyfin.ServerName,
 		AutoRegister:       config.Jellyfin.AutoRegister,
 		ImageQualityPoster: config.Jellyfin.ImageQualityPoster,
 	})
@@ -134,16 +146,16 @@ func main() {
 	r.PathPrefix("/").Handler(http.FileServer(http.Dir(config.Appdir)))
 
 	server := HttpLog(r)
-	addr := config.Listen
 
 	log.Printf("Initializing collections..")
 	collection.Init()
 	go collection.Background()
 
-	if config.Tls {
+	addr := fmt.Sprintf(":%d", config.Listen.Port)
+	if config.Listen.TlsCert != "" && config.Listen.TlsKey != "" {
 		log.Printf("Serving HTTPS on %s", addr)
-		log.Fatal(http.ListenAndServeTLS(addr, config.TlsCert,
-			config.TlsKey, server))
+		log.Fatal(http.ListenAndServeTLS(addr, config.Listen.TlsCert,
+			config.Listen.TlsKey, server))
 	} else {
 		log.Printf("Serving HTTP on %s", addr)
 		log.Fatal(http.ListenAndServe(addr, server))

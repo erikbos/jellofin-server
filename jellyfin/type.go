@@ -412,7 +412,44 @@ type JFShowsNextUpResponse struct {
 	StartIndex       int      `json:"StartIndex"`
 }
 
-type JFUsersPlaybackInfoResponse struct {
+type JFPlayBackInfoRequest struct {
+	DeviceProfile struct {
+		Name                string `json:"Name"`
+		MaxStaticBitrate    int    `json:"MaxStaticBitrate"`
+		MaxStreamingBitrate int    `json:"MaxStreamingBitrate"`
+		CodecProfiles       []struct {
+			Type  string `json:"Type"`
+			Codec string `json:"Codec"`
+		} `json:"CodecProfiles"`
+		DirectPlayProfiles []struct {
+			Type       string `json:"Type"`
+			Container  string `json:"Container"`
+			VideoCodec string `json:"VideoCodec,omitempty"`
+			AudioCodec string `json:"AudioCodec"`
+		} `json:"DirectPlayProfiles"`
+		TranscodingProfiles []struct {
+			Type             string `json:"Type"`
+			Context          string `json:"Context"`
+			Protocol         string `json:"Protocol"`
+			Container        string `json:"Container"`
+			VideoCodec       string `json:"VideoCodec,omitempty"`
+			AudioCodec       string `json:"AudioCodec"`
+			MaxAudioChannels string `json:"MaxAudioChannels,omitempty"`
+		} `json:"TranscodingProfiles"`
+		SubtitleProfiles []struct {
+			Format string `json:"Format"`
+			Method string `json:"Method"`
+		} `json:"SubtitleProfiles"`
+	} `json:"deviceProfile"`
+	UserID              string `json:"userId"`
+	StartTimeTicks      int    `json:"startTimeTicks"`
+	AutoOpenLiveStream  bool   `json:"autoOpenLiveStream"`
+	MediaSourceID       string `json:"mediaSourceId"`
+	AudioStreamIndex    int    `json:"audioStreamIndex"`
+	SubtitleStreamIndex int    `json:"subtitleStreamIndex"`
+}
+
+type JFPlaybackInfoResponse struct {
 	MediaSources  []JFMediaSources `json:"MediaSources"`
 	PlaySessionID string           `json:"PlaySessionId"`
 }

@@ -2,7 +2,6 @@ package jellyfin
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -104,8 +103,8 @@ func (j *Jellyfin) sessionsPlayingStoppedHandler(w http.ResponseWriter, r *http.
 }
 
 func (j *Jellyfin) playStateUpdate(userID, itemID string, positionTicks int, markAsWatched bool) (err error) {
-	log.Printf("playStateUpdate userID: %s, itemID: %s, Progress: %d sec\n",
-		userID, itemID, positionTicks/TicsToSeconds)
+	// log.Printf("playStateUpdate userID: %s, itemID: %s, Progress: %d sec\n",
+	// 	userID, itemID, positionTicks/TicsToSeconds)
 
 	var duration int
 	if strings.HasPrefix(itemID, itemprefix_episode) {
