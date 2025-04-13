@@ -4,6 +4,20 @@ import (
 	"net/http"
 )
 
+// Branding/Configuration
+func (j *Jellyfin) brandingConfigurationHandler(w http.ResponseWriter, r *http.Request) {
+	response := JFBrandingConfigurationResponse{
+		SplashscreenEnabled: false,
+	}
+	serveJSON(response, w)
+}
+
+// Branding/Css
+// Branding/Css.css
+func (j *Jellyfin) brandingCssHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+
 // /Localization/Countries
 func (j *Jellyfin) localizationCountriesHandler(w http.ResponseWriter, r *http.Request) {
 	response := []JFCountry{
@@ -14,6 +28,7 @@ func (j *Jellyfin) localizationCountriesHandler(w http.ResponseWriter, r *http.R
 			TwoLetterISORegionName:   "US",
 		},
 	}
+	j.cache1h(w)
 	serveJSON(response, w)
 }
 
@@ -28,6 +43,7 @@ func (j *Jellyfin) localizationCulturesHandler(w http.ResponseWriter, r *http.Re
 			TwoLetterISOLanguageName:    "en",
 		},
 	}
+	j.cache1h(w)
 	serveJSON(response, w)
 }
 
@@ -39,6 +55,7 @@ func (j *Jellyfin) localizationOptionsHandler(w http.ResponseWriter, r *http.Req
 			Value: "en-US",
 		},
 	}
+	j.cache1h(w)
 	serveJSON(response, w)
 }
 
@@ -50,5 +67,10 @@ func (j *Jellyfin) localizationParentalRatingsHandler(w http.ResponseWriter, r *
 			Value: 0,
 		},
 	}
+	j.cache1h(w)
 	serveJSON(response, w)
+}
+
+func (j *Jellyfin) cache1h(w http.ResponseWriter) {
+	w.Header().Set("cache-control", "max-age=3600")
 }

@@ -2,6 +2,7 @@ package jellyfin
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -106,20 +107,36 @@ func (j *Jellyfin) playStateUpdate(userID, itemID string, positionTicks int, mar
 	// log.Printf("playStateUpdate userID: %s, itemID: %s, Progress: %d sec\n",
 	// 	userID, itemID, positionTicks/TicsToSeconds)
 
+	// fixme: duration determination should be moved to the collections
 	var duration int
 	if strings.HasPrefix(itemID, itemprefix_episode) {
 		_, _, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemID))
 
 		// fix me: we should not have to load NFO here
-		j.loadNFO(&episode.Nfo, episode.NfoPath)
-
-		duration = episode.Nfo.FileInfo.StreamDetails.Video.DurationInSeconds
+		episode.LoadNfo()
+		if episode.Nfo != nil &&
+			episode.Nfo.FileInfo != nil &&
+			episode.Nfo.FileInfo.StreamDetails != nil &&
+			episode.Nfo.FileInfo.StreamDetails.Video != nil {
+			duration = episode.Nfo.FileInfo.StreamDetails.Video.DurationInSeconds
+		} else {
+			log.Printf("playStateUpdate: no duration for episode %s\n", itemID)
+		}
 	} else {
 		_, item := j.collections.GetItemByID(itemID)
-		duration = item.Nfo.Runtime * 60
+		if item != nil {
+			item.LoadNfo()
+		}
+		if item.Nfo != nil {
+			if item.Nfo.Runtime != 0 {
+				duration = item.Nfo.Runtime * 60
+			} else if item.Nfo.FileInfo.StreamDetails.Video.DurationInSeconds != 0 {
+				duration = item.Nfo.FileInfo.StreamDetails.Video.DurationInSeconds
+			}
+		}
 	}
 
-	playstate := database.PlayState{
+	playstate := database.UserData{
 		Timestamp: time.Now().UTC(),
 	}
 
@@ -137,6 +154,49 @@ func (j *Jellyfin) playStateUpdate(userID, itemID string, positionTicks int, mar
 		playstate.Played = false
 	}
 
-	j.db.PlayStateRepo.Update(userID, trimPrefix(itemID), playstate)
+	j.db.UserDataRepo.Update(userID, trimPrefix(itemID), playstate)
 	return nil
+}
+
+// POST /UserFavoriteItems/{item}
+//
+// // userFavoriteItemsPostHandler marks an item as favorite.
+func (j *Jellyfin) userFavoriteItemsPostHandler(w http.ResponseWriter, r *http.Request) {
+	accessTokenDetails := j.getAccessTokenDetails(w, r)
+	if accessTokenDetails == nil {
+		return
+	}
+
+	vars := mux.Vars(r)
+	itemID := vars["item"]
+
+	playstate, err := j.db.UserDataRepo.Get(accessTokenDetails.UserID, itemID)
+	if err != nil {
+		playstate = database.UserData{}
+	}
+	userData := j.makeJFUserData(accessTokenDetails.UserID, itemID, playstate)
+	serveJSON(userData, w)
+}
+
+// DELETE /UserFavoriteItems/{item}
+//
+// // userFavoriteItemsDeleteHandler unmarks an item as favorite.
+func (j *Jellyfin) userFavoriteItemsDeleteHandler(w http.ResponseWriter, r *http.Request) {
+	accessTokenDetails := j.getAccessTokenDetails(w, r)
+	if accessTokenDetails == nil {
+		return
+	}
+
+	vars := mux.Vars(r)
+	itemID := vars["item"]
+
+	playstate, err := j.db.UserDataRepo.Get(accessTokenDetails.UserID, itemID)
+	if err != nil {
+		playstate = database.UserData{}
+	}
+	playstate.Favorite = false
+	j.db.UserDataRepo.Update(accessTokenDetails.UserID, itemID, playstate)
+
+	userData := j.makeJFUserData(accessTokenDetails.UserID, itemID, playstate)
+	serveJSON(userData, w)
 }

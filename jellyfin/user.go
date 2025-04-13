@@ -9,6 +9,10 @@ import (
 	"github.com/miquels/notflix-server/database"
 )
 
+const (
+	ErrUserIDNotFound = "userid not found"
+)
+
 // GET /Users
 //
 // usersAllHandler returns all users, we return only the current user
@@ -18,13 +22,13 @@ func (j *Jellyfin) usersAllHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dbuser, err := j.db.UserRepo.GetById(accessTokenDetails.UserID)
+	dbuser, err := j.db.UserRepo.GetByID(accessTokenDetails.UserID)
 	if err != nil {
-		http.Error(w, "invalid user id", http.StatusNotFound)
+		http.Error(w, ErrUserIDNotFound, http.StatusNotFound)
 		return
 	}
 	response := []JFUser{
-		genJFUser(dbuser),
+		makeJFUser(dbuser),
 	}
 	serveJSON(response, w)
 }
@@ -37,12 +41,13 @@ func (j *Jellyfin) usersMeHandler(w http.ResponseWriter, r *http.Request) {
 	if accessTokenDetails == nil {
 		return
 	}
-	dbuser, err := j.db.UserRepo.GetById(accessTokenDetails.UserID)
+
+	dbuser, err := j.db.UserRepo.GetByID(accessTokenDetails.UserID)
 	if err != nil {
-		http.Error(w, "invalid user id", http.StatusNotFound)
+		http.Error(w, ErrUserIDNotFound, http.StatusNotFound)
 		return
 	}
-	response := genJFUser(dbuser)
+	response := makeJFUser(dbuser)
 	serveJSON(response, w)
 }
 
@@ -57,16 +62,16 @@ func (j *Jellyfin) usersHandler(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	if vars["user"] != accessTokenDetails.UserID {
-		http.Error(w, "invalid user id", http.StatusNotFound)
+		http.Error(w, ErrUserIDNotFound, http.StatusNotFound)
 		return
 	}
 
-	dbuser, err := j.db.UserRepo.GetById(accessTokenDetails.UserID)
+	dbuser, err := j.db.UserRepo.GetByID(accessTokenDetails.UserID)
 	if err != nil {
-		http.Error(w, "invalid user id", http.StatusNotFound)
+		http.Error(w, ErrUserIDNotFound, http.StatusNotFound)
 		return
 	}
-	response := genJFUser(dbuser)
+	response := makeJFUser(dbuser)
 	serveJSON(response, w)
 }
 
@@ -78,7 +83,7 @@ func (j *Jellyfin) usersPublicHandler(w http.ResponseWriter, r *http.Request) {
 	serveJSON(response, w)
 }
 
-func genJFUser(user *database.User) JFUser {
+func makeJFUser(user *database.User) JFUser {
 	return JFUser{
 		Id:                        user.ID,
 		Name:                      user.Username,
@@ -89,5 +94,11 @@ func genJFUser(user *database.User) JFUser {
 		EnableAutoLogin:           false,
 		LastLoginDate:             time.Now().UTC(),
 		LastActivityDate:          time.Now().UTC(),
+		Policy: JFUserPolicy{
+			// Needs to be true to allow Streamyfin to Cast
+			IsAdministrator: true,
+			// Checked by Streamyfin to permit download
+			EnableContentDownloading: true,
+		},
 	}
 }

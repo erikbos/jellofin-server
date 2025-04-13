@@ -6,7 +6,7 @@ import (
 	"log"
 
 	"github.com/jmoiron/sqlx"
-	_ "modernc.org/sqlite"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type (
@@ -18,14 +18,14 @@ type (
 		UserRepo
 		AccessTokenRepo
 		ItemRepo
-		PlayStateRepo
+		UserDataRepo
 		PlaylistRepo
 	}
 
 	// UserRepo defines the interface for user database operations
 	UserRepo interface {
 		// GetById retrieves a user from the database by their ID.
-		GetById(UserID string) (user *User, err error)
+		GetByID(UserID string) (user *User, err error)
 		// Validate checks if the user exists and the password is correct.
 		Validate(username, password string) (user *User, err error)
 		// Insert inserts a new user into the database.
@@ -35,9 +35,9 @@ type (
 	AccessTokenRepo interface {
 		// Get accesstoken details by tokenid
 		Get(token string) (*AccessToken, error)
-		// Generate generates new token
+		// Generate generates new access token
 		Generate(UserID string) string
-		// BackgroundJobs writes changed accesstokens to database every 3 seconds.
+		// BackgroundJobs syncs changed accesstokens periodically to database
 		BackgroundJobs()
 	}
 
@@ -45,12 +45,14 @@ type (
 		DbLoadItem(item *Item)
 	}
 
-	PlayStateRepo interface {
+	UserDataRepo interface {
 		// Get the play state details for an item per user.
-		Get(UserID, itemID string) (details PlayState, err error)
+		Get(UserID, itemID string) (details UserData, err error)
+		// Get all favorite items of a user.
+		GetFavorites(UserID string) (favoriteItems []string, err error)
 		// Update stores the play state details for a user and item.
-		Update(UserID, itemID string, details PlayState)
-		// BackgroundJobs loads state and writes changed play state to database every 3 seconds.
+		Update(UserID, itemID string, details UserData)
+		// BackgroundJobs syncs changed play state to periodically to database.
 		BackgroundJobs()
 	}
 
@@ -73,7 +75,7 @@ func New(o *Options) (*DatabaseRepo, error) {
 	if o.Filename == "" {
 		return nil, fmt.Errorf("database directory not set")
 	}
-	dbHandle, err := sqlx.Open("sqlite", o.Filename)
+	dbHandle, err := sqlx.Connect("sqlite3", o.Filename)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +86,7 @@ func New(o *Options) (*DatabaseRepo, error) {
 		UserRepo:        NewUserStorage(dbHandle),
 		AccessTokenRepo: NewAccessTokenStorage(dbHandle),
 		ItemRepo:        NewItemStorage(dbHandle),
-		PlayStateRepo:   NewPlayStateStorage(dbHandle),
+		UserDataRepo:    NewUserDataStorage(dbHandle),
 		PlaylistRepo:    NewPlaylistStorage(dbHandle),
 	}
 	return d, nil
@@ -130,6 +132,7 @@ itemid TEXT NOT NULL,
 position INTEGER,
 playedpercentage INTEGER,
 played BOOLEAN,
+favorite BOOLEAN,
 timestamp DATETIME);`,
 
 		`CREATE UNIQUE INDEX IF NOT EXISTS userid_itemid_idx ON playstate (userid, itemid);`,

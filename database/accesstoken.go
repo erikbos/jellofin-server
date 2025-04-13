@@ -93,7 +93,7 @@ func (s *AccessTokenStorage) BackgroundJobs() {
 		log.Fatal(ErrNoDbHandle)
 	}
 
-	s.lastDBSyncTime = time.Now()
+	s.lastDBSyncTime = time.Now().UTC()
 	for {
 		if err := s.writeChangedAccessTokensToDB(); err != nil {
 			log.Printf("Error writing access tokens to db: %s\n", err)
@@ -114,7 +114,7 @@ func (s *AccessTokenStorage) writeChangedAccessTokensToDB() error {
 			}
 		}
 	}
-	s.lastDBSyncTime = time.Now()
+	s.lastDBSyncTime = time.Now().UTC()
 	return nil
 }
 

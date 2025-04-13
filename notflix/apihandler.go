@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"path"
 	"strings"
 	"time"
@@ -15,7 +14,6 @@ import (
 	"github.com/miquels/notflix-server/collection"
 	"github.com/miquels/notflix-server/database"
 	"github.com/miquels/notflix-server/imageresize"
-	"github.com/miquels/notflix-server/nfo"
 )
 
 type Options struct {
@@ -100,10 +98,9 @@ func (n *Notflix) collectionsHandler(w http.ResponseWriter, r *http.Request) {
 	if preCheck(w, r) {
 		return
 	}
-	cc := []collection.Collection{}
+	cc := []Collection{}
 	for _, c := range n.collections.GetCollections() {
-		c.Items = nil
-		cc = append(cc, c)
+		cc = append(cc, copyCollection(c))
 	}
 	serveJSON(cc, w)
 }
@@ -118,9 +115,7 @@ func (n *Notflix) collectionHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "404 Not Found", http.StatusNotFound)
 		return
 	}
-	cc := *c
-	cc.Items = []*collection.Item{}
-	serveJSON(cc, w)
+	serveJSON(copyCollection(*c), w)
 }
 
 func (n *Notflix) itemsHandler(w http.ResponseWriter, r *http.Request) {
@@ -146,21 +141,7 @@ func (n *Notflix) itemsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "HEAD" {
 		return
 	}
-
-	// copy items
-	items := make([]collection.Item, len(c.Items))
-	for i := range c.Items {
-		items[i] = *c.Items[i]
-		items[i].Seasons = []collection.Season{}
-		items[i].Nfo = nil
-	}
-
-	// hack to show empty items list here.
-	var itemsObj interface{} = items
-	if len(items) == 0 {
-		itemsObj = []string{}
-	}
-	serveJSON(itemsObj, w)
+	serveJSON(copyItems(c.Items), w)
 }
 
 func (n *Notflix) itemHandler(w http.ResponseWriter, r *http.Request) {
@@ -187,37 +168,16 @@ func (n *Notflix) itemHandler(w http.ResponseWriter, r *http.Request) {
 		doNfo = false
 	}
 
-	// decode base NFO into a copy of `item' because we don't want the
-	// nfo details to hang around in memory.
-	i2 := *i
-	if doNfo && i2.NfoPath != "" {
-		file, err := os.Open(i2.NfoPath)
-		if err == nil {
-			i2.Nfo = nfo.Decode(file)
-			file.Close()
-		}
+	if doNfo {
+		i.LoadNfo()
 	}
 
-	// In case of a tvshow, do a deep copy and decode episode NFO
-	copy(i2.Seasons, i.Seasons)
-	for si := range i2.Seasons {
-		copy(i2.Seasons[si].Episodes, i.Seasons[si].Episodes)
-		for ei := range i2.Seasons[si].Episodes {
-			ep := i2.Seasons[si].Episodes[ei]
-			if doNfo {
-				if ep.NfoPath != "" {
-					file, err := os.Open(ep.NfoPath)
-					if err == nil {
-						ep2 := ep
-						ep2.Nfo = nfo.Decode(file)
-						file.Close()
-						i2.Seasons[si].Episodes[ei] = ep2
-					}
-				}
-			}
+	i2 := copyItem(*i)
+	if i.Seasons != nil {
+		for _, s := range i.Seasons {
+			i2.Seasons = append(i2.Seasons, copySeason(s, doNfo))
 		}
 	}
-
 	serveJSON(&i2, w)
 }
 
@@ -304,4 +264,97 @@ func (n *Notflix) dataHandler(w http.ResponseWriter, r *http.Request) {
 
 func (n *Notflix) indexHandler(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, path.Join(n.Appdir, "index.html"))
+}
+
+// copyCollection populates a collection apiresponse
+func copyCollection(c collection.Collection) Collection {
+	cc := Collection{
+		ID:   c.ID,
+		Name: c.Name_,
+		Type: c.Type,
+	}
+	return cc
+}
+
+func copyItems(c []*collection.Item) []Item {
+	items := make([]Item, len(c))
+	for i := range c {
+		items[i] = copyItem(*c[i])
+	}
+	return items
+}
+
+func copyItem(item collection.Item) Item {
+	ci := Item{
+		ID:         item.ID,
+		Name:       item.Name,
+		Path:       item.Path,
+		BaseUrl:    item.BaseUrl,
+		Type:       item.Type,
+		FirstVideo: item.FirstVideo,
+		LastVideo:  item.LastVideo,
+		Fanart:     item.Fanart,
+		Poster:     item.Poster,
+		Rating:     item.Rating,
+		Genre:      item.Genre,
+		Year:       item.Year,
+		Video:      item.Video,
+	}
+	if item.Nfo != nil {
+		ci.Nfo = ItemNfo{
+			ID:        item.Nfo.Id,
+			Title:     item.Nfo.Title,
+			Plot:      item.Nfo.Plot,
+			Genre:     item.Nfo.Genre,
+			Premiered: item.Nfo.Premiered,
+			MPAA:      item.Nfo.Mpaa,
+			Aired:     item.Nfo.Aired,
+			Studio:    item.Nfo.Studio,
+		}
+	}
+	return ci
+}
+
+func copySeason(season collection.Season, doNfo bool) Season {
+	cs := Season{
+		SeasonNo: season.SeasonNo,
+		Banner:   season.Banner,
+		Fanart:   season.Fanart,
+		Poster:   season.Poster,
+	}
+
+	cs.Episodes = make([]Episode, len(season.Episodes))
+	for i := range season.Episodes {
+		cs.Episodes[i] = copyEpisode(season.Episodes[i], doNfo)
+	}
+	return cs
+}
+
+func copyEpisode(episode collection.Episode, doNfo bool) Episode {
+	ce := Episode{
+		Name:      episode.Name,
+		SeasonNo:  episode.SeasonNo,
+		EpisodeNo: episode.EpisodeNo,
+		Double:    episode.Double,
+		SortName:  episode.SortName,
+		Video:     episode.Video,
+		Thumb:     episode.Thumb,
+		// SrtSubs:   c.SrtSubs,
+		// VttSubs:   c.VttSubs,
+	}
+	if doNfo {
+		// log.Printf("Loading NFO for %s\n", episode.NfoPath)
+		episode.LoadNfo()
+		// log.Printf("NFO: %+v\n", ce.Nfo)
+		if episode.Nfo != nil {
+			ce.Nfo = EpisodeNfo{
+				Title:   episode.Nfo.Title,
+				Plot:    episode.Nfo.Plot,
+				Season:  episode.Nfo.Season,
+				Episode: episode.Nfo.Episode,
+				Aired:   episode.Nfo.Aired,
+			}
+		}
+	}
+	return ce
 }

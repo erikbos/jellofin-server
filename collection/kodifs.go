@@ -5,6 +5,7 @@ import (
 	//	"fmt"
 	"fmt"
 	"net/url"
+	"os"
 	"path"
 	"regexp"
 	"sort"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/miquels/notflix-server/database"
 	"github.com/miquels/notflix-server/idhash"
+	"github.com/miquels/notflix-server/nfo"
 )
 
 var isVideo = regexp.MustCompile(`^(.*)\.(divx|mov|mp4|MP4|m4u|m4v)$`)
@@ -112,7 +114,7 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Item)
 	}
 
 	movie = &Item{
-		Id:         idhash.IdHash(mname),
+		ID:         idhash.IdHash(mname),
 		Name:       mname,
 		Year:       year,
 		BaseUrl:    coll.BaseUrl,
@@ -187,7 +189,7 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Item)
 		}
 
 		if ext == "nfo" {
-			movie.NfoPath = path.Join(coll.Directory, dir, name)
+			movie.nfoPath = path.Join(coll.Directory, dir, name)
 			continue
 		}
 	}
@@ -195,7 +197,7 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Item)
 	cr.copySrtVttSubs(movie.SrtSubs, &movie.VttSubs)
 
 	dbItemMovie := &database.Item{
-		ID:    movie.Id,
+		ID:    movie.ID,
 		Name:  movie.Name,
 		Year:  movie.Year,
 		Genre: strings.Join(movie.Genre, ","),
@@ -246,7 +248,7 @@ func (cr *CollectionRepo) getSeason(show *Item, seasonNo int) (s *Season) {
 
 	// insert new
 	sn := &Season{
-		Id:       idhash.IdHash(fmt.Sprintf("%s-season-%d", show.Name, seasonNo)),
+		ID:       idhash.IdHash(fmt.Sprintf("%s-season-%d", show.Name, seasonNo)),
 		SeasonNo: seasonNo,
 	}
 	for i = 0; i < len(show.Seasons); i++ {
@@ -309,7 +311,7 @@ func (cr *CollectionRepo) showScanDir(baseDir string, dir string, seasonHint int
 
 			// nfo file.
 			if fn == "tvshow.nfo" {
-				show.NfoPath = path.Join(d, fn)
+				show.nfoPath = path.Join(d, fn)
 				continue
 			}
 
@@ -379,7 +381,7 @@ func (cr *CollectionRepo) showScanDir(baseDir string, dir string, seasonHint int
 		s = isVideo.FindStringSubmatch(fn)
 		if len(s) > 0 {
 			ep := Episode{
-				Id:       idhash.IdHash(s[0]),
+				ID:       idhash.IdHash(s[0]),
 				Video:    escapePath(path.Join(dir, fn)),
 				BaseName: s[1],
 			}
@@ -446,7 +448,7 @@ func (cr *CollectionRepo) showScanDir(baseDir string, dir string, seasonHint int
 		}
 
 		if ext == "nfo" {
-			ep.NfoPath = path.Join(baseDir, dir, name)
+			ep.nfoPath = path.Join(baseDir, dir, name)
 			continue
 		}
 	}
@@ -455,7 +457,7 @@ func (cr *CollectionRepo) showScanDir(baseDir string, dir string, seasonHint int
 func (cr *CollectionRepo) buildShow(coll *Collection, dir string) (show *Item) {
 
 	item := &Item{
-		Id:      idhash.IdHash(path.Base(dir)),
+		ID:      idhash.IdHash(path.Base(dir)),
 		Name:    path.Base(dir),
 		BaseUrl: coll.BaseUrl,
 		Path:    escapePath(dir),
@@ -497,7 +499,7 @@ func (cr *CollectionRepo) buildShow(coll *Collection, dir string) (show *Item) {
 	}
 
 	// If we have an NFO and at least one image, accept it.
-	if item.NfoPath != "" &&
+	if item.nfoPath != "" &&
 		(item.Fanart != "" || item.Poster != "" || item.Thumb != "") {
 		show = item
 	}
@@ -525,7 +527,7 @@ func (cr *CollectionRepo) buildShow(coll *Collection, dir string) (show *Item) {
 	item.Year = year
 
 	dbItemShow := &database.Item{
-		ID:    item.Id,
+		ID:    item.ID,
 		Name:  item.Name,
 		Year:  item.Year,
 		Genre: strings.Join(item.Genre, ","),
@@ -543,5 +545,16 @@ func (cr *CollectionRepo) copySrtVttSubs(srt []Subs, vtt *[]Subs) {
 			sub.Path = path[:idx] + ".vtt"
 			*vtt = append(*vtt, sub)
 		}
+	}
+}
+
+func loadNFO(n **nfo.Nfo, filename string) {
+	// NFO already loaded and parsed?
+	if *n != nil {
+		return
+	}
+	if file, err := os.Open(filename); err == nil {
+		defer file.Close()
+		*n = nfo.Decode(file)
 	}
 }

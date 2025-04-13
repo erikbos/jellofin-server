@@ -97,6 +97,7 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 
 	r.Handle("/UserViews", middleware(j.usersViewsHandler))
 	r.Handle("/UserItems/Resume", middleware(j.usersItemsResumeHandler))
+	r.Handle("/UserItems/{item}/Userdata", middleware(j.usersItemUserDataHandler))
 
 	r.Handle("/Library/VirtualFolders", middleware(j.libraryVirtualFoldersHandler))
 	r.Handle("/Shows/NextUp", middleware(j.showsNextUpHandler))
@@ -111,6 +112,7 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/Items/Suggestions", middleware(j.usersItemsSuggestionsHandler))
 	r.Handle("/Items/{item}", middleware(j.usersItemHandler))
 	r.Handle("/Items/{item}", middleware(j.itemsDeleteHandler)).Methods("DELETE")
+
 	// Images can be fetched without auth
 	r.Handle("/Items/{item}/Images/{type}", http.HandlerFunc(j.itemsImagesHandler)).Methods("GET")
 	r.Handle("/Items/{item}/Images/{type}/{index}", http.HandlerFunc(j.itemsImagesHandler)).Methods("GET")
@@ -125,7 +127,7 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 
 	r.Handle("/Persons", http.HandlerFunc(j.personsHandler))
 
-	// playstate
+	// userdata
 	r.Handle("/UserPlayedItems/{item}", middleware(j.usersPlayedItemsPostHandler)).Methods("POST")
 	r.Handle("/UserPlayedItems/{item}", middleware(j.usersPlayedItemsDeleteHandler)).Methods("DELETE")
 	r.Handle("/Users/{user}/PlayedItems/{item}", middleware(j.usersPlayedItemsPostHandler)).Methods("POST")
@@ -133,6 +135,8 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/Sessions/Playing", middleware(j.sessionsPlayingHandler)).Methods("POST")
 	r.Handle("/Sessions/Playing/Progress", middleware(j.sessionsPlayingProgressHandler)).Methods("POST")
 	r.Handle("/Sessions/Playing/Stopped", middleware(j.sessionsPlayingStoppedHandler)).Methods("POST")
+	r.Handle("/UserFavoriteItems/{item}", middleware(j.userFavoriteItemsPostHandler)).Methods("POST")
+	r.Handle("/UserFavoriteItems/{item}", middleware(j.userFavoriteItemsDeleteHandler)).Methods("DELETE")
 
 	// playlists
 	r.Handle("/Playlists", middleware(j.createPlaylistHandler)).Methods("POST")
@@ -147,33 +151,41 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/Playlists/{playlist}/Users", middleware(j.getPlaylistAllUsersHandler)).Methods("GET")
 	r.Handle("/Playlists/{playlist}/Users/{user}", middleware(j.getPlaylistUsersHandler)).Methods("GET")
 
+	// Branding
+	r.Handle("/Branding/Configuration", middleware(j.brandingConfigurationHandler))
+	r.Handle("/Branding/Css", middleware(j.brandingCssHandler))
+	r.Handle("/Branding/Css.css", middleware(j.brandingCssHandler))
+
 	// Localization
 	r.Handle("/Localization/Countries", middleware(j.localizationCountriesHandler))
 	r.Handle("/Localization/Cultures", middleware(j.localizationCulturesHandler))
 	r.Handle("/Localization/Options", middleware(j.localizationOptionsHandler))
 	r.Handle("/Localization/ParentalRatings", middleware(j.localizationParentalRatingsHandler))
+
 }
 
 type contextKey string
 
 const (
 	// Misc IDs for api responses
-	serverID             = "2b11644442754f02a0c1e45d2a9f5c71"
-	collectionRootID     = "e9d5075a555c1cbc394eec4cef295274"
-	playlistCollectionID = "2f0340563593c4d98b97c9bfa21ce23c"
-	displayPreferencesID = "f137a2dd21bbc1b99aa5c0f6bf02a805"
-	CollectionMovies     = "movies"
-	CollectionTVShows    = "tvshows"
-	CollectionPlaylists  = "playlists"
+	serverID              = "2b11644442754f02a0c1e45d2a9f5c71"
+	collectionRootID      = "e9d5075a555c1cbc394eec4cef295274"
+	playlistCollectionID  = "2f0340563593c4d98b97c9bfa21ce23c"
+	favoritesCollectionID = "f4a0b1c2d3e5c4b8a9e6f7d8e9a0b1c2"
+	displayPreferencesID  = "f137a2dd21bbc1b99aa5c0f6bf02a805"
+	CollectionMovies      = "movies"
+	CollectionTVShows     = "tvshows"
+	CollectionPlaylists   = "playlists"
 
 	// itemid prefixes
-	itemprefix_separator           = "_"
-	itemprefix_collection          = "collection_"
-	itemprefix_collection_playlist = "collectionplaylist_"
-	itemprefix_show                = "show_"
-	itemprefix_season              = "season_"
-	itemprefix_episode             = "episode_"
-	itemprefix_playlist            = "playlist_"
+	itemprefix_separator            = "_"
+	itemprefix_collection           = "collection_"
+	itemprefix_collection_favorites = "collectionfavorites_"
+	itemprefix_collection_playlist  = "collectionplaylist_"
+	itemprefix_show                 = "show_"
+	itemprefix_season               = "season_"
+	itemprefix_episode              = "episode_"
+	itemprefix_playlist             = "playlist_"
 
 	// imagetag prefix will get HTTP-redirected
 	tagprefix_redirect = "redirect_"

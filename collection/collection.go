@@ -15,8 +15,6 @@ type Options struct {
 	Db          *database.DatabaseRepo
 }
 
-// var config CollectionRepo
-
 type CollectionRepo struct {
 	collections Collections
 	db          *database.DatabaseRepo
@@ -31,14 +29,19 @@ func New(options *Options) *CollectionRepo {
 }
 
 type Collection struct {
-	SourceId  int     `json:"id"`
-	Name_     string  `json:"name"`
-	Type      string  `json:"type"`
-	Items     []*Item `json:"items,omitempty"`
-	Directory string  `json:"-"`
-	BaseUrl   string  `json:"-"`
-	HlsServer string  `json:"-"`
+	ID        int
+	Name_     string
+	Type      string
+	Items     []*Item
+	Directory string
+	BaseUrl   string
+	HlsServer string
 }
+
+const (
+	CollectionMovies = "movies"
+	CollectionShows  = "shows"
+)
 
 // CollectionDetails contains details about a collection
 type CollectionDetails struct {
@@ -52,71 +55,69 @@ type Collections []Collection
 
 // An 'item' can be a movie, a tv-show, a folder, etc.
 type Item struct {
-	// generic
-	Id          string   `json:"id"`
-	Name        string   `json:"name"`
-	Path        string   `json:"path"`
-	BaseUrl     string   `json:"baseurl"`
-	Type        string   `json:"type"`
-	FirstVideo  int64    `json:"firstvideo,omitempty"`
-	LastVideo   int64    `json:"lastvideo,omitempty"`
-	SortName    string   `json:"sortName,omitempty"`
-	NfoPath     string   `json:"-"`
-	NfoTime     int64    `json:"-"`
-	Nfo         *nfo.Nfo `json:"nfo,omitempty"`
-	Banner      string   `json:"banner,omitempty"`
-	Fanart      string   `json:"fanart,omitempty"`
-	Folder      string   `json:"folder,omitempty"`
-	Poster      string   `json:"poster,omitempty"`
-	Rating      float32  `json:"rating,omitempty"`
-	Votes       int      `json:"votes,omitempty"`
-	Genre       []string `json:"genre,omitempty"`
-	Genrestring string   `json:"-"`
-	Year        int      `json:"year,omitempty"`
+	ID         string
+	Name       string
+	Path       string
+	BaseUrl    string
+	Type       string
+	FirstVideo int64
+	LastVideo  int64
+	SortName   string
+	nfoPath    string
+	nfoTime    int64
+	Nfo        *nfo.Nfo
+	Banner     string
+	Fanart     string
+	Folder     string
+	Poster     string
+	Rating     float32
+	Votes      int
+	Genre      []string
+	Year       int
 
 	// movie
-	Video   string `json:"video,omitempty"`
-	Thumb   string `json:"thumb,omitempty"`
-	SrtSubs []Subs `json:"srtsubs,omitempty"`
-	VttSubs []Subs `json:"vttsubs,omitempty"`
+	Video   string
+	Thumb   string
+	SrtSubs []Subs
+	VttSubs []Subs
 
 	// show
-	SeasonAllBanner string   `json:"seasonAllBanner,omitempty"`
-	SeasonAllFanart string   `json:"seasonAllFanart,omitempty"`
-	SeasonAllPoster string   `json:"seasonAllPoster,omitempty"`
-	Seasons         []Season `json:"seasons,omitempty"`
+	SeasonAllBanner string
+	SeasonAllFanart string
+	SeasonAllPoster string
+	Seasons         []Season
 }
 
 type Season struct {
-	Id       string    `json:"id"`
-	SeasonNo int       `json:"seasonno"`
-	Banner   string    `json:"banner,omitempty"`
-	Fanart   string    `json:"fanart,omitempty"`
-	Poster   string    `json:"poster,omitempty"`
-	Episodes []Episode `json:"episodes,omitempty"`
+	ID       string
+	SeasonNo int
+	Banner   string
+	Fanart   string
+	Poster   string
+	Episodes []Episode
 }
 
 type Episode struct {
-	Id        string   `json:"id"`
-	Name      string   `json:"name"`
-	SeasonNo  int      `json:"seasonno"`
-	EpisodeNo int      `json:"episodeno"`
-	Double    bool     `json:"double,omitempty"`
-	SortName  string   `json:"sortName,omitempty"`
-	BaseName  string   `json:"-"`
-	NfoPath   string   `json:"-"`
-	NfoTime   int64    `json:"-"`
-	VideoTS   int64    `json:"-"`
-	Nfo       *nfo.Nfo `json:"nfo,omitempty"`
-	Video     string   `json:"video"`
-	Thumb     string   `json:"thumb,omitempty"`
-	SrtSubs   []Subs   `json:"srtsubs,omitempty"`
-	VttSubs   []Subs   `json:"vttsubs,omitempty"`
+	ID        string
+	Name      string
+	SeasonNo  int
+	EpisodeNo int
+	Double    bool
+	SortName  string
+	BaseName  string
+	nfoPath   string
+	nfoTime   int64
+	VideoTS   int64
+	Nfo       *nfo.Nfo
+	Video     string
+	Thumb     string
+	SrtSubs   []Subs
+	VttSubs   []Subs
 }
 
 type Subs struct {
-	Lang string `json:"lang"`
-	Path string `json:"path"`
+	Lang string
+	Path string
 }
 
 type byItem []Item
@@ -158,16 +159,11 @@ func (p PathString) String() string {
 	return string(p)
 }
 
-const (
-	CollectionMovies = "movies"
-	CollectionShows  = "shows"
-)
-
 func (cr *CollectionRepo) updateCollections(pace int) {
 	id := 1
 	for i := range cr.collections {
 		c := &(cr.collections[i])
-		c.SourceId = id
+		c.ID = id
 		c.BaseUrl = fmt.Sprintf("/data/%d", id)
 		switch c.Type {
 		case CollectionMovies:
@@ -217,7 +213,7 @@ func (cr *CollectionRepo) GetCollection(collName string) (c *Collection) {
 	}
 	for n := range cr.collections {
 		if cr.collections[n].Name_ == collName ||
-			cr.collections[n].SourceId == sourceId {
+			cr.collections[n].ID == sourceId {
 			c = &(cr.collections[n])
 			return
 		}
@@ -231,7 +227,7 @@ func (cr *CollectionRepo) GetItem(collName string, itemName string) (i *Item) {
 		return
 	}
 	for _, n := range c.Items {
-		if n.Name == itemName || n.Id == itemName {
+		if n.Name == itemName || n.ID == itemName {
 			i = n
 			return
 		}
@@ -253,7 +249,7 @@ func (cr *CollectionRepo) GetSeasonByID(saesonId string) (*Collection, *Item, *S
 	for _, c := range cr.collections {
 		for _, i := range c.Items {
 			for _, s := range i.Seasons {
-				if s.Id == saesonId {
+				if s.ID == saesonId {
 					return &c, i, &s
 				}
 			}
@@ -268,7 +264,7 @@ func (cr *CollectionRepo) GetEpisodeByID(episodeId string) (*Collection, *Item, 
 		for _, i := range c.Items {
 			for _, s := range i.Seasons {
 				for _, e := range s.Episodes {
-					if e.Id == episodeId {
+					if e.ID == episodeId {
 						return &c, i, &s, &e
 					}
 
@@ -366,4 +362,14 @@ func returnIntArray(m map[int]bool) []int {
 	}
 	sort.Ints(result)
 	return result
+}
+
+// LoadNfo loads the NFO file for the item if not loaded already
+func (i *Item) LoadNfo() {
+	loadNFO(&i.Nfo, i.nfoPath)
+}
+
+// LoadNfo loads the NFO file for the episode if not loaded already
+func (e *Episode) LoadNfo() {
+	loadNFO(&e.Nfo, e.nfoPath)
 }

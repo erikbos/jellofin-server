@@ -14,6 +14,7 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/miquels/notflix-server/collection"
+	"github.com/miquels/notflix-server/database"
 	"github.com/miquels/notflix-server/idhash"
 )
 
@@ -30,11 +31,16 @@ func (j *Jellyfin) usersViewsHandler(w http.ResponseWriter, r *http.Request) {
 
 	items := []JFItem{}
 	for _, c := range j.collections.GetCollections() {
-		if item, err := j.makeJItemCollection(genCollectionID(c.SourceId)); err == nil {
+		if item, err := j.makeJItemCollection(genCollectionID(c.ID)); err == nil {
 			items = append(items, item)
 		}
 	}
 
+	// Add favorites and playlist collections
+	favoriteCollection, err := j.makeJFItemCollectionFavorites(accessTokenDetails.UserID)
+	if err == nil {
+		items = append(items, favoriteCollection)
+	}
 	playlistCollection, err := j.makeJFItemCollectionPlaylist(accessTokenDetails.UserID)
 	if err == nil {
 		items = append(items, playlistCollection)
@@ -52,7 +58,7 @@ func (j *Jellyfin) usersViewsHandler(w http.ResponseWriter, r *http.Request) {
 func (j *Jellyfin) usersGroupingOptionsHandler(w http.ResponseWriter, r *http.Request) {
 	collections := []JFCollection{}
 	for _, c := range j.collections.GetCollections() {
-		collectionItem, _ := j.makeJItemCollection(genCollectionID(c.SourceId))
+		collectionItem, _ := j.makeJItemCollection(genCollectionID(c.ID))
 		collection := JFCollection{
 			Name: c.Name_,
 			ID:   collectionItem.ID,
@@ -71,16 +77,25 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vars := mux.Vars(r)
-	itemId := vars["item"]
+	itemID := vars["item"]
 
-	splitted := strings.Split(itemId, "_")
+	splitted := strings.Split(itemID, itemprefix_separator)
 	if len(splitted) == 2 {
-		splitted[0] += "_"
+		splitted[0] += itemprefix_separator
 		switch splitted[0] {
 		case itemprefix_collection:
-			collectionItem, err := j.makeJItemCollection(itemId)
+			collectionItem, err := j.makeJItemCollection(itemID)
 			if err != nil {
 				http.Error(w, "Could not find collection", http.StatusNotFound)
+				return
+
+			}
+			serveJSON(collectionItem, w)
+			return
+		case itemprefix_collection_favorites:
+			collectionItem, err := j.makeJFItemCollectionFavorites(accessTokenDetails.UserID)
+			if err != nil {
+				http.Error(w, "Could not find favorites collection", http.StatusNotFound)
 				return
 
 			}
@@ -96,7 +111,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 			serveJSON(collectionItem, w)
 			return
 		case itemprefix_season:
-			seasonItem, err := j.makeJFItemSeason(accessTokenDetails.UserID, itemId)
+			seasonItem, err := j.makeJFItemSeason(accessTokenDetails.UserID, itemID)
 			if err != nil {
 				http.Error(w, "Could not find season", http.StatusNotFound)
 				return
@@ -104,7 +119,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 			serveJSON(seasonItem, w)
 			return
 		case itemprefix_episode:
-			episodeItem, err := j.makeJFItemEpisode(accessTokenDetails.UserID, itemId)
+			episodeItem, err := j.makeJFItemEpisode(accessTokenDetails.UserID, itemID)
 			if err != nil {
 				http.Error(w, "Could not find episode", http.StatusNotFound)
 				return
@@ -112,7 +127,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 			serveJSON(episodeItem, w)
 			return
 		case itemprefix_playlist:
-			playlistItem, err := j.makeJFItemPlaylist(accessTokenDetails.UserID, itemId)
+			playlistItem, err := j.makeJFItemPlaylist(accessTokenDetails.UserID, itemID)
 			if err != nil {
 				http.Error(w, "Could not find playlist", http.StatusNotFound)
 				return
@@ -127,12 +142,35 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Try to find individual item
-	c, i := j.collections.GetItemByID(itemId)
+	c, i := j.collections.GetItemByID(itemID)
 	if i == nil {
 		http.Error(w, "Item not found", http.StatusNotFound)
 		return
 	}
 	serveJSON(j.makeJFItem(accessTokenDetails.UserID, i, idhash.IdHash(c.Name_), c.Type, false), w)
+}
+
+// /UserItems/1d57ee2251656c5fb9a05becdf0e62a3/Userdata
+//
+// usersItemUserDataHandler returns the user data for a specific item
+func (j *Jellyfin) usersItemUserDataHandler(w http.ResponseWriter, r *http.Request) {
+	accessTokenDetails := j.getAccessTokenDetails(w, r)
+	if accessTokenDetails == nil {
+		return
+	}
+
+	vars := mux.Vars(r)
+	itemID := vars["item"]
+
+	playstate, err := j.db.UserDataRepo.Get(accessTokenDetails.UserID, itemID)
+	if err != nil {
+		playstate = database.UserData{}
+	}
+	playstate.Favorite = true
+	j.db.UserDataRepo.Update(accessTokenDetails.UserID, itemID, playstate)
+
+	userData := j.makeJFUserData(accessTokenDetails.UserID, itemID, playstate)
+	serveJSON(userData, w)
 }
 
 // /Items
@@ -170,33 +208,53 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	queryparams := r.URL.Query()
-	searchTerm := queryparams.Get("searchTerm")
 	searchCollection := queryparams.Get("parentId")
+
+	var items []JFItem
+	var err error
+	var collectionPopulated bool
+
+	// Return favorites collection if requested
+	if strings.HasPrefix(searchCollection, itemprefix_collection_favorites) {
+		items, err = j.makeJFItemFavoritesOverview(accessTokenDetails.UserID)
+		if err != nil {
+			http.Error(w, "Could not find favorites collection", http.StatusNotFound)
+			return
+		}
+		collectionPopulated = true
+	}
 
 	// Return playlist collection if requested
 	if strings.HasPrefix(searchCollection, itemprefix_collection_playlist) {
-		response, _ := j.makeJFItemPlaylistOverview(accessTokenDetails.UserID)
-		serveJSON(response, w)
-		return
+		items, err = j.makeJFItemPlaylistOverview(accessTokenDetails.UserID)
+		if err != nil {
+			http.Error(w, "Could not find playlist collection", http.StatusNotFound)
+			return
+		}
+		collectionPopulated = true
 	}
 
-	var searchC *collection.Collection
-	if searchCollection != "" {
-		collectionid := strings.TrimPrefix(searchCollection, itemprefix_collection)
-		searchC = j.collections.GetCollection(collectionid)
-	}
+	searchTerm := queryparams.Get("searchTerm")
 
-	items := []JFItem{}
-	for _, c := range j.collections.GetCollections() {
-		// Skip if we are searching in one particular collection?
-		if searchC != nil && searchC.SourceId != c.SourceId {
-			continue
+	// Search for items in case favorites or playlist collection not requested
+	if !collectionPopulated {
+		var searchC *collection.Collection
+		if searchCollection != "" {
+			collectionid := strings.TrimPrefix(searchCollection, itemprefix_collection)
+			searchC = j.collections.GetCollection(collectionid)
 		}
 
-		for _, i := range c.Items {
-			if searchTerm == "" || strings.Contains(strings.ToLower(i.Name), strings.ToLower(searchTerm)) {
-				if j.applyItemFilter(i, queryparams) {
-					items = append(items, j.makeJFItem(accessTokenDetails.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
+		for _, c := range j.collections.GetCollections() {
+			// Skip if we are searching in one particular collection?
+			if searchC != nil && searchC.ID != c.ID {
+				continue
+			}
+
+			for _, i := range c.Items {
+				if searchTerm == "" || strings.Contains(strings.ToLower(i.Name), strings.ToLower(searchTerm)) {
+					if j.applyItemFilter(i, queryparams) {
+						items = append(items, j.makeJFItem(accessTokenDetails.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
+					}
 				}
 			}
 		}
@@ -237,7 +295,7 @@ func (j *Jellyfin) usersItemsLatestHandler(w http.ResponseWriter, r *http.Reques
 	items := []JFItem{}
 	for _, c := range j.collections.GetCollections() {
 		// Skip if we are searching in one particular collection
-		if searchC != nil && searchC.SourceId != c.SourceId {
+		if searchC != nil && searchC.ID != c.ID {
 			continue
 		}
 		for _, i := range c.Items {
@@ -286,7 +344,7 @@ func (j *Jellyfin) searchHintsHandler(w http.ResponseWriter, r *http.Request) {
 	items := []JFItem{}
 	for _, c := range j.collections.GetCollections() {
 		// Skip if we are searching in one particular collection?
-		if searchC != nil && searchC.SourceId != c.SourceId {
+		if searchC != nil && searchC.ID != c.ID {
 			continue
 		}
 
@@ -369,6 +427,19 @@ func (j *Jellyfin) usersItemsSuggestionsHandler(w http.ResponseWriter, r *http.R
 	}
 	serveJSON(response, w)
 }
+
+// applyItemFilter2 applies all possible filters to a list of items
+// func (j *Jellyfin) applyItemFilter2(items []JFItem, queryparams url.Values) (filteredItems []JFItem) {
+// 	searchTerm := queryparams.Get("searchTerm")
+
+// 	for _, i := range items {
+// 		if searchTerm == "" || strings.Contains(strings.ToLower(i.Name), strings.ToLower(searchTerm)) {
+// 			if j.applyItemFilter(i, queryparams) {
+// 				filteredItems = append(filteredItems, i)
+// 			}
+// 		}
+// 	}
+// }
 
 // applyItemFilter checks if the item should be included in a result set or not
 func (j *Jellyfin) applyItemFilter(i *collection.Item, queryparams url.Values) bool {
@@ -486,7 +557,10 @@ func (j *Jellyfin) usersItemsFiltersHandler(w http.ResponseWriter, r *http.Reque
 	var details collection.CollectionDetails
 	if searchCollection := r.URL.Query().Get("parentId"); searchCollection != "" {
 		collectionid := strings.TrimPrefix(searchCollection, itemprefix_collection)
-		details = j.collections.GetCollection(collectionid).Details()
+		// Not every collection has genres (e.g. dynamic collections such as playlists or favorites)
+		if c := j.collections.GetCollection(collectionid); c != nil {
+			details = c.Details()
+		}
 	} else {
 		details = j.collections.Details()
 	}
@@ -539,7 +613,7 @@ func (j *Jellyfin) usersItemsFilters2Handler(w http.ResponseWriter, r *http.Requ
 func (j *Jellyfin) libraryVirtualFoldersHandler(w http.ResponseWriter, r *http.Request) {
 	libraries := []JFMediaLibrary{}
 	for _, c := range j.collections.GetCollections() {
-		collectionItem, _ := j.makeJItemCollection(genCollectionID(c.SourceId))
+		collectionItem, _ := j.makeJItemCollection(genCollectionID(c.ID))
 		l := JFMediaLibrary{
 			Name:               c.Name_,
 			ItemId:             collectionItem.ID,
@@ -561,8 +635,8 @@ func (j *Jellyfin) showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vars := mux.Vars(r)
-	showId := vars["show"]
-	_, i := j.collections.GetItemByID(showId)
+	showID := vars["show"]
+	_, i := j.collections.GetItemByID(showID)
 	if i == nil {
 		http.Error(w, "Show not found", http.StatusNotFound)
 		return
@@ -570,7 +644,7 @@ func (j *Jellyfin) showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
 	// Create API response
 	seasons := []JFItem{}
 	for _, s := range i.Seasons {
-		season, err := j.makeJFItemSeason(accessTokenDetails.UserID, s.Id)
+		season, err := j.makeJFItemSeason(accessTokenDetails.UserID, s.ID)
 		if err != nil {
 			log.Printf("buildJFItemSeason returned error %s", err)
 			continue
@@ -607,12 +681,12 @@ func (j *Jellyfin) showsEpisodesHandler(w http.ResponseWriter, r *http.Request) 
 	episodes := []JFItem{}
 	for _, s := range i.Seasons {
 		// Limit results to a season if id provided
-		if RequestedSeasonId != "" && itemprefix_season+s.Id != RequestedSeasonId {
+		if RequestedSeasonId != "" && itemprefix_season+s.ID != RequestedSeasonId {
 			continue
 		}
 		for _, e := range s.Episodes {
-			episodeId := itemprefix_episode + e.Id
-			episode, err := j.makeJFItemEpisode(accessTokenDetails.UserID, episodeId)
+			episodeID := itemprefix_episode + e.ID
+			episode, err := j.makeJFItemEpisode(accessTokenDetails.UserID, episodeID)
 			if err != nil {
 				log.Printf("buildJFItemEpisode returned error %s", err)
 				continue
@@ -655,10 +729,11 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vars := mux.Vars(r)
-	itemId := vars["item"]
+	itemID := vars["item"]
 	imageType := vars["type"]
 
-	splitted := strings.Split(itemId, "_")
+	splitted := strings.Split(itemID, itemprefix_separator)
+	splitted[0] += itemprefix_separator
 	if len(splitted) == 2 {
 		switch splitted[0] {
 		// case "collection":
@@ -670,8 +745,8 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 		// 	}
 		// 	serveJSON(collectionItem, w)
 		// 	return
-		case "season":
-			c, item, season := j.collections.GetSeasonByID(trimPrefix(itemId))
+		case itemprefix_season:
+			c, item, season := j.collections.GetSeasonByID(trimPrefix(itemID))
 			if season == nil {
 				http.Error(w, "Could not find season", http.StatusNotFound)
 				return
@@ -683,25 +758,33 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 					j.imageQualityPoster)
 				return
 			default:
-				log.Printf("Image request %s, unknown type %s", itemId, imageType)
+				log.Printf("Image request %s, unknown type %s", itemID, imageType)
 				return
 			}
-		case "episode":
-			c, item, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemId))
+		case itemprefix_episode:
+			c, item, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemID))
 			if episode == nil {
 				http.Error(w, "Item not found (could not find episode)", http.StatusNotFound)
 				return
 			}
 			j.serveFile(w, r, c.Directory+"/"+item.Name+"/"+episode.Thumb)
 			return
+		case itemprefix_collection:
+			fallthrough
+		case itemprefix_collection_favorites:
+			fallthrough
+		case itemprefix_collection_playlist:
+			log.Printf("Image request for collection %s!", itemID)
+			http.Error(w, "Image request for collection not yet supported", http.StatusNotFound)
+			return
 		default:
-			log.Printf("Image request for unknown prefix %s!", itemId)
+			log.Printf("Image request for unknown prefix %s!", itemID)
 			http.Error(w, "Unknown image item prefix", http.StatusInternalServerError)
 			return
 		}
 	}
 
-	c, i := j.collections.GetItemByID(itemId)
+	c, i := j.collections.GetItemByID(itemID)
 	if i == nil {
 		http.Error(w, "Item not found", http.StatusNotFound)
 		return
@@ -727,16 +810,16 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 // curl -v 'http://127.0.0.1:9090/Items/68d73f6f48efedb7db697bf9fee580cb/PlaybackInfo?UserId=2b1ec0a52b09456c9823a367d84ac9e5'
 func (j *Jellyfin) itemsPlaybackInfoHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	itemId := vars["item"]
+	itemID := vars["item"]
 
 	var mediaSource []JFMediaSources
 
-	if _, i := j.collections.GetItemByID(itemId); i != nil {
+	if _, i := j.collections.GetItemByID(itemID); i != nil {
 		mediaSource = j.makeMediaSource(i.Video, i.Nfo)
 	}
 
-	if strings.HasPrefix(itemId, itemprefix_episode) {
-		if _, _, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemId)); episode != nil {
+	if strings.HasPrefix(itemID, itemprefix_episode) {
+		if _, _, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemID)); episode != nil {
 			mediaSource = j.makeMediaSource(episode.Video, episode.Nfo)
 		}
 	}
@@ -768,11 +851,11 @@ func (j *Jellyfin) mediaSegmentsHandler(w http.ResponseWriter, r *http.Request) 
 // curl -v -I 'http://127.0.0.1:9090/Videos/NrXTYiS6xAxFj4QAiJoT/stream'
 func (j *Jellyfin) videoStreamHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	itemId := vars["item"]
+	itemID := vars["item"]
 
 	// Is episode?
-	if strings.HasPrefix(itemId, itemprefix_episode) {
-		c, item, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemId))
+	if strings.HasPrefix(itemID, itemprefix_episode) {
+		c, item, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemID))
 		if episode == nil {
 			http.Error(w, "Could not find episode", http.StatusNotFound)
 			return

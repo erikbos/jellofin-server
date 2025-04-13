@@ -377,6 +377,7 @@ type JFGenreItem struct {
 	Name string `json:"Name"`
 	ID   string `json:"Id"`
 }
+
 type JFUserData struct {
 	PlaybackPositionTicks int       `json:"PlaybackPositionTicks"`
 	PlayedPercentage      int       `json:"PlayedPercentage"`
@@ -385,7 +386,9 @@ type JFUserData struct {
 	LastPlayedDate        time.Time `json:"LastPlayedDate,omitempty"`
 	Played                bool      `json:"Played"`
 	Key                   string    `json:"Key"`
-	UnplayedItemCount     int       `json:"UnplayedItemCount"`
+	// Always set to "00000000000000000000000000000000"
+	ItemID            string `json:"ItemId"`
+	UnplayedItemCount int    `json:"UnplayedItemCount"`
 }
 
 type JFImageTags struct {
@@ -568,4 +571,10 @@ type JFItemFilterResponse struct {
 type JFItemFilter2Response struct {
 	Genres []JFGenreItem `json:"Genres"`
 	Tags   []string      `json:"Tags"`
+}
+
+type JFBrandingConfigurationResponse struct {
+	LoginDisclaimer     string `json:"LoginDisclaimer,omitempty"`
+	CustomCss           string `json:"CustomCss,omitempty"`
+	SplashscreenEnabled bool   `json:"SplashscreenEnabled"`
 }

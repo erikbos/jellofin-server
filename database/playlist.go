@@ -83,7 +83,7 @@ func (p *PlaylistStorage) GetPlaylists(userID string) (playlistIDs []string, err
 }
 
 func (p *PlaylistStorage) GetPlaylist(playlistID string) (*Playlist, error) {
-	log.Printf("db - GetPlaylist: %s\n", playlistID)
+	// log.Printf("db - GetPlaylist: %s\n", playlistID)
 
 	var playlist struct {
 		ID        string    `db:"id"`

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -67,6 +66,51 @@ func (j *Jellyfin) makeJItemCollection(itemid string) (response JFItem, e error)
 	return
 }
 
+func (j *Jellyfin) makeJFItemCollectionFavorites(userid string) (response JFItem, e error) {
+	favoriteIDs, err := j.db.UserDataRepo.GetFavorites(userid)
+
+	// In case of no favorites, we still want to return a collection item
+	var itemCount int
+	if err == nil {
+		itemCount = len(favoriteIDs)
+	}
+	id := itemprefix_collection_favorites + favoritesCollectionID
+
+	response = JFItem{
+		Name:                     "Favorites",
+		ServerID:                 serverID,
+		ID:                       id,
+		Etag:                     idhash.IdHash(id),
+		DateCreated:              time.Now().UTC(),
+		PremiereDate:             time.Now().UTC(),
+		CollectionType:           CollectionPlaylists,
+		SortName:                 CollectionPlaylists,
+		Type:                     "UserView",
+		IsFolder:                 true,
+		EnableMediaSourceDisplay: true,
+		ChildCount:               itemCount,
+		DisplayPreferencesID:     displayPreferencesID,
+		ExternalUrls:             []JFExternalUrls{},
+		PlayAccess:               "Full",
+		PrimaryImageAspectRatio:  1.7777777777777777,
+		RemoteTrailers:           []JFRemoteTrailers{},
+		LocationType:             "FileSystem",
+		Path:                     "/collection",
+		LockData:                 false,
+		MediaType:                "Unknown",
+		ParentID:                 collectionRootID,
+		CanDelete:                false,
+		CanDownload:              true,
+		SpecialFeatureCount:      0,
+		// PremiereDate should be set based upon most recent item in collection
+		// TODO: we do not support images for a collection
+		// ImageTags: &JFImageTags{
+		// 	Primary: "collection",
+		// },
+	}
+	return
+}
+
 func (j *Jellyfin) makeJFItemCollectionPlaylist(userid string) (response JFItem, e error) {
 	playlistIDs, err := j.db.PlaylistRepo.GetPlaylists(userid)
 
@@ -113,16 +157,16 @@ func (j *Jellyfin) makeJFItemCollectionPlaylist(userid string) (response JFItem,
 }
 
 // makeJFItem make movie or show from provided item
-func (j *Jellyfin) makeJFItem(userId string, i *collection.Item, parentId, collectionType string, listView bool) (response JFItem) {
+func (j *Jellyfin) makeJFItem(userID string, i *collection.Item, parentId, collectionType string, listView bool) (response JFItem) {
 	response = JFItem{
-		ID:                      i.Id,
+		ID:                      i.ID,
 		ParentID:                parentId,
 		ServerID:                serverID,
 		Name:                    i.Name,
 		OriginalTitle:           i.Name,
 		SortName:                i.Name,
 		ForcedSortName:          i.Name,
-		Etag:                    idhash.IdHash(i.Id),
+		Etag:                    idhash.IdHash(i.ID),
 		DateCreated:             time.Unix(i.FirstVideo/1000, 0).UTC(),
 		PremiereDate:            time.Unix(i.FirstVideo/1000, 0).UTC(),
 		PrimaryImageAspectRatio: 0.6666666666666666,
@@ -132,7 +176,7 @@ func (j *Jellyfin) makeJFItem(userId string, i *collection.Item, parentId, colle
 	}
 
 	response.ImageTags = &JFImageTags{
-		Primary: "primary_" + i.Id,
+		Primary: "primary_" + i.ID,
 	}
 
 	// Required to have Infuse load backdrop of episode
@@ -149,7 +193,8 @@ func (j *Jellyfin) makeJFItem(userId string, i *collection.Item, parentId, colle
 		response.VideoType = "VideoFile"
 		response.Container = "mov,mp4,m4a"
 
-		j.loadNFO(&i.Nfo, i.NfoPath)
+		i.LoadNfo()
+		// fix: me, this should come from collection package
 		response.MediaSources = j.makeMediaSource(i.Video, i.Nfo)
 		response.RunTimeTicks = response.MediaSources[0].RunTimeTicks
 		response.MediaStreams = response.MediaSources[0].MediaStreams
@@ -171,7 +216,7 @@ func (j *Jellyfin) makeJFItem(userId string, i *collection.Item, parentId, colle
 		for _, s := range i.Seasons {
 			for _, e := range s.Episodes {
 				totalEpisodes++
-				episodePlaystate, err := j.db.PlayStateRepo.Get(userId, e.Id)
+				episodePlaystate, err := j.db.UserDataRepo.Get(userID, e.ID)
 				if err == nil {
 					if episodePlaystate.Played {
 						playedEpisodes++
@@ -197,16 +242,15 @@ func (j *Jellyfin) makeJFItem(userId string, i *collection.Item, parentId, colle
 
 	j.enrichResponseWithNFO(&response, i.Nfo)
 
-	if playstate, err := j.db.PlayStateRepo.Get(userId, i.Id); err == nil {
-		response.UserData = j.makeJFUserData(playstate)
-		response.UserData.Key = i.Id
+	if playstate, err := j.db.UserDataRepo.Get(userID, i.ID); err == nil {
+		response.UserData = j.makeJFUserData(userID, i.ID, playstate)
 	}
 	return response
 }
 
 // makeJFItemSeason makes a season
-func (j *Jellyfin) makeJFItemSeason(userId, seasonId string) (response JFItem, err error) {
-	_, show, season := j.collections.GetSeasonByID(trimPrefix(seasonId))
+func (j *Jellyfin) makeJFItemSeason(userID, seasonID string) (response JFItem, err error) {
+	_, show, season := j.collections.GetSeasonByID(trimPrefix(seasonID))
 	if season == nil {
 		err = errors.New("could not find season")
 		return
@@ -215,10 +259,10 @@ func (j *Jellyfin) makeJFItemSeason(userId, seasonId string) (response JFItem, e
 	response = JFItem{
 		Type:               "Season",
 		ServerID:           serverID,
-		ParentID:           show.Id,
-		SeriesID:           show.Id,
-		ID:                 itemprefix_season + seasonId,
-		Etag:               idhash.IdHash(seasonId),
+		ParentID:           show.ID,
+		SeriesID:           show.ID,
+		ID:                 itemprefix_season + seasonID,
+		Etag:               idhash.IdHash(seasonID),
 		SeriesName:         show.Name,
 		IndexNumber:        season.SeasonNo,
 		Name:               fmt.Sprintf("Season %d", season.SeasonNo),
@@ -241,7 +285,7 @@ func (j *Jellyfin) makeJFItemSeason(userId, seasonId string) (response JFItem, e
 	var playedEpisodes int
 	var lastestPlayed time.Time
 	for _, e := range season.Episodes {
-		episodePlaystate, err := j.db.PlayStateRepo.Get(userId, e.Id)
+		episodePlaystate, err := j.db.UserDataRepo.Get(userID, e.ID)
 		if err == nil {
 			if episodePlaystate.Played {
 				playedEpisodes++
@@ -265,8 +309,8 @@ func (j *Jellyfin) makeJFItemSeason(userId, seasonId string) (response JFItem, e
 }
 
 // makeJFItemEpisode makes an episode
-func (j *Jellyfin) makeJFItemEpisode(userId, episodeId string) (response JFItem, err error) {
-	_, show, _, episode := j.collections.GetEpisodeByID(trimPrefix(episodeId))
+func (j *Jellyfin) makeJFItemEpisode(userID, episodeID string) (response JFItem, err error) {
+	_, show, _, episode := j.collections.GetEpisodeByID(trimPrefix(episodeID))
 	if episode == nil {
 		err = errors.New("could not find episode")
 		return
@@ -274,8 +318,8 @@ func (j *Jellyfin) makeJFItemEpisode(userId, episodeId string) (response JFItem,
 
 	response = JFItem{
 		Type:         "Episode",
-		ID:           episodeId,
-		Etag:         idhash.IdHash(episodeId),
+		ID:           episodeID,
+		Etag:         idhash.IdHash(episodeID),
 		ServerID:     serverID,
 		SeriesName:   show.Name,
 		SeriesID:     idhash.IdHash(show.Name),
@@ -297,7 +341,7 @@ func (j *Jellyfin) makeJFItemEpisode(userId, episodeId string) (response JFItem,
 	}
 
 	// Get a bunch of metadata from show-level nfo
-	j.loadNFO(&show.Nfo, show.NfoPath)
+	show.LoadNfo()
 	if show.Nfo != nil {
 		j.enrichResponseWithNFO(&response, show.Nfo)
 	}
@@ -307,7 +351,7 @@ func (j *Jellyfin) makeJFItemEpisode(userId, episodeId string) (response JFItem,
 	response.CommunityRating = 0
 
 	// Enrich and override metadata using episode nfo, if available, as it is more specific than data from show
-	j.loadNFO(&episode.Nfo, episode.NfoPath)
+	episode.LoadNfo()
 	if episode.Nfo != nil {
 		j.enrichResponseWithNFO(&response, episode.Nfo)
 	}
@@ -317,39 +361,50 @@ func (j *Jellyfin) makeJFItemEpisode(userId, episodeId string) (response JFItem,
 	response.RunTimeTicks = response.MediaSources[0].RunTimeTicks
 	response.MediaStreams = response.MediaSources[0].MediaStreams
 
-	if playstate, err := j.db.PlayStateRepo.Get(userId, episodeId); err == nil {
-		response.UserData = j.makeJFUserData(playstate)
-		response.UserData.Key = episodeId
+	if playstate, err := j.db.UserDataRepo.Get(userID, episodeID); err == nil {
+		response.UserData = j.makeJFUserData(userID, episodeID, playstate)
 	}
 	return response, nil
 }
 
-func (j *Jellyfin) makeJFItemPlaylistOverview(userId string) (response UserItemsResponse, err error) {
-	playlistIDs, err := j.db.PlaylistRepo.GetPlaylists(userId)
+// makeJFItemFavoritesOverview creates a list of favorite items
+func (j *Jellyfin) makeJFItemFavoritesOverview(userID string) (items []JFItem, err error) {
+	favoriteIDs, err := j.db.UserDataRepo.GetFavorites(userID)
 
-	log.Printf("buildJFItemPlaylistOverview: %+v", playlistIDs)
-
-	// In case we have playlists populate, otherwise leave empty list
-	items := []JFItem{}
-	if err == nil {
-		for _, playlistID := range playlistIDs {
-			item, err := j.makeJFItemPlaylist(userId, playlistID)
-			if err == nil {
-				items = append(items, item)
-			}
-		}
+	// log.Printf("makeJFItemFavoritesOverview: %+v, %+v", favoriteIDs, err)
+	if err != nil {
+		return
 	}
 
-	response = UserItemsResponse{
-		Items:            items,
-		TotalRecordCount: len(items),
-		StartIndex:       0,
+	for _, itemID := range favoriteIDs {
+		c, i := j.collections.GetItemByID(itemID)
+		if i != nil {
+			item := j.makeJFItem(userID, i, genCollectionID(c.ID), c.Type, false)
+			items = append(items, item)
+		}
 	}
 	return
 }
 
-func (j *Jellyfin) makeJFItemPlaylist(userId, playlistId string) (response JFItem, err error) {
-	playlist, err := j.db.PlaylistRepo.GetPlaylist(trimPrefix(playlistId))
+func (j *Jellyfin) makeJFItemPlaylistOverview(userId string) (items []JFItem, err error) {
+	playlistIDs, err := j.db.PlaylistRepo.GetPlaylists(userId)
+
+	log.Printf("makeJFItemPlaylistOverview: %+v, %+v", playlistIDs, err)
+	if err != nil {
+		return
+	}
+	// In case we have playlists populate, otherwise leave empty list
+	for _, playlistID := range playlistIDs {
+		item, err := j.makeJFItemPlaylist(userId, playlistID)
+		if err == nil {
+			items = append(items, item)
+		}
+	}
+	return
+}
+
+func (j *Jellyfin) makeJFItemPlaylist(userID, playlistID string) (response JFItem, err error) {
+	playlist, err := j.db.PlaylistRepo.GetPlaylist(trimPrefix(playlistID))
 	if playlist == nil {
 		err = errors.New("could not find playlist")
 		return
@@ -360,13 +415,13 @@ func (j *Jellyfin) makeJFItemPlaylist(userId, playlistId string) (response JFIte
 		Type:                     "Playlist",
 		ID:                       id,
 		ServerID:                 serverID,
-		ParentID:                 "1071671e7bffa0532e930debee501d2e",
+		ParentID:                 "1071671e7bffa0532e930debee501d2e", // fixme: this should be ID generated by makeJFItemCollectionPlaylist()
 		Name:                     playlist.Name,
+		SortName:                 playlist.Name,
 		Etag:                     idhash.IdHash(id),
 		DateCreated:              time.Now().UTC(),
 		CanDelete:                true,
 		CanDownload:              true,
-		SortName:                 userId,
 		Path:                     "/playlist",
 		IsFolder:                 true,
 		PlayAccess:               "Full",
@@ -381,25 +436,18 @@ func (j *Jellyfin) makeJFItemPlaylist(userId, playlistId string) (response JFIte
 	return
 }
 
-func (j *Jellyfin) makeJFUserData(p database.PlayState) (response *JFUserData) {
+// makeJFUserData creates a JFUserData object from PlayState
+func (j *Jellyfin) makeJFUserData(UserID, itemID string, p database.UserData) (response *JFUserData) {
 	response = &JFUserData{
 		PlaybackPositionTicks: p.Position * TicsToSeconds,
 		PlayedPercentage:      p.PlayedPercentage,
 		Played:                p.Played,
+		IsFavorite:            p.Favorite,
 		LastPlayedDate:        p.Timestamp,
+		Key:                   UserID + "/" + itemID,
+		ItemID:                "00000000000000000000000000000000",
 	}
 	return
-}
-
-func (j *Jellyfin) loadNFO(n **nfo.Nfo, filename string) {
-	// NFO already loaded and parsed?
-	if *n != nil {
-		return
-	}
-	if file, err := os.Open(filename); err == nil {
-		defer file.Close()
-		*n = nfo.Decode(file)
-	}
 }
 
 func (j *Jellyfin) enrichResponseWithNFO(response *JFItem, n *nfo.Nfo) {
@@ -526,7 +574,7 @@ func (j *Jellyfin) makeMediaSource(filename string, n *nfo.Nfo) (mediasources []
 		Formats:              []string{},
 	}
 
-	// log.Printf("buildMediaSource: n: %+v, n2: %+v, n3: %+v\n", n, n.FileInfo, n.FileInfo.StreamDetails)
+	// log.Printf("makeMediaSource: n: %+v, n2: %+v, n3: %+v\n", n, n.FileInfo, n.FileInfo.StreamDetails)
 	if n == nil || n.FileInfo == nil || n.FileInfo.StreamDetails == nil {
 		return []JFMediaSources{mediasource}
 	}

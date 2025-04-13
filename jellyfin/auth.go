@@ -78,17 +78,7 @@ func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http
 		AccessToken: accesstoken,
 		SessionInfo: session,
 		ServerId:    serverID,
-		User: JFUser{
-			ServerId:                  serverID,
-			Id:                        user.ID,
-			Name:                      user.Username,
-			HasPassword:               true,
-			HasConfiguredPassword:     true,
-			HasConfiguredEasyPassword: false,
-			EnableAutoLogin:           false,
-			LastLoginDate:             time.Now().UTC(),
-			LastActivityDate:          time.Now().UTC(),
-		},
+		User:        makeJFUser(user),
 	}
 	serveJSON(response, w)
 }
