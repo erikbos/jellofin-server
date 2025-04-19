@@ -43,7 +43,7 @@ type AccessToken struct {
 }
 
 // Generate generates new token
-func (s *AccessTokenStorage) Generate(userID string) string {
+func (s *AccessTokenStorage) Generate(userID string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -54,11 +54,14 @@ func (s *AccessTokenStorage) Generate(userID string) string {
 		LastUsed: time.Now().UTC(),
 	}
 	// Store accesstoken in database
-	s.storeToken(*t)
+	if err := s.storeToken(*t); err != nil {
+		return "", err
+	}
+
 	// Store accesstoken in memory
 	s.accessTokenCache[token] = t
 
-	return token
+	return token, nil
 }
 
 // Get accesstoken details by tokenid

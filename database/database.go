@@ -25,7 +25,7 @@ type (
 	// UserRepo defines the interface for user database operations
 	UserRepo interface {
 		// GetById retrieves a user from the database by their ID.
-		GetByID(UserID string) (user *User, err error)
+		GetByID(userID string) (user *User, err error)
 		// Validate checks if the user exists and the password is correct.
 		Validate(username, password string) (user *User, err error)
 		// Insert inserts a new user into the database.
@@ -36,7 +36,7 @@ type (
 		// Get accesstoken details by tokenid
 		Get(token string) (*AccessToken, error)
 		// Generate generates new access token
-		Generate(UserID string) string
+		Generate(userID string) (string, error)
 		// BackgroundJobs syncs changed accesstokens periodically to database
 		BackgroundJobs()
 	}
@@ -47,11 +47,11 @@ type (
 
 	UserDataRepo interface {
 		// Get the play state details for an item per user.
-		Get(UserID, itemID string) (details UserData, err error)
+		Get(userID, itemID string) (details UserData, err error)
 		// Get all favorite items of a user.
-		GetFavorites(UserID string) (favoriteItems []string, err error)
+		GetFavorites(userID string) (favoriteItems []string, err error)
 		// Update stores the play state details for a user and item.
-		Update(UserID, itemID string, details UserData)
+		Update(userID, itemID string, details UserData) error
 		// BackgroundJobs syncs changed play state to periodically to database.
 		BackgroundJobs()
 	}
@@ -59,9 +59,9 @@ type (
 	// PlaylistRepo defines the interface for database operations
 	PlaylistRepo interface {
 		CreatePlaylist(Playlist) (playlistID string, err error)
-		GetPlaylists(UserID string) (playlistIDs []string, err error)
-		GetPlaylist(playlistID string) (*Playlist, error)
-		AddItemsToPlaylist(UserID, playlistID string, itemIDs []string) error
+		GetPlaylists(userID string) (playlistIDs []string, err error)
+		GetPlaylist(userID, playlistID string) (*Playlist, error)
+		AddItemsToPlaylist(userID, playlistID string, itemIDs []string) error
 		DeleteItemsFromPlaylist(playlistID string, itemIDs []string) error
 		MovePlaylistItem(playlistID string, itemID string, newIndex int) error
 	}

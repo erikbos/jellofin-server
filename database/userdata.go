@@ -24,7 +24,10 @@ func NewUserDataStorage(d *sqlx.DB) *UserDataStorage {
 		dbHandle: d,
 		state:    make(map[UserDataKey]UserData),
 	}
-	p.LoadStateFromDB()
+	err := p.LoadStateFromDB()
+	if err != nil {
+		log.Printf("Error loading play state from db: %s\n", err)
+	}
 	return p
 }
 
@@ -55,7 +58,7 @@ var (
 )
 
 // Update stores the play state details for a user and item.
-func (p *UserDataStorage) Update(userID, itemID string, details UserData) {
+func (p *UserDataStorage) Update(userID, itemID string, details UserData) error {
 	if i := strings.Index(itemID, itemprefix_separator); i != -1 {
 		// fixme: stripping prefix should be done by caller
 		itemID = itemID[i+1:]
@@ -70,6 +73,8 @@ func (p *UserDataStorage) Update(userID, itemID string, details UserData) {
 
 	key := UserDataKey{userID: userID, itemID: itemID}
 	p.state[key] = details
+
+	return nil
 }
 
 // Get the play state details for an item per user.
@@ -186,7 +191,6 @@ func (p *UserDataStorage) BackgroundJobs() {
 		log.Fatal(ErrNoDbHandle)
 	}
 
-	p.LoadStateFromDB()
 	p.lastDBSyncTime = time.Now().UTC()
 
 	for {

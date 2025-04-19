@@ -324,8 +324,15 @@ func (cr *CollectionRepo) showScanDir(baseDir string, dir string, seasonHint int
 					show.SeasonAllBanner = p
 				case "season-all-poster":
 					show.SeasonAllPoster = p
+				case "season-specials-poster":
+					// Assign specials poster to season 0.
+					if season := cr.getSeason(show, 0); season != nil {
+						season.Poster = escapePath(path.Join(dir, fn))
+					}
 				case "banner":
 					show.Banner = p
+				case "clearlogo":
+					show.Logo = p
 				case "fanart":
 					show.Fanart = p
 				case "folder":

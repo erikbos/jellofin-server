@@ -87,7 +87,7 @@ func setheaders(h http.Header) {
 	h.Set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
 }
 
-func serveJSON(obj interface{}, w http.ResponseWriter) {
+func serveJSON(obj any, w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	j := json.NewEncoder(w)
 	j.SetIndent("", "  ")

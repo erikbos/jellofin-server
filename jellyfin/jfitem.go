@@ -157,15 +157,34 @@ func (j *Jellyfin) makeJFItemCollectionPlaylist(userid string) (response JFItem,
 }
 
 // makeJFItem make movie or show from provided item
-func (j *Jellyfin) makeJFItem(userID string, i *collection.Item, parentId, collectionType string, listView bool) (response JFItem) {
+func (j *Jellyfin) makeJFItem(userID string, item *collection.Item, parentID, collectionType string, listView bool) (response JFItem) {
+	switch collectionType {
+	case collection.CollectionMovies:
+		return j.makeJFItemMovie(userID, item, parentID, listView)
+	case collection.CollectionShows:
+		return j.makeJFItemShow(userID, item, parentID)
+	}
+	log.Printf("makeJFItem: unknown item type: %+v", item)
+	return JFItem{}
+}
+
+// makeJFItem make movie item
+func (j *Jellyfin) makeJFItemMovie(userID string, i *collection.Item, parentID string, listView bool) (response JFItem) {
 	response = JFItem{
+		Type:                    "Movie",
 		ID:                      i.ID,
-		ParentID:                parentId,
+		ParentID:                parentID,
 		ServerID:                serverID,
 		Name:                    i.Name,
 		OriginalTitle:           i.Name,
 		SortName:                i.Name,
 		ForcedSortName:          i.Name,
+		IsFolder:                false,
+		LocationType:            "FileSystem",
+		Path:                    "file.mp4",
+		MediaType:               "Video",
+		VideoType:               "VideoFile",
+		Container:               "mov,mp4,m4a",
 		Etag:                    idhash.IdHash(i.ID),
 		DateCreated:             time.Unix(i.FirstVideo/1000, 0).UTC(),
 		PremiereDate:            time.Unix(i.FirstVideo/1000, 0).UTC(),
@@ -173,77 +192,101 @@ func (j *Jellyfin) makeJFItem(userID string, i *collection.Item, parentId, colle
 		CanDelete:               false,
 		CanDownload:             true,
 		PlayAccess:              "Full",
+		ImageTags: &JFImageTags{
+			Primary:  "primary_" + i.ID,
+			Backdrop: "backdrop_" + i.ID,
+		},
+		// Required to have Infuse load backdrop of episode
+		BackdropImageTags: []string{
+			"backdrop_" + i.ID,
+		},
 	}
 
-	response.ImageTags = &JFImageTags{
-		Primary: "primary_" + i.ID,
-	}
+	i.LoadNfo()
+	// fixme: this should come from collection package
+	response.MediaSources = j.makeMediaSource(i.Video, i.Nfo)
+	response.RunTimeTicks = response.MediaSources[0].RunTimeTicks
+	response.MediaStreams = response.MediaSources[0].MediaStreams
 
-	// Required to have Infuse load backdrop of episode
-	response.BackdropImageTags = []string{
-		response.ID,
-	}
-
-	if collectionType == collection.CollectionMovies {
-		response.Type = "Movie"
-		response.IsFolder = false
-		response.LocationType = "FileSystem"
-		response.Path = "file.mp4"
-		response.MediaType = "Video"
-		response.VideoType = "VideoFile"
-		response.Container = "mov,mp4,m4a"
-
-		i.LoadNfo()
-		// fix: me, this should come from collection package
-		response.MediaSources = j.makeMediaSource(i.Video, i.Nfo)
-		response.RunTimeTicks = response.MediaSources[0].RunTimeTicks
-		response.MediaStreams = response.MediaSources[0].MediaStreams
-
-		// listview = true, movie carousel return both primary and BackdropImageTags
-		// non-listview = false, remove primary (thumbnail) image reference
-		if !listView {
-			response.ImageTags = nil
-		}
-	}
-
-	if collectionType == collection.CollectionShows {
-		response.Type = "Series"
-		response.IsFolder = true
-		response.ChildCount = len(i.Seasons)
-
-		var playedEpisodes, totalEpisodes int
-		var lastestPlayed time.Time
-		for _, s := range i.Seasons {
-			for _, e := range s.Episodes {
-				totalEpisodes++
-				episodePlaystate, err := j.db.UserDataRepo.Get(userID, e.ID)
-				if err == nil {
-					if episodePlaystate.Played {
-						playedEpisodes++
-						if episodePlaystate.Timestamp.After(lastestPlayed) {
-							lastestPlayed = episodePlaystate.Timestamp
-						}
-					}
-				}
-			}
-		}
-		if totalEpisodes != 0 {
-			response.UserData = &JFUserData{
-				UnplayedItemCount: totalEpisodes - playedEpisodes,
-				PlayedPercentage:  100 * playedEpisodes / totalEpisodes,
-				LastPlayedDate:    lastestPlayed,
-				Key:               response.ID,
-			}
-			if playedEpisodes == response.ChildCount {
-				response.UserData.Played = true
-			}
-		}
-	}
+	// listview = true, movie carousel return both primary and BackdropImageTags
+	// non-listview = false, remove primary (thumbnail) image reference
+	// if !listView {
+	// 	response.ImageTags = nil
+	// }
 
 	j.enrichResponseWithNFO(&response, i.Nfo)
 
 	if playstate, err := j.db.UserDataRepo.Get(userID, i.ID); err == nil {
 		response.UserData = j.makeJFUserData(userID, i.ID, playstate)
+	}
+	return response
+}
+
+// makeJFItemShow makes show item
+func (j *Jellyfin) makeJFItemShow(userID string, i *collection.Item, parentID string) (response JFItem) {
+	response = JFItem{
+		Type:                    "Series",
+		ID:                      i.ID,
+		ParentID:                parentID,
+		ServerID:                serverID,
+		Name:                    i.Name,
+		OriginalTitle:           i.Name,
+		SortName:                i.Name,
+		ForcedSortName:          i.Name,
+		IsFolder:                true,
+		Etag:                    idhash.IdHash(i.ID),
+		DateCreated:             time.Unix(i.FirstVideo/1000, 0).UTC(),
+		PremiereDate:            time.Unix(i.FirstVideo/1000, 0).UTC(),
+		PrimaryImageAspectRatio: 0.6666666666666666,
+		CanDelete:               false,
+		CanDownload:             true,
+		PlayAccess:              "Full",
+		ImageTags: &JFImageTags{
+			Primary:  "primary_" + i.ID,
+			Backdrop: "backdrop_" + i.ID,
+			Logo:     "logo_" + i.ID,
+		},
+		// Required to have Infuse load backdrop of episode
+		BackdropImageTags: []string{
+			"backdrop_" + i.ID,
+		},
+	}
+
+	j.enrichResponseWithNFO(&response, i.Nfo)
+
+	response.ChildCount = len(i.Seasons)
+	// In case show does not have any seasons no need to calculate userdata
+	if response.ChildCount == 0 {
+		return response
+	}
+
+	// Calculate the number of episodes and played episode in the show
+	var playedEpisodes, totalEpisodes int
+	var lastestPlayed time.Time
+	for _, s := range i.Seasons {
+		for _, e := range s.Episodes {
+			totalEpisodes++
+			episodePlaystate, err := j.db.UserDataRepo.Get(userID, e.ID)
+			if err == nil {
+				if episodePlaystate.Played {
+					playedEpisodes++
+					if episodePlaystate.Timestamp.After(lastestPlayed) {
+						lastestPlayed = episodePlaystate.Timestamp
+					}
+				}
+			}
+		}
+	}
+	if totalEpisodes != 0 {
+		response.UserData = &JFUserData{
+			UnplayedItemCount: totalEpisodes - playedEpisodes,
+			PlayedPercentage:  100 * playedEpisodes / totalEpisodes,
+			LastPlayedDate:    lastestPlayed,
+			Key:               response.ID,
+		}
+		if playedEpisodes == response.ChildCount {
+			response.UserData.Played = true
+		}
 	}
 	return response
 }
@@ -264,9 +307,6 @@ func (j *Jellyfin) makeJFItemSeason(userID, seasonID string) (response JFItem, e
 		ID:                 itemprefix_season + seasonID,
 		Etag:               idhash.IdHash(seasonID),
 		SeriesName:         show.Name,
-		IndexNumber:        season.SeasonNo,
-		Name:               fmt.Sprintf("Season %d", season.SeasonNo),
-		SortName:           fmt.Sprintf("%04d", season.SeasonNo),
 		IsFolder:           true,
 		LocationType:       "FileSystem",
 		MediaType:          "Unknown",
@@ -280,6 +320,18 @@ func (j *Jellyfin) makeJFItemSeason(userID, seasonID string) (response JFItem, e
 		ImageTags: &JFImageTags{
 			Primary: "season",
 		},
+	}
+	// Regular season? (>0)
+	if season.SeasonNo != 0 {
+		response.IndexNumber = season.SeasonNo
+		response.Name = fmt.Sprintf("Season %d", season.SeasonNo)
+		response.SortName = fmt.Sprintf("%04d", season.SeasonNo)
+	} else {
+		// Specials tend to have season number 0, set season
+		// number to 99 to make it sort at the end
+		response.IndexNumber = 99
+		response.Name = "Specials"
+		response.SortName = "9999"
 	}
 
 	var playedEpisodes int
@@ -376,6 +428,7 @@ func (j *Jellyfin) makeJFItemFavoritesOverview(userID string) (items []JFItem, e
 		return
 	}
 
+	items = []JFItem{}
 	for _, itemID := range favoriteIDs {
 		c, i := j.collections.GetItemByID(itemID)
 		if i != nil {
@@ -404,7 +457,7 @@ func (j *Jellyfin) makeJFItemPlaylistOverview(userId string) (items []JFItem, er
 }
 
 func (j *Jellyfin) makeJFItemPlaylist(userID, playlistID string) (response JFItem, err error) {
-	playlist, err := j.db.PlaylistRepo.GetPlaylist(trimPrefix(playlistID))
+	playlist, err := j.db.PlaylistRepo.GetPlaylist(userID, trimPrefix(playlistID))
 	if playlist == nil {
 		err = errors.New("could not find playlist")
 		return
@@ -463,6 +516,9 @@ func (j *Jellyfin) enrichResponseWithNFO(response *JFItem, n *nfo.Nfo) {
 
 	// Handle episode naming & numbering
 	if n.Season != "" {
+		if n.Season == "0" {
+			n.Season = "99"
+		}
 		response.SeasonName = "Season " + n.Season
 		response.ParentIndexNumber, _ = strconv.Atoi(n.Season)
 	}

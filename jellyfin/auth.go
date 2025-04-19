@@ -72,7 +72,11 @@ func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http
 		IsActive:           true,
 	}
 
-	accesstoken := j.db.AccessTokenRepo.Generate(user.ID)
+	accesstoken, err := j.db.AccessTokenRepo.Generate(user.ID)
+	if err != nil {
+		http.Error(w, "Failed to generate access token", http.StatusInternalServerError)
+		return
+	}
 
 	response := JFAuthenticateByNameResponse{
 		AccessToken: accesstoken,

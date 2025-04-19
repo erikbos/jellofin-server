@@ -138,6 +138,11 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/UserFavoriteItems/{item}", middleware(j.userFavoriteItemsPostHandler)).Methods("POST")
 	r.Handle("/UserFavoriteItems/{item}", middleware(j.userFavoriteItemsDeleteHandler)).Methods("DELETE")
 
+	// sessions
+	r.Handle("/Sessions", middleware(j.sessionsHandler))
+	r.Handle("/Sessions/Capabilities", middleware(j.sessionsCapabilitiesHandler))
+	r.Handle("/Sessions/Capabilities/Full", middleware(j.sessionsCapabilitiesFullHandler))
+
 	// playlists
 	r.Handle("/Playlists", middleware(j.createPlaylistHandler)).Methods("POST")
 	r.Handle("/Playlists/{playlist}", middleware(j.getPlaylistHandler)).Methods("GET")

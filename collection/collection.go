@@ -85,7 +85,9 @@ type Item struct {
 	SeasonAllBanner string
 	SeasonAllFanart string
 	SeasonAllPoster string
-	Seasons         []Season
+	// Filename of transparent logo, e.g. "clearlogo.png"
+	Logo    string
+	Seasons []Season
 }
 
 type Season struct {

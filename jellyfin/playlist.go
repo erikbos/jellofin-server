@@ -119,7 +119,7 @@ func (j *Jellyfin) getPlaylistHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	playlistID := vars["playlist"]
 
-	playlist, err := j.db.PlaylistRepo.GetPlaylist(trimPrefix(playlistID))
+	playlist, err := j.db.PlaylistRepo.GetPlaylist(accessTokenDetails.UserID, trimPrefix(playlistID))
 	// log.Printf("querying playlist: %+v, %+v\n", playlist, err)
 	if err != nil {
 		http.Error(w, "Playlist not found", http.StatusNotFound)
@@ -146,7 +146,7 @@ func (j *Jellyfin) getPlaylistItemsHandler(w http.ResponseWriter, r *http.Reques
 	vars := mux.Vars(r)
 	playlistID := vars["playlist"]
 
-	playlist, err := j.db.PlaylistRepo.GetPlaylist(trimPrefix(playlistID))
+	playlist, err := j.db.PlaylistRepo.GetPlaylist(accessTokenDetails.UserID, trimPrefix(playlistID))
 	if err != nil {
 		http.Error(w, "Playlist not found", http.StatusNotFound)
 		return

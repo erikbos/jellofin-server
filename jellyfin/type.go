@@ -332,6 +332,7 @@ type JFMediaSources struct {
 	TranscodingSubProtocol  string                `json:"TranscodingSubProtocol"`
 	DefaultAudioStreamIndex int                   `json:"DefaultAudioStreamIndex"`
 }
+
 type JFRemoteTrailers struct {
 	URL  string `json:"Url"`
 	Name string `json:"Name,omitempty"`
@@ -577,4 +578,44 @@ type JFBrandingConfigurationResponse struct {
 	LoginDisclaimer     string `json:"LoginDisclaimer,omitempty"`
 	CustomCss           string `json:"CustomCss,omitempty"`
 	SplashscreenEnabled bool   `json:"SplashscreenEnabled"`
+}
+
+type JFSessionResponse struct {
+	PlayState                JFSessionResponsePlayState    `json:"PlayState"`
+	AdditionalUsers          []string                      `json:"AdditionalUsers"`
+	Capabilities             JFSessionResponseCapabilities `json:"Capabilities"`
+	RemoteEndPoint           string                        `json:"RemoteEndPoint"`
+	PlayableMediaTypes       []string                      `json:"PlayableMediaTypes"`
+	ID                       string                        `json:"Id"`
+	UserID                   string                        `json:"UserId"`
+	UserName                 string                        `json:"UserName"`
+	Client                   string                        `json:"Client"`
+	LastActivityDate         time.Time                     `json:"LastActivityDate"`
+	LastPlaybackCheckIn      time.Time                     `json:"LastPlaybackCheckIn"`
+	DeviceName               string                        `json:"DeviceName"`
+	DeviceID                 string                        `json:"DeviceId"`
+	ApplicationVersion       string                        `json:"ApplicationVersion"`
+	IsActive                 bool                          `json:"IsActive"`
+	SupportsMediaControl     bool                          `json:"SupportsMediaControl"`
+	SupportsRemoteControl    bool                          `json:"SupportsRemoteControl"`
+	NowPlayingQueue          []string                      `json:"NowPlayingQueue"`
+	NowPlayingQueueFullItems []string                      `json:"NowPlayingQueueFullItems"`
+	HasCustomDeviceName      bool                          `json:"HasCustomDeviceName"`
+	ServerID                 string                        `json:"ServerId"`
+	SupportedCommands        []string                      `json:"SupportedCommands"`
+}
+
+type JFSessionResponsePlayState struct {
+	CanSeek       bool   `json:"CanSeek"`
+	IsPaused      bool   `json:"IsPaused"`
+	IsMuted       bool   `json:"IsMuted"`
+	RepeatMode    string `json:"RepeatMode"`
+	PlaybackOrder string `json:"PlaybackOrder"`
+}
+
+type JFSessionResponseCapabilities struct {
+	PlayableMediaTypes           []string `json:"PlayableMediaTypes"`
+	SupportedCommands            []string `json:"SupportedCommands"`
+	SupportsMediaControl         bool     `json:"SupportsMediaControl"`
+	SupportsPersistentIdentifier bool     `json:"SupportsPersistentIdentifier"`
 }

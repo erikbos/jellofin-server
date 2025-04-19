@@ -166,8 +166,6 @@ func (j *Jellyfin) usersItemUserDataHandler(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		playstate = database.UserData{}
 	}
-	playstate.Favorite = true
-	j.db.UserDataRepo.Update(accessTokenDetails.UserID, itemID, playstate)
 
 	userData := j.makeJFUserData(accessTokenDetails.UserID, itemID, playstate)
 	serveJSON(userData, w)
@@ -646,11 +644,17 @@ func (j *Jellyfin) showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
 	for _, s := range i.Seasons {
 		season, err := j.makeJFItemSeason(accessTokenDetails.UserID, s.ID)
 		if err != nil {
-			log.Printf("buildJFItemSeason returned error %s", err)
+			log.Printf("makeJFItemSeason returned error %s", err)
 			continue
 		}
 		seasons = append(seasons, season)
 	}
+
+	// Sort seasons, this way season 99, Specials ends up last
+	sort.SliceStable(seasons, func(i, j int) bool {
+		return seasons[i].IndexNumber < seasons[j].IndexNumber
+	})
+
 	response := UserItemsResponse{
 		Items:            seasons,
 		TotalRecordCount: len(seasons),
@@ -688,7 +692,7 @@ func (j *Jellyfin) showsEpisodesHandler(w http.ResponseWriter, r *http.Request) 
 			episodeID := itemprefix_episode + e.ID
 			episode, err := j.makeJFItemEpisode(accessTokenDetails.UserID, episodeID)
 			if err != nil {
-				log.Printf("buildJFItemEpisode returned error %s", err)
+				log.Printf("makeJFItemEpisode returned error %s", err)
 				continue
 			}
 			episodes = append(episodes, episode)
@@ -737,7 +741,7 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 	if len(splitted) == 2 {
 		switch splitted[0] {
 		// case "collection":
-		// 	collectionItem, err := buildJFItemCollection(itemId)
+		// 	collectionItem, err := makeJFItemCollection(itemId)
 		// 	if err != nil {
 		// 		http.Error(w, "Could not find collection", http.StatusNotFound)
 		// 		return
@@ -792,16 +796,29 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch vars["type"] {
 	case "Primary":
-		w.Header().Set("cache-control", "max-age=2592000")
-		j.serveImage(w, r, c.Directory+"/"+i.Name+"/"+i.Poster, j.imageQualityPoster)
+		if i.Poster != "" {
+			w.Header().Set("cache-control", "max-age=2592000")
+			j.serveImage(w, r, c.Directory+"/"+i.Name+"/"+i.Poster, j.imageQualityPoster)
+		} else {
+			http.Error(w, "Poster not found", http.StatusNotFound)
+		}
 		return
 	case "Backdrop":
-		w.Header().Set("cache-control", "max-age=2592000")
-		j.serveFile(w, r, c.Directory+"/"+i.Name+"/"+i.Fanart)
+		if i.Fanart != "" {
+			w.Header().Set("cache-control", "max-age=2592000")
+			j.serveFile(w, r, c.Directory+"/"+i.Name+"/"+i.Fanart)
+		} else {
+			http.Error(w, "Backdrop not found", http.StatusNotFound)
+		}
 		return
-		// We do not have artwork on disk for logo requests
-		// case "Logo":
-		// return
+	case "Logo":
+		if i.Logo != "" {
+			w.Header().Set("cache-control", "max-age=2592000")
+			j.serveImage(w, r, c.Directory+"/"+i.Name+"/"+i.Logo, j.imageQualityPoster)
+		} else {
+			http.Error(w, "Logo not found", http.StatusNotFound)
+		}
+		return
 	}
 	log.Printf("Unknown image type requested: %s\n", vars["type"])
 	http.Error(w, "Item image not found", http.StatusNotFound)
@@ -943,7 +960,7 @@ func parseTime(input string) (parsedTime time.Time, err error) {
 	return
 }
 
-func serveJSON(obj interface{}, w http.ResponseWriter) {
+func serveJSON(obj any, w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	j := json.NewEncoder(w)
 	j.SetIndent("", "  ")

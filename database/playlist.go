@@ -82,7 +82,7 @@ func (p *PlaylistStorage) GetPlaylists(userID string) (playlistIDs []string, err
 	return
 }
 
-func (p *PlaylistStorage) GetPlaylist(playlistID string) (*Playlist, error) {
+func (p *PlaylistStorage) GetPlaylist(userID, playlistID string) (*Playlist, error) {
 	// log.Printf("db - GetPlaylist: %s\n", playlistID)
 
 	var playlist struct {
@@ -91,7 +91,8 @@ func (p *PlaylistStorage) GetPlaylist(playlistID string) (*Playlist, error) {
 		UserID    string    `db:"userid"`
 		Timestamp time.Time `db:"timestamp"`
 	}
-	if err := p.dbHandle.Get(&playlist, "SELECT * FROM playlist WHERE id=? LIMIT 1", playlistID); err != nil {
+	if err := p.dbHandle.Get(&playlist, "SELECT * FROM playlist WHERE userid=? AND id=? LIMIT 1",
+		userID, playlistID); err != nil {
 		return nil, err
 	}
 

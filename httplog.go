@@ -42,6 +42,10 @@ func HttpLog(handle http.Handler) http.HandlerFunc {
 		end := time.Now()
 		latency := end.Sub(start)
 
+		if writer.status > 200 {
+			log.Printf("\n")
+		}
+
 		log.Printf("%v %s \"%s %s %s\" %d %d %s %v",
 			end.Format("2006/01/02 15:04:05"),
 			request.RemoteAddr,
@@ -52,5 +56,9 @@ func HttpLog(handle http.Handler) http.HandlerFunc {
 			writer.length,
 			strconv.Quote(request.Header.Get("User-Agent")),
 			latency.Milliseconds())
+
+		if writer.status > 200 {
+			log.Printf("\n")
+		}
 	}
 }
