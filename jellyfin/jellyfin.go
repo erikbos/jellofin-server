@@ -110,14 +110,17 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/Items/Latest", middleware(j.usersItemsLatestHandler))
 	// r.Handle("/Items/Resume", middleware(j.usersItemsResumeHandler))
 	r.Handle("/Items/Suggestions", middleware(j.usersItemsSuggestionsHandler))
-	r.Handle("/Items/{item}", middleware(j.usersItemHandler))
 	r.Handle("/Items/{item}", middleware(j.itemsDeleteHandler)).Methods("DELETE")
-
+	r.Handle("/Items/{item}", middleware(j.usersItemHandler))
+	r.Handle("/Items/{item}/Ancestors", middleware(j.usersItemsAncestorsHandler))
 	// Images can be fetched without auth
 	r.Handle("/Items/{item}/Images/{type}", http.HandlerFunc(j.itemsImagesHandler)).Methods("GET")
 	r.Handle("/Items/{item}/Images/{type}/{index}", http.HandlerFunc(j.itemsImagesHandler)).Methods("GET")
 	r.Handle("/Items/{item}/PlaybackInfo", middleware(j.itemsPlaybackInfoHandler))
 	r.Handle("/Items/{item}/Similar", middleware(j.usersItemsSimilarHandler))
+
+	r.Handle("/Genres", middleware(j.genresHandler))
+	r.Handle("/Genres/{genre}", middleware(j.genreHandler))
 
 	r.Handle("/Search/Hints", middleware(j.searchHintsHandler))
 
@@ -168,38 +171,6 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/Localization/ParentalRatings", middleware(j.localizationParentalRatingsHandler))
 
 }
-
-type contextKey string
-
-const (
-	// Misc IDs for api responses
-	serverID              = "2b11644442754f02a0c1e45d2a9f5c71"
-	collectionRootID      = "e9d5075a555c1cbc394eec4cef295274"
-	playlistCollectionID  = "2f0340563593c4d98b97c9bfa21ce23c"
-	favoritesCollectionID = "f4a0b1c2d3e5c4b8a9e6f7d8e9a0b1c2"
-	displayPreferencesID  = "f137a2dd21bbc1b99aa5c0f6bf02a805"
-	CollectionMovies      = "movies"
-	CollectionTVShows     = "tvshows"
-	CollectionPlaylists   = "playlists"
-
-	// itemid prefixes
-	itemprefix_separator            = "_"
-	itemprefix_collection           = "collection_"
-	itemprefix_collection_favorites = "collectionfavorites_"
-	itemprefix_collection_playlist  = "collectionplaylist_"
-	itemprefix_show                 = "show_"
-	itemprefix_season               = "season_"
-	itemprefix_episode              = "episode_"
-	itemprefix_playlist             = "playlist_"
-
-	// imagetag prefix will get HTTP-redirected
-	tagprefix_redirect = "redirect_"
-	// imagetag prefix means we will serve the filename from local disk
-	tagprefix_file = "file_"
-
-	// Context key holding access token details within a request
-	contextAccessTokenDetails contextKey = "AccessTokenDetails"
-)
 
 // lowercaseQueryParamNames lower cases the firstcharacter of each query parametername
 // this is to handle Infuse's incorrect naming of query parameters:

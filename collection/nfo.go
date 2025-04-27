@@ -1,5 +1,5 @@
 // Read `Kodi' style .NFO files
-package nfo
+package collection
 
 import (
 	"encoding/xml"
@@ -81,7 +81,7 @@ type AudioDetails struct {
 	Language string `xml:"language,omitempty"`
 }
 
-func Decode(r io.ReadSeeker) (nfo *Nfo) {
+func NfoDecode(r io.ReadSeeker) (nfo *Nfo) {
 	// this is a really dirty hack to partially support <xbmcmultiepisode>
 	// for now. It just skips the tag and as a result parses just
 	// the first episode in the multiepisode list.

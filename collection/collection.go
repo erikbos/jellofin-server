@@ -3,11 +3,10 @@ package collection
 import (
 	"fmt"
 	"net/url"
-	"sort"
+	"slices"
 	"strconv"
 
 	"github.com/miquels/notflix-server/database"
-	"github.com/miquels/notflix-server/nfo"
 )
 
 type Options struct {
@@ -63,17 +62,10 @@ type Item struct {
 	FirstVideo int64
 	LastVideo  int64
 	SortName   string
-	nfoPath    string
-	nfoTime    int64
-	Nfo        *nfo.Nfo
 	Banner     string
 	Fanart     string
 	Folder     string
 	Poster     string
-	Rating     float32
-	Votes      int
-	Genre      []string
-	Year       int
 
 	// movie
 	Video   string
@@ -88,6 +80,26 @@ type Item struct {
 	// Filename of transparent logo, e.g. "clearlogo.png"
 	Logo    string
 	Seasons []Season
+
+	// Content metadata
+	nfoPath string
+	nfoTime int64
+	Nfo     *Nfo
+
+	Metadata *Metadata
+
+	Genres         []string
+	OfficialRating string
+	Year           int
+	Rating         float32
+	Votes          int
+}
+
+type Metadata struct {
+	Genre  []string
+	Year   int
+	Rating float32
+	Votes  int
 }
 
 type Season struct {
@@ -110,7 +122,7 @@ type Episode struct {
 	nfoPath   string
 	nfoTime   int64
 	VideoTS   int64
-	Nfo       *nfo.Nfo
+	Nfo       *Nfo
 	Video     string
 	Thumb     string
 	SrtSubs   []Subs
@@ -277,6 +289,59 @@ func (cr *CollectionRepo) GetEpisodeByID(episodeId string) (*Collection, *Item, 
 	return nil, nil, nil, nil
 }
 
+// Details returns collection details such as genres, tags, ratings, etc.
+func (c *CollectionRepo) Details() CollectionDetails {
+	genres := make([]string, 0)
+	tags := make([]string, 0)
+	official := make([]string, 0)
+	years := make([]int, 0)
+
+	for _, collection := range c.collections {
+		for _, i := range collection.Items {
+			for _, g := range i.Genres {
+				g := normalizeGenre(g)
+				if !slices.Contains(genres, g) {
+					genres = append(genres, g)
+				}
+			}
+			if i.OfficialRating != "" && !slices.Contains(official, i.OfficialRating) {
+				official = append(official, i.OfficialRating)
+			}
+			if i.Year != 0 && !slices.Contains(years, i.Year) {
+				years = append(years, i.Year)
+			}
+		}
+	}
+
+	details := CollectionDetails{
+		Genres:          genres,
+		Tags:            tags,
+		OfficialRatings: official,
+		Years:           years,
+	}
+	return details
+}
+
+// GenreItemCount returns number of items per genre.
+func (c *CollectionRepo) GenreItemCount() map[string]int {
+	genreCount := make(map[string]int)
+	for _, collection := range c.collections {
+		for _, i := range collection.Items {
+			for _, g := range i.Genres {
+				if g == "" {
+					continue
+				}
+				if _, found := genreCount[g]; !found {
+					genreCount[g] = 1
+				} else {
+					genreCount[g] += 1
+				}
+			}
+		}
+	}
+	return genreCount
+}
+
 func (c *Collection) GetHlsServer() string {
 	return c.HlsServer
 }
@@ -286,89 +351,64 @@ func (c *Collection) GetDataDir() string {
 }
 
 // Details returns collection details such as genres, tags, ratings, etc.
-func (c *CollectionRepo) Details() CollectionDetails {
-	genre := make(map[string]bool)
-	tags := make(map[string]bool)
-	ratings := make(map[string]bool)
-	years := make(map[int]bool)
+func (c *Collection) Details() CollectionDetails {
+	genres := make([]string, 0)
+	tags := make([]string, 0)
+	official := make([]string, 0)
+	years := make([]int, 0)
 
-	for _, c := range c.collections {
-		for _, i := range c.Items {
-			// Fixme: i.Genre is not populated
-			// if i.Genre != nil {
-			// 	for _, g := range i.Genre {
-			// 		genre[g] = true
-			// 	}
-			// }
-			// if i.Rating != 0 {
-			// 	ratings[i.Rating] = true
-			// }
-			if i.Year != 0 {
-				years[i.Year] = true
+	for _, i := range c.Items {
+		for _, g := range i.Genres {
+			g := normalizeGenre(g)
+			if !slices.Contains(genres, g) {
+				genres = append(genres, g)
+			}
+		}
+		if i.OfficialRating != "" && !slices.Contains(official, i.OfficialRating) {
+			official = append(official, i.OfficialRating)
+		}
+		if i.Year != 0 && !slices.Contains(years, i.Year) {
+			years = append(years, i.Year)
+		}
+	}
+
+	slices.Sort(years)
+
+	details := CollectionDetails{
+		Genres:          genres,
+		Tags:            tags,
+		OfficialRatings: official,
+		Years:           years,
+	}
+	return details
+}
+
+// GenreCount returns number of items per genre.
+func (c *Collection) GenreCount() map[string]int {
+	genreCount := make(map[string]int)
+	for _, i := range c.Items {
+		for _, g := range i.Genres {
+			if g == "" {
+				continue
+			}
+			if _, found := genreCount[g]; !found {
+				genreCount[g] = 1
+			} else {
+				genreCount[g] += 1
 			}
 		}
 	}
-
-	details := CollectionDetails{
-		Genres:          returnStringArray(genre),
-		Tags:            returnStringArray(tags),
-		OfficialRatings: returnStringArray(ratings),
-		Years:           returnIntArray(years),
-	}
-	return details
-}
-
-// Details returns collection details such as genres, tags, ratings, etc.
-func (c *Collection) Details() CollectionDetails {
-	genre := make(map[string]bool)
-	tags := make(map[string]bool)
-	ratings := make(map[string]bool)
-	years := make(map[int]bool)
-
-	for _, i := range c.Items {
-		// Fixme: i.Genre is not populated
-		// if i.Genre != nil {
-		// 	for _, g := range i.Genre {
-		// 		genre[g] = true
-		// 	}
-		// }
-		// if i.Rating != 0 {
-		// 	ratings[i.Rating] = true
-		// }
-		if i.Year != 0 {
-			years[i.Year] = true
-		}
-	}
-
-	details := CollectionDetails{
-		Genres:          returnStringArray(genre),
-		Tags:            returnStringArray(tags),
-		OfficialRatings: returnStringArray(ratings),
-		Years:           returnIntArray(years),
-	}
-	return details
-}
-
-func returnStringArray(m map[string]bool) []string {
-	result := []string{}
-	for k := range m {
-		result = append(result, k)
-	}
-	return result
-}
-
-func returnIntArray(m map[int]bool) []int {
-	result := []int{}
-	for k := range m {
-		result = append(result, k)
-	}
-	sort.Ints(result)
-	return result
+	return genreCount
 }
 
 // LoadNfo loads the NFO file for the item if not loaded already
 func (i *Item) LoadNfo() {
 	loadNFO(&i.Nfo, i.nfoPath)
+	if i.Nfo != nil {
+		i.Genres = i.Nfo.Genre
+		i.OfficialRating = i.Nfo.Mpaa
+		i.Year = i.Nfo.Year
+	}
 }
 
 // LoadNfo loads the NFO file for the episode if not loaded already

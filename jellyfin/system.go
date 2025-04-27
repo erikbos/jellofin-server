@@ -3,18 +3,19 @@ package jellyfin
 import (
 	"fmt"
 	"net/http"
-	"os"
 )
 
 // /System/Info/Public
 //
 // systemInfoHandler returns basic server info
 func (j *Jellyfin) systemInfoHandler(w http.ResponseWriter, r *http.Request) {
-	hostname, _ := os.Hostname()
-
+	protocol := "http"
+	if r.TLS != nil {
+		protocol = "https"
+	}
 	response := JFSystemInfoResponse{
 		Id:           serverID,
-		LocalAddress: fmt.Sprintf("http://%s:%d", hostname, j.serverPort),
+		LocalAddress: fmt.Sprintf("%s://%s", protocol, r.Host),
 		// Jellyfin native client checks for exact productname ..
 		// https://github.com/jellyfin/jellyfin-expo/blob/7dedbc72fb53fc4b83c3967c9a8c6c071916425b/utils/ServerValidator.js#L82C49-L82C64
 		ProductName:            "Jellyfin Server",

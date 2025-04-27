@@ -1,6 +1,7 @@
-package nfo
+package collection
 
 import (
+	"slices"
 	"strings"
 )
 
@@ -71,19 +72,10 @@ func normalizeGenre(genre string) string {
 	return genre
 }
 
-func contains(a []string, s string) bool {
-	for _, c := range a {
-		if c == s {
-			return true
-		}
-	}
-	return false
-}
-
 func NormalizeGenres(genres []string) (res []string) {
 	for _, g := range genres {
 		m := normalizeGenre(g)
-		if !contains(res, m) && len(m) > 1 {
+		if !slices.Contains(res, m) && len(m) > 1 {
 			res = append(res, m)
 		}
 	}

@@ -5,7 +5,6 @@ package collection
 import (
 	"fmt"
 	"regexp"
-	"strconv"
 )
 
 // pattern: ___.s03e04.___
@@ -19,22 +18,6 @@ var pat3 = regexp.MustCompile(`^.*[ .]([0-9]{4})[.-]([0-9]{2})[.-]([0-9]{2})[ .]
 
 // pattern: ___.308.___  (or 3x08) where first number is season.
 var pat4 = regexp.MustCompile(`^.*[ .]([0-9]{1,2})x?([0-9]{2})[ .].*$`)
-
-func parseInt(s string) (i int) {
-	n, err := strconv.ParseInt(s, 10, 64)
-	if err == nil {
-		i = int(n)
-	}
-	return
-}
-
-// func parseFloat32(s string) (i float32) {
-// 	n, err := strconv.ParseFloat(s, 64)
-// 	if err == nil {
-// 		i = float32(n)
-// 	}
-// 	return
-// }
 
 func parseEpisodeName(name string, seasonHint int, ep *Episode) (ok bool) {
 

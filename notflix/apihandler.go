@@ -192,20 +192,7 @@ func (n *Notflix) genresHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gc := make(map[string]int)
-	for i := range c.Items {
-		for _, g := range c.Items[i].Genre {
-			if g == "" {
-				continue
-			}
-			if v, found := gc[g]; !found {
-				gc[g] = 1
-			} else {
-				gc[g] = v + 1
-			}
-		}
-	}
-
+	gc := c.GenreCount()
 	serveJSON(gc, w)
 }
 
@@ -296,7 +283,7 @@ func copyItem(item collection.Item) Item {
 		Fanart:     item.Fanart,
 		Poster:     item.Poster,
 		Rating:     item.Rating,
-		Genre:      item.Genre,
+		Genre:      item.Genres,
 		Year:       item.Year,
 		Video:      item.Video,
 	}

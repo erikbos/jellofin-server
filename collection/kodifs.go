@@ -14,7 +14,6 @@ import (
 
 	"github.com/miquels/notflix-server/database"
 	"github.com/miquels/notflix-server/idhash"
-	"github.com/miquels/notflix-server/nfo"
 )
 
 var isVideo = regexp.MustCompile(`^(.*)\.(divx|mov|mp4|MP4|m4u|m4v)$`)
@@ -200,7 +199,7 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Item)
 		ID:    movie.ID,
 		Name:  movie.Name,
 		Year:  movie.Year,
-		Genre: strings.Join(movie.Genre, ","),
+		Genre: strings.Join(movie.Genres, ","),
 	}
 
 	cr.db.DbLoadItem(dbItemMovie)
@@ -537,7 +536,7 @@ func (cr *CollectionRepo) buildShow(coll *Collection, dir string) (show *Item) {
 		ID:    item.ID,
 		Name:  item.Name,
 		Year:  item.Year,
-		Genre: strings.Join(item.Genre, ","),
+		Genre: strings.Join(item.Genres, ","),
 	}
 	cr.db.DbLoadItem(dbItemShow)
 	return
@@ -555,13 +554,13 @@ func (cr *CollectionRepo) copySrtVttSubs(srt []Subs, vtt *[]Subs) {
 	}
 }
 
-func loadNFO(n **nfo.Nfo, filename string) {
+func loadNFO(n **Nfo, filename string) {
 	// NFO already loaded and parsed?
 	if *n != nil {
 		return
 	}
 	if file, err := os.Open(filename); err == nil {
 		defer file.Close()
-		*n = nfo.Decode(file)
+		*n = NfoDecode(file)
 	}
 }

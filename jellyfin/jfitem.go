@@ -12,8 +12,82 @@ import (
 	"github.com/miquels/notflix-server/collection"
 	"github.com/miquels/notflix-server/database"
 	"github.com/miquels/notflix-server/idhash"
-	"github.com/miquels/notflix-server/nfo"
 )
+
+const (
+	// Misc IDs for api responses
+	serverID                = "2b11644442754f02a0c1e45d2a9f5c71"
+	collectionRootID        = "e9d5075a555c1cbc394eec4cef295274"
+	playlistCollectionID    = "2f0340563593c4d98b97c9bfa21ce23c"
+	favoritesCollectionID   = "f4a0b1c2d3e5c4b8a9e6f7d8e9a0b1c2"
+	displayPreferencesID    = "f137a2dd21bbc1b99aa5c0f6bf02a805"
+	collectionTypeMovies    = "movies"
+	collectionTypeTVShows   = "tvshows"
+	CollectionTypePlaylists = "playlists"
+
+	// itemid prefixes
+	itemprefix_separator            = "_"
+	itemprefix_root                 = "root_"
+	itemprefix_collection           = "collection_"
+	itemprefix_collection_favorites = "collectionfavorites_"
+	itemprefix_collection_playlist  = "collectionplaylist_"
+	itemprefix_show                 = "show_"
+	itemprefix_season               = "season_"
+	itemprefix_episode              = "episode_"
+	itemprefix_playlist             = "playlist_"
+
+	// imagetag prefix will get HTTP-redirected
+	tagprefix_redirect = "redirect_"
+	// imagetag prefix means we will serve the filename from local disk
+	tagprefix_file = "file_"
+)
+
+func (j *Jellyfin) makeJFItemRoot() (response JFItem, e error) {
+	rootID := itemprefix_root + collectionRootID
+
+	childCount := len(j.collections.GetCollections())
+	// we add the favorites and playlist collections to the child count
+	childCount += 2
+
+	genres := j.collections.Details().Genres
+
+	response = JFItem{
+		Name:                     "Media Folders",
+		ServerID:                 serverID,
+		ID:                       rootID,
+		Etag:                     idhash.IdHash(rootID),
+		DateCreated:              time.Now().UTC(),
+		Type:                     "UserRootFolder",
+		IsFolder:                 true,
+		CanDelete:                false,
+		CanDownload:              false,
+		SortName:                 "media folders",
+		ExternalUrls:             []JFExternalUrls{},
+		Path:                     "/root",
+		EnableMediaSourceDisplay: true,
+		Taglines:                 []string{},
+		PlayAccess:               "Full",
+		RemoteTrailers:           []JFRemoteTrailers{},
+		ProviderIds:              JFProviderIds{},
+		People:                   []JFPeople{},
+		Studios:                  []JFStudios{},
+		Genres:                   genres,
+		GenreItems:               makeJFGenreItems(genres),
+		LocalTrailerCount:        0,
+		ChildCount:               childCount,
+		SpecialFeatureCount:      0,
+		DisplayPreferencesID:     displayPreferencesID,
+		Tags:                     []string{},
+		PrimaryImageAspectRatio:  1.7777777777777777,
+		BackdropImageTags:        []string{},
+		LocationType:             "FileSystem",
+		MediaType:                "Unknown",
+		// ImageTags: &JFImageTags{
+		// 	Primary: collectionRootID,
+		// },
+	}
+	return
+}
 
 func (j *Jellyfin) makeJItemCollection(itemid string) (response JFItem, e error) {
 	collectionid := strings.TrimPrefix(itemid, itemprefix_collection)
@@ -22,9 +96,11 @@ func (j *Jellyfin) makeJItemCollection(itemid string) (response JFItem, e error)
 		e = errors.New("collection not found")
 		return
 	}
-	details := c.Details()
+	collectionGenres := c.Details().Genres
 
 	itemID := itemprefix_collection + collectionid
+	parentID := itemprefix_root + collectionRootID
+
 	response = JFItem{
 		Name:                     c.Name_,
 		ServerID:                 serverID,
@@ -45,12 +121,12 @@ func (j *Jellyfin) makeJItemCollection(itemid string) (response JFItem, e error)
 		Path:                     "/collection",
 		LockData:                 false,
 		MediaType:                "Unknown",
-		ParentID:                 "e9d5075a555c1cbc394eec4cef295274",
+		ParentID:                 parentID,
 		CanDelete:                false,
 		CanDownload:              true,
 		SpecialFeatureCount:      0,
-		Genres:                   details.Genres,
-		GenreItems:               arrayToGenreItems(details.Genres),
+		Genres:                   collectionGenres,
+		GenreItems:               makeJFGenreItems(collectionGenres),
 		// TODO: we do not support images for a collection
 		// ImageTags: &JFImageTags{
 		// 	Primary: "collection",
@@ -58,9 +134,11 @@ func (j *Jellyfin) makeJItemCollection(itemid string) (response JFItem, e error)
 	}
 	switch c.Type {
 	case collection.CollectionMovies:
-		response.CollectionType = CollectionMovies
+		response.CollectionType = collectionTypeMovies
 	case collection.CollectionShows:
-		response.CollectionType = CollectionTVShows
+		response.CollectionType = collectionTypeTVShows
+	default:
+		log.Printf("makeJItemCollection: unknown collection type: %s", c.Type)
 	}
 	response.SortName = response.CollectionType
 	return
@@ -83,8 +161,8 @@ func (j *Jellyfin) makeJFItemCollectionFavorites(userid string) (response JFItem
 		Etag:                     idhash.IdHash(id),
 		DateCreated:              time.Now().UTC(),
 		PremiereDate:             time.Now().UTC(),
-		CollectionType:           CollectionPlaylists,
-		SortName:                 CollectionPlaylists,
+		CollectionType:           CollectionTypePlaylists,
+		SortName:                 CollectionTypePlaylists,
 		Type:                     "UserView",
 		IsFolder:                 true,
 		EnableMediaSourceDisplay: true,
@@ -128,8 +206,8 @@ func (j *Jellyfin) makeJFItemCollectionPlaylist(userid string) (response JFItem,
 		Etag:                     idhash.IdHash(id),
 		DateCreated:              time.Now().UTC(),
 		PremiereDate:             time.Now().UTC(),
-		CollectionType:           CollectionPlaylists,
-		SortName:                 CollectionPlaylists,
+		CollectionType:           CollectionTypePlaylists,
+		SortName:                 CollectionTypePlaylists,
 		Type:                     "UserView",
 		IsFolder:                 true,
 		EnableMediaSourceDisplay: true,
@@ -215,6 +293,11 @@ func (j *Jellyfin) makeJFItemMovie(userID string, i *collection.Item, parentID s
 	// }
 
 	j.enrichResponseWithNFO(&response, i.Nfo)
+	if i.Nfo != nil {
+		i.Genres = response.Genres
+		i.OfficialRating = response.OfficialRating
+		i.Year = response.ProductionYear
+	}
 
 	if playstate, err := j.db.UserDataRepo.Get(userID, i.ID); err == nil {
 		response.UserData = j.makeJFUserData(userID, i.ID, playstate)
@@ -244,12 +327,14 @@ func (j *Jellyfin) makeJFItemShow(userID string, i *collection.Item, parentID st
 		ImageTags: &JFImageTags{
 			Primary:  "primary_" + i.ID,
 			Backdrop: "backdrop_" + i.ID,
-			Logo:     "logo_" + i.ID,
 		},
 		// Required to have Infuse load backdrop of episode
 		BackdropImageTags: []string{
 			"backdrop_" + i.ID,
 		},
+	}
+	if i.Logo != "" {
+		response.ImageTags.Logo = "logo_" + i.ID
 	}
 
 	j.enrichResponseWithNFO(&response, i.Nfo)
@@ -396,6 +481,11 @@ func (j *Jellyfin) makeJFItemEpisode(userID, episodeID string) (response JFItem,
 	show.LoadNfo()
 	if show.Nfo != nil {
 		j.enrichResponseWithNFO(&response, show.Nfo)
+		if show.Nfo != nil {
+			show.Genres = response.Genres
+			show.OfficialRating = response.OfficialRating
+			show.Year = response.ProductionYear
+		}
 	}
 
 	// Remove ratings as we do not want ratings from series apply to an episode
@@ -489,7 +579,32 @@ func (j *Jellyfin) makeJFItemPlaylist(userID, playlistID string) (response JFIte
 	return
 }
 
-// makeJFUserData creates a JFUserData object from PlayState
+func (j *Jellyfin) makeJFItemGenre(genre string) (response JFItem) {
+
+	response = JFItem{
+		ID:           idhash.IdHash(genre),
+		ServerID:     serverID,
+		Type:         "Genre",
+		Name:         genre,
+		SortName:     genre,
+		Etag:         idhash.IdHash(genre),
+		DateCreated:  time.Now().UTC(),
+		PremiereDate: time.Now().UTC(),
+		LocationType: "FileSystem",
+		MediaType:    "Unknown",
+		ChildCount:   1,
+	}
+
+	if genreItemCount := j.collections.GenreItemCount(); genreItemCount != nil {
+		if genreCount, ok := genreItemCount[genre]; ok {
+			response.ChildCount = genreCount
+		}
+	}
+
+	return
+}
+
+// makeJFUserData creates a JFUserData object from Userdata
 func (j *Jellyfin) makeJFUserData(UserID, itemID string, p database.UserData) (response *JFUserData) {
 	response = &JFUserData{
 		PlaybackPositionTicks: p.Position * TicsToSeconds,
@@ -503,7 +618,7 @@ func (j *Jellyfin) makeJFUserData(UserID, itemID string, p database.UserData) (r
 	return
 }
 
-func (j *Jellyfin) enrichResponseWithNFO(response *JFItem, n *nfo.Nfo) {
+func (j *Jellyfin) enrichResponseWithNFO(response *JFItem, n *collection.Nfo) {
 	if n == nil {
 		return
 	}
@@ -537,16 +652,10 @@ func (j *Jellyfin) enrichResponseWithNFO(response *JFItem, n *nfo.Nfo) {
 	}
 
 	if len(n.Genre) != 0 {
-		normalizedGenres := nfo.NormalizeGenres(n.Genre)
+		normalizedGenres := collection.NormalizeGenres(n.Genre)
 		// Why do we populate two response fields with same data?
 		response.Genres = normalizedGenres
-		for _, genre := range normalizedGenres {
-			g := JFGenreItem{
-				Name: genre,
-				ID:   idhash.IdHash(genre),
-			}
-			response.GenreItems = append(response.GenreItems, g)
-		}
+		response.GenreItems = makeJFGenreItems(normalizedGenres)
 	}
 
 	if n.Studio != "" {
@@ -601,7 +710,7 @@ func (j *Jellyfin) enrichResponseWithNFO(response *JFItem, n *nfo.Nfo) {
 	}
 }
 
-func (j *Jellyfin) makeMediaSource(filename string, n *nfo.Nfo) (mediasources []JFMediaSources) {
+func (j *Jellyfin) makeMediaSource(filename string, n *collection.Nfo) (mediasources []JFMediaSources) {
 	mediasource := JFMediaSources{
 		ID:                    idhash.IdHash(filename),
 		ETag:                  idhash.IdHash(filename),
