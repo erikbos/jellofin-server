@@ -33,12 +33,12 @@ const (
 //
 // usersViewsHandler returns the collections available to the user as items
 func (j *Jellyfin) usersViewsHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(w, r)
-	if accessTokenDetails == nil {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
 		return
 	}
 
-	items := []JFItem{}
+	items := make([]JFItem, 0)
 	for _, c := range j.collections.GetCollections() {
 		if item, err := j.makeJItemCollection(genCollectionID(c.ID)); err == nil {
 			items = append(items, item)
@@ -46,11 +46,11 @@ func (j *Jellyfin) usersViewsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add favorites and playlist collections
-	favoriteCollection, err := j.makeJFItemCollectionFavorites(accessTokenDetails.UserID)
+	favoriteCollection, err := j.makeJFItemCollectionFavorites(accessToken.UserID)
 	if err == nil {
 		items = append(items, favoriteCollection)
 	}
-	playlistCollection, err := j.makeJFItemCollectionPlaylist(accessTokenDetails.UserID)
+	playlistCollection, err := j.makeJFItemCollectionPlaylist(accessToken.UserID)
 	if err == nil {
 		items = append(items, playlistCollection)
 	}
@@ -80,8 +80,8 @@ func (j *Jellyfin) usersGroupingOptionsHandler(w http.ResponseWriter, r *http.Re
 // curl -v 'http://127.0.0.1:9090/Users/2b1ec0a52b09456c9823a367d84ac9e5/Items/f137a2dd21bbc1b99aa5c0f6bf02a805?Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount'
 // handle individual item: any type: collection, a movie/show or individual file
 func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(w, r)
-	if accessTokenDetails == nil {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
 		return
 	}
 
@@ -111,7 +111,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 			serveJSON(collectionItem, w)
 			return
 		case itemprefix_collection_favorites:
-			collectionItem, err := j.makeJFItemCollectionFavorites(accessTokenDetails.UserID)
+			collectionItem, err := j.makeJFItemCollectionFavorites(accessToken.UserID)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusNotFound)
 				return
@@ -120,7 +120,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 			serveJSON(collectionItem, w)
 			return
 		case itemprefix_collection_playlist:
-			collectionItem, err := j.makeJFItemCollectionPlaylist(accessTokenDetails.UserID)
+			collectionItem, err := j.makeJFItemCollectionPlaylist(accessToken.UserID)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusNotFound)
 				return
@@ -129,7 +129,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 			serveJSON(collectionItem, w)
 			return
 		case itemprefix_season:
-			seasonItem, err := j.makeJFItemSeason(accessTokenDetails.UserID, itemID)
+			seasonItem, err := j.makeJFItemSeason(accessToken.UserID, itemID)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusNotFound)
 				return
@@ -137,7 +137,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 			serveJSON(seasonItem, w)
 			return
 		case itemprefix_episode:
-			episodeItem, err := j.makeJFItemEpisode(accessTokenDetails.UserID, itemID)
+			episodeItem, err := j.makeJFItemEpisode(accessToken.UserID, itemID)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusNotFound)
 				return
@@ -145,7 +145,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 			serveJSON(episodeItem, w)
 			return
 		case itemprefix_playlist:
-			playlistItem, err := j.makeJFItemPlaylist(accessTokenDetails.UserID, itemID)
+			playlistItem, err := j.makeJFItemPlaylist(accessToken.UserID, itemID)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusNotFound)
 				return
@@ -165,27 +165,27 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Item not found", http.StatusNotFound)
 		return
 	}
-	serveJSON(j.makeJFItem(accessTokenDetails.UserID, i, idhash.IdHash(c.Name_), c.Type, false), w)
+	serveJSON(j.makeJFItem(accessToken.UserID, i, idhash.IdHash(c.Name_), c.Type, false), w)
 }
 
 // /UserItems/1d57ee2251656c5fb9a05becdf0e62a3/Userdata
 //
 // usersItemUserDataHandler returns the user data for a specific item
 func (j *Jellyfin) usersItemUserDataHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(w, r)
-	if accessTokenDetails == nil {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
 		return
 	}
 
 	vars := mux.Vars(r)
 	itemID := vars["item"]
 
-	playstate, err := j.db.UserDataRepo.Get(accessTokenDetails.UserID, itemID)
+	playstate, err := j.db.UserDataRepo.Get(accessToken.UserID, itemID)
 	if err != nil {
 		playstate = database.UserData{}
 	}
 
-	userData := j.makeJFUserData(accessTokenDetails.UserID, itemID, playstate)
+	userData := j.makeJFUserData(accessToken.UserID, itemID, playstate)
 	serveJSON(userData, w)
 }
 
@@ -218,21 +218,21 @@ func (j *Jellyfin) usersItemUserDataHandler(w http.ResponseWriter, r *http.Reque
 // - StartIndex, index of first result item
 // - Limit=50, number of items to return
 func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(w, r)
-	if accessTokenDetails == nil {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
 		return
 	}
 
 	queryparams := r.URL.Query()
 	searchCollection := queryparams.Get("parentId")
 
-	var items []JFItem
+	items := make([]JFItem, 0)
 	var err error
 	var collectionPopulated bool
 
 	// Return favorites collection if requested
 	if strings.HasPrefix(searchCollection, itemprefix_collection_favorites) {
-		items, err = j.makeJFItemFavoritesOverview(accessTokenDetails.UserID)
+		items, err = j.makeJFItemFavoritesOverview(accessToken.UserID)
 		if err != nil {
 			http.Error(w, "Could not find favorites collection", http.StatusNotFound)
 			return
@@ -242,7 +242,7 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Return playlist collection if requested
 	if strings.HasPrefix(searchCollection, itemprefix_collection_playlist) {
-		items, err = j.makeJFItemPlaylistOverview(accessTokenDetails.UserID)
+		items, err = j.makeJFItemPlaylistOverview(accessToken.UserID)
 		if err != nil {
 			http.Error(w, "Could not find playlist collection", http.StatusNotFound)
 			return
@@ -269,7 +269,7 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 			for _, i := range c.Items {
 				if searchTerm == "" || strings.Contains(strings.ToLower(i.Name), strings.ToLower(searchTerm)) {
 					if j.applyItemFilter(i, queryparams) {
-						items = append(items, j.makeJFItem(accessTokenDetails.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
+						items = append(items, j.makeJFItem(accessToken.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
 					}
 				}
 			}
@@ -291,8 +291,8 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 //
 // returns array with parent and root item
 func (j *Jellyfin) usersItemsAncestorsHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(w, r)
-	if accessTokenDetails == nil {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
 		return
 	}
 
@@ -327,8 +327,8 @@ func (j *Jellyfin) usersItemsAncestorsHandler(w http.ResponseWriter, r *http.Req
 // - StartIndex, index of first result item
 // - Limit=50, number of items to return
 func (j *Jellyfin) usersItemsLatestHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(w, r)
-	if accessTokenDetails == nil {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
 		return
 	}
 
@@ -340,7 +340,7 @@ func (j *Jellyfin) usersItemsLatestHandler(w http.ResponseWriter, r *http.Reques
 		searchC = j.collections.GetCollection(collectionid)
 	}
 
-	items := []JFItem{}
+	items := make([]JFItem, 0)
 	for _, c := range j.collections.GetCollections() {
 		// Skip if we are searching in one particular collection
 		if searchC != nil && searchC.ID != c.ID {
@@ -348,7 +348,7 @@ func (j *Jellyfin) usersItemsLatestHandler(w http.ResponseWriter, r *http.Reques
 		}
 		for _, i := range c.Items {
 			if j.applyItemFilter(i, queryparams) {
-				items = append(items, j.makeJFItem(accessTokenDetails.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
+				items = append(items, j.makeJFItem(accessToken.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
 			}
 		}
 	}
@@ -367,8 +367,8 @@ func (j *Jellyfin) usersItemsLatestHandler(w http.ResponseWriter, r *http.Reques
 //
 // searchHintsHandler
 func (j *Jellyfin) searchHintsHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(w, r)
-	if accessTokenDetails == nil {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
 		return
 	}
 
@@ -378,7 +378,7 @@ func (j *Jellyfin) searchHintsHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Return playlist collection if requested
 	if strings.HasPrefix(searchCollection, itemprefix_collection_playlist) {
-		response, _ := j.makeJFItemPlaylistOverview(accessTokenDetails.UserID)
+		response, _ := j.makeJFItemPlaylistOverview(accessToken.UserID)
 		serveJSON(response, w)
 		return
 	}
@@ -389,7 +389,7 @@ func (j *Jellyfin) searchHintsHandler(w http.ResponseWriter, r *http.Request) {
 		searchC = j.collections.GetCollection(collectionid)
 	}
 
-	items := []JFItem{}
+	items := make([]JFItem, 0)
 	for _, c := range j.collections.GetCollections() {
 		// Skip if we are searching in one particular collection?
 		if searchC != nil && searchC.ID != c.ID {
@@ -399,7 +399,7 @@ func (j *Jellyfin) searchHintsHandler(w http.ResponseWriter, r *http.Request) {
 		for _, i := range c.Items {
 			if searchTerm == "" || strings.Contains(strings.ToLower(i.Name), strings.ToLower(searchTerm)) {
 				if j.applyItemFilter(i, queryparams) {
-					items = append(items, j.makeJFItem(accessTokenDetails.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
+					items = append(items, j.makeJFItem(accessToken.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
 				}
 			}
 		}
@@ -423,15 +423,15 @@ func (j *Jellyfin) searchHintsHandler(w http.ResponseWriter, r *http.Request) {
 // 	fields=MediaSourceCount&limit=20&
 
 func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(w, r)
-	if accessTokenDetails == nil {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
 		return
 	}
 
 	c, i := j.collections.GetItemByID("rVFG3EzPthk2wowNkqUl")
 	response := JFShowsNextUpResponse{
 		Items: []JFItem{
-			j.makeJFItem(accessTokenDetails.UserID, i, idhash.IdHash(c.Name_), c.Type, true),
+			j.makeJFItem(accessToken.UserID, i, idhash.IdHash(c.Name_), c.Type, true),
 		},
 		TotalRecordCount: 1,
 		StartIndex:       0,
@@ -444,8 +444,13 @@ func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 //
 // usersItemsResumeHandler returns a list of items that are resumable
 func (j *Jellyfin) usersItemsResumeHandler(w http.ResponseWriter, r *http.Request) {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
+		return
+	}
+
 	response := JFUsersItemsResumeResponse{
-		Items:            []string{},
+		Items:            []JFItem{},
 		TotalRecordCount: 0,
 		StartIndex:       0,
 	}
@@ -457,7 +462,7 @@ func (j *Jellyfin) usersItemsResumeHandler(w http.ResponseWriter, r *http.Reques
 // usersItemsSimilarHandler returns a list of items that are similar
 func (j *Jellyfin) usersItemsSimilarHandler(w http.ResponseWriter, r *http.Request) {
 	response := JFUsersItemsResumeResponse{
-		Items:            []string{},
+		Items:            []JFItem{},
 		TotalRecordCount: 0,
 		StartIndex:       0,
 	}
@@ -469,7 +474,7 @@ func (j *Jellyfin) usersItemsSimilarHandler(w http.ResponseWriter, r *http.Reque
 // usersItemsSuggestionsHandler returns a list of items that are suggested for the user
 func (j *Jellyfin) usersItemsSuggestionsHandler(w http.ResponseWriter, r *http.Request) {
 	response := JFUsersItemsResumeResponse{
-		Items:            []string{},
+		Items:            []JFItem{},
 		TotalRecordCount: 0,
 		StartIndex:       0,
 	}
@@ -678,8 +683,8 @@ func (j *Jellyfin) libraryVirtualFoldersHandler(w http.ResponseWriter, r *http.R
 // curl -v 'http://127.0.0.1:9090/Shows/4QBdg3S803G190AgFrBf/Seasons?UserId=2b1ec0a52b09456c9823a367d84ac9e5&ExcludeLocationTypes=Virtual&Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount'
 // generate season overview
 func (j *Jellyfin) showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(w, r)
-	if accessTokenDetails == nil {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
 		return
 	}
 
@@ -691,9 +696,9 @@ func (j *Jellyfin) showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Create API response
-	seasons := []JFItem{}
+	seasons := make([]JFItem, 0)
 	for _, s := range i.Seasons {
-		season, err := j.makeJFItemSeason(accessTokenDetails.UserID, s.ID)
+		season, err := j.makeJFItemSeason(accessToken.UserID, s.ID)
 		if err != nil {
 			log.Printf("makeJFItemSeason returned error %s", err)
 			continue
@@ -717,8 +722,8 @@ func (j *Jellyfin) showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
 // curl -v 'http://127.0.0.1:9090/Shows/rXlq4EHNxq4HIVQzw3o2/Episodes?UserId=2b1ec0a52b09456c9823a367d84ac9e5&ExcludeLocationTypes=Virtual&Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount&SeasonId=rXlq4EHNxq4HIVQzw3o2/1'
 // generate episode overview for one season of a show
 func (j *Jellyfin) showsEpisodesHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(w, r)
-	if accessTokenDetails == nil {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
 		return
 	}
 
@@ -730,18 +735,18 @@ func (j *Jellyfin) showsEpisodesHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Do we need to filter down overview by a particular season?
-	RequestedSeasonId := r.URL.Query().Get("seasonId")
+	RequestedSeasonID := r.URL.Query().Get("seasonId")
 
 	// Create API response for requested season
-	episodes := []JFItem{}
+	episodes := make([]JFItem, 0)
 	for _, s := range i.Seasons {
 		// Limit results to a season if id provided
-		if RequestedSeasonId != "" && itemprefix_season+s.ID != RequestedSeasonId {
+		if RequestedSeasonID != "" && itemprefix_season+s.ID != RequestedSeasonID {
 			continue
 		}
 		for _, e := range s.Episodes {
 			episodeID := itemprefix_episode + e.ID
-			episode, err := j.makeJFItemEpisode(accessTokenDetails.UserID, episodeID)
+			episode, err := j.makeJFItemEpisode(accessToken.UserID, episodeID)
 			if err != nil {
 				log.Printf("makeJFItemEpisode returned error %s", err)
 				continue

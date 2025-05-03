@@ -5,25 +5,74 @@ import (
 	"net/http"
 )
 
+const (
+	serverVersion = "10.10.7"
+)
+
+// /System/Info
+//
+// systemInfoHandler returns server info
+func (j *Jellyfin) systemInfoHandler(w http.ResponseWriter, r *http.Request) {
+	response := JFSystemInfoResponse{
+		Id:                         serverID,
+		OperatingSystemDisplayName: "",
+		HasPendingRestart:          false,
+		IsShuttingDown:             false,
+		SupportsLibraryMonitor:     true,
+		WebSocketPortNumber:        8096,
+		CompletedInstallations:     []string{},
+		CanSelfRestart:             true,
+		CanLaunchWebBrowser:        false,
+		ProgramDataPath:            "/jellyfin",
+		WebPath:                    "/jellyfin-web",
+		ItemsByNamePath:            "/jellyfin/metadata",
+		CachePath:                  "/jellyfin/cache",
+		LogPath:                    "/jellyfin/log",
+		InternalMetadataPath:       "/jellyfin/metadata",
+		TranscodingTempPath:        "/jellyfin/cache/transcodes",
+		CastReceiverApplications: []CastReceiverApplication{
+			{
+				Id:   "F007D354",
+				Name: "Stable",
+			},
+			{
+				Id:   "6F511C87",
+				Name: "Unstable",
+			},
+		},
+		HasUpdateAvailable: false,
+		EncoderLocation:    "System",
+		SystemArchitecture: "X64",
+		LocalAddress:       localAddress(r),
+		ServerName:         j.serverName,
+		Version:            serverVersion,
+		OperatingSystem:    "",
+	}
+	serveJSON(response, w)
+}
+
 // /System/Info/Public
 //
-// systemInfoHandler returns basic server info
-func (j *Jellyfin) systemInfoHandler(w http.ResponseWriter, r *http.Request) {
-	protocol := "http"
-	if r.TLS != nil {
-		protocol = "https"
-	}
-	response := JFSystemInfoResponse{
+// systemInfoPublicHandler returns basic server info
+func (j *Jellyfin) systemInfoPublicHandler(w http.ResponseWriter, r *http.Request) {
+	response := JFSystemInfoPublicResponse{
 		Id:           serverID,
-		LocalAddress: fmt.Sprintf("%s://%s", protocol, r.Host),
+		LocalAddress: localAddress(r),
 		// Jellyfin native client checks for exact productname ..
 		// https://github.com/jellyfin/jellyfin-expo/blob/7dedbc72fb53fc4b83c3967c9a8c6c071916425b/utils/ServerValidator.js#L82C49-L82C64
 		ProductName:            "Jellyfin Server",
 		ServerName:             j.serverName,
-		Version:                "10.10.3",
+		Version:                serverVersion,
 		StartupWizardCompleted: true,
 	}
 	serveJSON(response, w)
+}
+
+// /System/Ping
+//
+// systemPingHandler returns static string
+func (j *Jellyfin) systemPingHandler(w http.ResponseWriter, r *http.Request) {
+	serveJSON("Pong", w)
 }
 
 // /Plugins
@@ -70,4 +119,12 @@ func (j *Jellyfin) displayPreferencesHandler(w http.ResponseWriter, r *http.Requ
 		ShowSidebar:     false,
 		Client:          "emby",
 	}, w)
+}
+
+func localAddress(r *http.Request) string {
+	protocol := "http"
+	if r.TLS != nil {
+		protocol = "https"
+	}
+	return fmt.Sprintf("%s://%s", protocol, r.Host)
 }

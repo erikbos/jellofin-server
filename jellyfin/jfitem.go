@@ -17,6 +17,7 @@ import (
 const (
 	// Misc IDs for api responses
 	serverID                = "2b11644442754f02a0c1e45d2a9f5c71"
+	sessionID               = "e3a869b7a901f8894de8ee65688db6c0"
 	collectionRootID        = "e9d5075a555c1cbc394eec4cef295274"
 	playlistCollectionID    = "2f0340563593c4d98b97c9bfa21ce23c"
 	favoritesCollectionID   = "f4a0b1c2d3e5c4b8a9e6f7d8e9a0b1c2"
@@ -363,15 +364,31 @@ func (j *Jellyfin) makeJFItemShow(userID string, i *collection.Item, parentID st
 		}
 	}
 	if totalEpisodes != 0 {
-		response.UserData = &JFUserData{
-			UnplayedItemCount: totalEpisodes - playedEpisodes,
-			PlayedPercentage:  100 * playedEpisodes / totalEpisodes,
-			LastPlayedDate:    lastestPlayed,
-			Key:               response.ID,
+		playstate, err := j.db.UserDataRepo.Get(userID, i.ID)
+		if err != nil {
+			playstate = database.UserData{
+				Timestamp: time.Now().UTC(),
+			}
 		}
+		response.UserData = j.makeJFUserData(userID, i.ID, playstate)
+
+		response.UserData.UnplayedItemCount = totalEpisodes - playedEpisodes
+		response.UserData.PlayedPercentage = 100 * playedEpisodes / totalEpisodes
+		response.UserData.LastPlayedDate = lastestPlayed
+		response.UserData.Key = response.ID
 		if playedEpisodes == response.ChildCount {
 			response.UserData.Played = true
 		}
+
+		// response.UserData = &JFUserData{
+		// 	UnplayedItemCount: totalEpisodes - playedEpisodes,
+		// 	PlayedPercentage:  100 * playedEpisodes / totalEpisodes,
+		// 	LastPlayedDate:    lastestPlayed,
+		// 	Key:               response.ID,
+		// }
+		// if playedEpisodes == response.ChildCount {
+		// 	response.UserData.Played = true
+		// }
 	}
 	return response
 }
@@ -432,15 +449,31 @@ func (j *Jellyfin) makeJFItemSeason(userID, seasonID string) (response JFItem, e
 			}
 		}
 	}
-	response.UserData = &JFUserData{
-		UnplayedItemCount: response.ChildCount - playedEpisodes,
-		PlayedPercentage:  100 * playedEpisodes / response.ChildCount,
-		LastPlayedDate:    lastestPlayed,
-		Key:               response.ID,
+
+	playstate, err := j.db.UserDataRepo.Get(userID, seasonID)
+	if err != nil {
+		playstate = database.UserData{
+			Timestamp: time.Now().UTC(),
+		}
 	}
+	response.UserData = j.makeJFUserData(userID, seasonID, playstate)
+
+	response.UserData.UnplayedItemCount = response.ChildCount - playedEpisodes
+	response.UserData.PlayedPercentage = 100 * playedEpisodes / response.ChildCount
+	response.UserData.LastPlayedDate = lastestPlayed
 	if playedEpisodes == response.ChildCount {
 		response.UserData.Played = true
 	}
+
+	// response.UserData = &JFUserData{
+	// 	UnplayedItemCount: response.ChildCount - playedEpisodes,
+	// 	PlayedPercentage:  100 * playedEpisodes / response.ChildCount,
+	// 	LastPlayedDate:    lastestPlayed,
+	// 	Key:               response.ID,
+	// }
+	// if playedEpisodes == response.ChildCount {
+	// 	response.UserData.Played = true
+	// }
 
 	return response, nil
 }
@@ -529,8 +562,8 @@ func (j *Jellyfin) makeJFItemFavoritesOverview(userID string) (items []JFItem, e
 	return
 }
 
-func (j *Jellyfin) makeJFItemPlaylistOverview(userId string) (items []JFItem, err error) {
-	playlistIDs, err := j.db.PlaylistRepo.GetPlaylists(userId)
+func (j *Jellyfin) makeJFItemPlaylistOverview(userID string) (items []JFItem, err error) {
+	playlistIDs, err := j.db.PlaylistRepo.GetPlaylists(userID)
 
 	log.Printf("makeJFItemPlaylistOverview: %+v, %+v", playlistIDs, err)
 	if err != nil {
@@ -538,7 +571,7 @@ func (j *Jellyfin) makeJFItemPlaylistOverview(userId string) (items []JFItem, er
 	}
 	// In case we have playlists populate, otherwise leave empty list
 	for _, playlistID := range playlistIDs {
-		item, err := j.makeJFItemPlaylist(userId, playlistID)
+		item, err := j.makeJFItemPlaylist(userID, playlistID)
 		if err == nil {
 			items = append(items, item)
 		}

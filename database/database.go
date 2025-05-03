@@ -24,7 +24,7 @@ type (
 
 	// UserRepo defines the interface for user database operations
 	UserRepo interface {
-		// GetById retrieves a user from the database by their ID.
+		// GetByID retrieves a user from the database by their ID.
 		GetByID(userID string) (user *User, err error)
 		// Validate checks if the user exists and the password is correct.
 		Validate(username, password string) (user *User, err error)

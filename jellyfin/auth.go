@@ -60,7 +60,7 @@ func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http
 	remoteAddress, _, _ := net.SplitHostPort(r.RemoteAddr)
 
 	session := &JFSessionInfo{
-		Id:                 "e3a869b7a901f8894de8ee65688db6c0",
+		Id:                 sessionID,
 		UserId:             user.ID,
 		UserName:           user.Username,
 		Client:             embyHeader.client,
@@ -185,4 +185,47 @@ func (j *Jellyfin) getAccessTokenDetails(w http.ResponseWriter, r *http.Request)
 	}
 	http.Error(w, "access token not found", http.StatusUnauthorized)
 	return nil
+}
+
+// GET /QuickConnect/Enabled
+//
+// quickConnectEnabledHandler returns boolean whether quickconnect is enabled.
+func (j *Jellyfin) quickConnectEnabledHandler(w http.ResponseWriter, r *http.Request) {
+	serveJSON(false, w)
+}
+
+// POST /QuickConnect/Authorize
+//
+// usersAuthenticateByNameHandler stores quickconnect code of an authenticated user.
+func (j *Jellyfin) quickConnectAuthorizeHandler(w http.ResponseWriter, r *http.Request) {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
+		return
+	}
+
+	queryparams := r.URL.Query()
+	userID := queryparams.Get("userId")
+	code := queryparams.Get("code")
+
+	if userID != accessToken.UserID {
+		http.Error(w, "userID does not match access token", http.StatusForbidden)
+		return
+	}
+	log.Printf("quickConnectAuthorizeHandler: user: %s, code: %s", userID, code)
+	http.Error(w, "quickconnect code not implemented", http.StatusUnauthorized)
+}
+
+// GET /QuickConnect/Connect
+//
+// quickConnectConnectHandler returns info about a quick connect code.
+func (j *Jellyfin) quickConnectConnectHandler(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "quickconnect code not found", http.StatusNotFound)
+}
+
+// POST /QuickConnect/Initiate
+//
+// usersAuthenticateByNameHandler authenticates a user by quick connect code.
+func (j *Jellyfin) quickConnectInitiateHandler(w http.ResponseWriter, r *http.Request) {
+	log.Printf("quickConnectInitiateHandler: %+v", r)
+	http.Error(w, "quickconnect code not implemented", http.StatusUnauthorized)
 }

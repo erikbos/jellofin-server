@@ -23,7 +23,7 @@ func (j *Jellyfin) sessionsHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Every connected client gets to see the same session details ;-)
 	response := JFSessionResponse{
-		ID:                    "ac8900873f2a7b460877e426f37b4d06",
+		ID:                    sessionID,
 		UserID:                accessToken.UserID,
 		UserName:              dbuser.Username,
 		LastActivityDate:      accessToken.LastUsed,

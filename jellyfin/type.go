@@ -7,7 +7,7 @@ import (
 // API definitions: https://swagger.emby.media/ & https://api.jellyfin.org/
 // Docs: https://github.com/mediabrowser/emby/wiki
 
-type JFSystemInfoResponse struct {
+type JFSystemInfoPublicResponse struct {
 	LocalAddress           string `json:"LocalAddress"`
 	ServerName             string `json:"ServerName"`
 	Version                string `json:"Version"`
@@ -15,6 +15,38 @@ type JFSystemInfoResponse struct {
 	OperatingSystem        string `json:"OperatingSystem"`
 	Id                     string `json:"Id"`
 	StartupWizardCompleted bool   `json:"StartupWizardCompleted"`
+}
+
+type JFSystemInfoResponse struct {
+	OperatingSystemDisplayName string                    `json:"OperatingSystemDisplayName"`
+	HasPendingRestart          bool                      `json:"HasPendingRestart"`
+	IsShuttingDown             bool                      `json:"IsShuttingDown"`
+	SupportsLibraryMonitor     bool                      `json:"SupportsLibraryMonitor"`
+	WebSocketPortNumber        int                       `json:"WebSocketPortNumber"`
+	CompletedInstallations     []string                  `json:"CompletedInstallations"`
+	CanSelfRestart             bool                      `json:"CanSelfRestart"`
+	CanLaunchWebBrowser        bool                      `json:"CanLaunchWebBrowser"`
+	ProgramDataPath            string                    `json:"ProgramDataPath"`
+	WebPath                    string                    `json:"WebPath"`
+	ItemsByNamePath            string                    `json:"ItemsByNamePath"`
+	CachePath                  string                    `json:"CachePath"`
+	LogPath                    string                    `json:"LogPath"`
+	InternalMetadataPath       string                    `json:"InternalMetadataPath"`
+	TranscodingTempPath        string                    `json:"TranscodingTempPath"`
+	CastReceiverApplications   []CastReceiverApplication `json:"CastReceiverApplications"`
+	HasUpdateAvailable         bool                      `json:"HasUpdateAvailable"`
+	EncoderLocation            string                    `json:"EncoderLocation"`
+	SystemArchitecture         string                    `json:"SystemArchitecture"`
+	LocalAddress               string                    `json:"LocalAddress"`
+	ServerName                 string                    `json:"ServerName"`
+	Version                    string                    `json:"Version"`
+	OperatingSystem            string                    `json:"OperatingSystem"`
+	Id                         string                    `json:"Id"`
+}
+
+type CastReceiverApplication struct {
+	Id   string `json:"Id"`
+	Name string `json:"Name"`
 }
 
 type JFPluginResponse struct {
@@ -117,7 +149,7 @@ type JFAuthenticateByNameResponse struct {
 }
 
 type JFUsersItemsResumeResponse struct {
-	Items            []string `json:"Items"`
+	Items            []JFItem `json:"Items"`
 	TotalRecordCount int      `json:"TotalRecordCount"`
 	StartIndex       int      `json:"StartIndex"`
 }

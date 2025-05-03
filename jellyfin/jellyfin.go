@@ -70,21 +70,25 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 
 	r.Use(lowercaseQueryParamNames)
 
-	// Endpoints without auth
-	r.Handle("/System/Info/Public", http.HandlerFunc(j.systemInfoHandler))
-	r.Handle("/Users/AuthenticateByName", http.HandlerFunc(j.usersAuthenticateByNameHandler)).Methods("POST")
-	r.Handle("/Users/Public", http.HandlerFunc(j.usersPublicHandler))
-	r.Handle("/Plugins", http.HandlerFunc(j.pluginsHandler))
-
+	// middleware for endpoints to check valid auth token
 	middleware := func(handler http.HandlerFunc) http.Handler {
 		return handlers.CompressHandler(j.authmiddleware(http.HandlerFunc(handler)))
 	}
 
-	// Endpoints with auth and gzip middleware
-	r.Handle("/DisplayPreferences/usersettings", middleware(j.displayPreferencesHandler))
+	r.Handle("/System/Ping", http.HandlerFunc(j.systemPingHandler))
+	r.Handle("/System/Info", middleware(j.systemInfoHandler))
+	r.Handle("/System/Info/Public", http.HandlerFunc(j.systemInfoPublicHandler))
+	r.Handle("/Plugins", http.HandlerFunc(j.pluginsHandler))
+
+	r.Handle("/Users/AuthenticateByName", http.HandlerFunc(j.usersAuthenticateByNameHandler)).Methods("POST")
+	r.Handle("/QuickConnect/Authorize", middleware(j.quickConnectAuthorizeHandler)).Methods("POST")
+	r.Handle("/QuickConnect/Connect", http.HandlerFunc(j.quickConnectConnectHandler))
+	r.Handle("/QuickConnect/Enabled", http.HandlerFunc(j.quickConnectEnabledHandler))
+	r.Handle("/QuickConnect/Initiate", http.HandlerFunc(j.quickConnectInitiateHandler)).Methods("POST")
 
 	r.Handle("/Users", middleware(j.usersAllHandler))
 	r.Handle("/Users/Me", middleware(j.usersMeHandler))
+	r.Handle("/Users/Public", http.HandlerFunc(j.usersPublicHandler))
 
 	r.Handle("/Users/{user}", middleware(j.usersHandler))
 	r.Handle("/Users/{user}/Views", middleware(j.usersViewsHandler))
@@ -98,6 +102,8 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/UserViews", middleware(j.usersViewsHandler))
 	r.Handle("/UserItems/Resume", middleware(j.usersItemsResumeHandler))
 	r.Handle("/UserItems/{item}/Userdata", middleware(j.usersItemUserDataHandler))
+
+	r.Handle("/DisplayPreferences/usersettings", middleware(j.displayPreferencesHandler))
 
 	r.Handle("/Library/VirtualFolders", middleware(j.libraryVirtualFoldersHandler))
 	r.Handle("/Shows/NextUp", middleware(j.showsNextUpHandler))

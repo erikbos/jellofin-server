@@ -30,6 +30,17 @@ var (
 	ErrInvalidPassword = errors.New("invalid password")
 )
 
+// GetByID retrieves a user from the database by their ID.
+func (u *UserStorage) GetByID(userID string) (user *User, err error) {
+	var data User
+	if err := u.dbHandle.Get(&data, "SELECT * FROM users WHERE id=? LIMIT 1", userID); err != nil {
+		return nil, ErrUserNotFound
+	}
+	// No need to return hashed pw
+	data.Password = ""
+	return &data, nil
+}
+
 // Validate checks if the user exists and the password is correct.
 func (u *UserStorage) Validate(username, password string) (user *User, err error) {
 	var data User
@@ -68,15 +79,4 @@ func (u *UserStorage) Insert(username, password string) (user *User, err error) 
 	}
 	tx.Commit()
 	return
-}
-
-// GetById retrieves a user from the database by their ID.
-func (u *UserStorage) GetByID(userID string) (user *User, err error) {
-	var data User
-	if err := u.dbHandle.Get(&data, "SELECT * FROM users WHERE id=? LIMIT 1", userID); err != nil {
-		return nil, ErrUserNotFound
-	}
-	// No need to return hashed pw
-	data.Password = ""
-	return &data, nil
 }

@@ -17,12 +17,12 @@ const (
 //
 // usersAllHandler returns all users, we return only the current user
 func (j *Jellyfin) usersAllHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(w, r)
-	if accessTokenDetails == nil {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
 		return
 	}
 
-	dbuser, err := j.db.UserRepo.GetByID(accessTokenDetails.UserID)
+	dbuser, err := j.db.UserRepo.GetByID(accessToken.UserID)
 	if err != nil {
 		http.Error(w, ErrUserIDNotFound, http.StatusNotFound)
 		return
@@ -37,12 +37,12 @@ func (j *Jellyfin) usersAllHandler(w http.ResponseWriter, r *http.Request) {
 //
 // usersMeHandler returns the current user
 func (j *Jellyfin) usersMeHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(w, r)
-	if accessTokenDetails == nil {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
 		return
 	}
 
-	dbuser, err := j.db.UserRepo.GetByID(accessTokenDetails.UserID)
+	dbuser, err := j.db.UserRepo.GetByID(accessToken.UserID)
 	if err != nil {
 		http.Error(w, ErrUserIDNotFound, http.StatusNotFound)
 		return
@@ -55,18 +55,18 @@ func (j *Jellyfin) usersMeHandler(w http.ResponseWriter, r *http.Request) {
 //
 // usersHandler returns a user, we always return the current user
 func (j *Jellyfin) usersHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(w, r)
-	if accessTokenDetails == nil {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
 		return
 	}
 
 	vars := mux.Vars(r)
-	if vars["user"] != accessTokenDetails.UserID {
+	if vars["user"] != accessToken.UserID {
 		http.Error(w, ErrUserIDNotFound, http.StatusNotFound)
 		return
 	}
 
-	dbuser, err := j.db.UserRepo.GetByID(accessTokenDetails.UserID)
+	dbuser, err := j.db.UserRepo.GetByID(accessToken.UserID)
 	if err != nil {
 		http.Error(w, ErrUserIDNotFound, http.StatusNotFound)
 		return

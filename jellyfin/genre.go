@@ -15,8 +15,8 @@ import (
 //
 // genresHandler returns a list of genres for one or all collections.
 func (j *Jellyfin) genresHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(w, r)
-	if accessTokenDetails == nil {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
 		return
 	}
 
@@ -48,8 +48,8 @@ func (j *Jellyfin) genresHandler(w http.ResponseWriter, r *http.Request) {
 //
 // genreHandler returns details of a specific genre
 func (j *Jellyfin) genreHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(w, r)
-	if accessTokenDetails == nil {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
 		return
 	}
 
@@ -74,8 +74,8 @@ func (j *Jellyfin) genreHandler(w http.ResponseWriter, r *http.Request) {
 //
 // usersItemsFiltersHandler returns a list of genre filter values
 func (j *Jellyfin) usersItemsFiltersHandler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(w, r)
-	if accessTokenDetails == nil {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
 		return
 	}
 
@@ -104,8 +104,8 @@ func (j *Jellyfin) usersItemsFiltersHandler(w http.ResponseWriter, r *http.Reque
 //
 // usersItemsFilters2Handler returns a list of genre name and their id.
 func (j *Jellyfin) usersItemsFilters2Handler(w http.ResponseWriter, r *http.Request) {
-	accessTokenDetails := j.getAccessTokenDetails(w, r)
-	if accessTokenDetails == nil {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
 		return
 	}
 

@@ -66,7 +66,7 @@ func (p *UserDataStorage) Update(userID, itemID string, details UserData) error 
 
 	details.Timestamp = time.Now().UTC()
 
-	log.Printf("UserDataStorageUpdate: userID: %s, itemID: %s, data: %+v\n", userID, itemID, details)
+	// log.Printf("UserDataStorageUpdate: userID: %s, itemID: %s, data: %+v\n", userID, itemID, details)
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -163,7 +163,7 @@ func (p *UserDataStorage) writeStateToDB() error {
 
 	for key, value := range p.state {
 		if value.Timestamp.After(p.lastDBSyncTime) {
-			log.Printf("Persisting play state for user %s, item %s, details: %+v\n", key.userID, key.itemID, value)
+			// log.Printf("Persisting play state for user %s, item %s, details: %+v\n", key.userID, key.itemID, value)
 			_, err := tx.NamedExec(`INSERT OR REPLACE INTO playstate (userid, itemid, position, playedPercentage, played, favorite, timestamp)
                 VALUES (:userid, :itemid, :position, :playedPercentage, :played, :favorite, :timestamp)`,
 				map[string]interface{}{

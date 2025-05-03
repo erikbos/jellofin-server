@@ -249,21 +249,21 @@ func (cr *CollectionRepo) GetItem(collName string, itemName string) (i *Item) {
 	return
 }
 
-func (cr *CollectionRepo) GetItemByID(itemId string) (c *Collection, i *Item) {
+func (cr *CollectionRepo) GetItemByID(itemID string) (c *Collection, i *Item) {
 	for _, c := range cr.collections {
-		if i = cr.GetItem(c.Name_, itemId); i != nil {
+		if i = cr.GetItem(c.Name_, itemID); i != nil {
 			return &c, i
 		}
 	}
 	return nil, nil
 }
 
-func (cr *CollectionRepo) GetSeasonByID(saesonId string) (*Collection, *Item, *Season) {
+func (cr *CollectionRepo) GetSeasonByID(saesonID string) (*Collection, *Item, *Season) {
 	// fixme: wooho O(n^^3) "just temporarily.."
 	for _, c := range cr.collections {
 		for _, i := range c.Items {
 			for _, s := range i.Seasons {
-				if s.ID == saesonId {
+				if s.ID == saesonID {
 					return &c, i, &s
 				}
 			}
@@ -272,13 +272,13 @@ func (cr *CollectionRepo) GetSeasonByID(saesonId string) (*Collection, *Item, *S
 	return nil, nil, nil
 }
 
-func (cr *CollectionRepo) GetEpisodeByID(episodeId string) (*Collection, *Item, *Season, *Episode) {
+func (cr *CollectionRepo) GetEpisodeByID(episodeID string) (*Collection, *Item, *Season, *Episode) {
 	// fixme: wooho O(n^^4) "just temporarily.."
 	for _, c := range cr.collections {
 		for _, i := range c.Items {
 			for _, s := range i.Seasons {
 				for _, e := range s.Episodes {
-					if e.ID == episodeId {
+					if e.ID == episodeID {
 						return &c, i, &s, &e
 					}
 
