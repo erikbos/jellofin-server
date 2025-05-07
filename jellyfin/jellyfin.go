@@ -114,12 +114,12 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/Items/Filters", middleware(j.usersItemsFiltersHandler))
 	r.Handle("/Items/Filters2", middleware(j.usersItemsFilters2Handler))
 	r.Handle("/Items/Latest", middleware(j.usersItemsLatestHandler))
-	// r.Handle("/Items/Resume", middleware(j.usersItemsResumeHandler))
 	r.Handle("/Items/Suggestions", middleware(j.usersItemsSuggestionsHandler))
 	r.Handle("/Items/{item}", middleware(j.itemsDeleteHandler)).Methods("DELETE")
 	r.Handle("/Items/{item}", middleware(j.usersItemHandler))
 	r.Handle("/Items/{item}/Ancestors", middleware(j.usersItemsAncestorsHandler))
-	// Images can be fetched without auth
+	// Images can be fetched without auth, https://github.com/jellyfin/jellyfin/issues/13988
+	// streamyfin does not yet set auth headers
 	r.Handle("/Items/{item}/Images/{type}", http.HandlerFunc(j.itemsImagesHandler)).Methods("GET")
 	r.Handle("/Items/{item}/Images/{type}/{index}", http.HandlerFunc(j.itemsImagesHandler)).Methods("GET")
 	r.Handle("/Items/{item}/PlaybackInfo", middleware(j.itemsPlaybackInfoHandler))
@@ -134,7 +134,7 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/Videos/{item}/stream", middleware(j.videoStreamHandler))
 	r.Handle("/Videos/{item}/stream.{container}", middleware(j.videoStreamHandler))
 
-	r.Handle("/Persons", http.HandlerFunc(j.personsHandler))
+	r.Handle("/Persons", middleware(j.personsHandler))
 
 	// userdata
 	r.Handle("/UserPlayedItems/{item}", middleware(j.usersPlayedItemsPostHandler)).Methods("POST")

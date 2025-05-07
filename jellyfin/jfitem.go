@@ -300,7 +300,7 @@ func (j *Jellyfin) makeJFItemMovie(userID string, i *collection.Item, parentID s
 		i.Year = response.ProductionYear
 	}
 
-	if playstate, err := j.db.UserDataRepo.Get(userID, i.ID); err == nil {
+	if playstate, err := j.db.UserDataRepo.Get(userID, trimPrefix(i.ID)); err == nil {
 		response.UserData = j.makeJFUserData(userID, i.ID, playstate)
 	}
 	return response
@@ -352,7 +352,7 @@ func (j *Jellyfin) makeJFItemShow(userID string, i *collection.Item, parentID st
 	for _, s := range i.Seasons {
 		for _, e := range s.Episodes {
 			totalEpisodes++
-			episodePlaystate, err := j.db.UserDataRepo.Get(userID, e.ID)
+			episodePlaystate, err := j.db.UserDataRepo.Get(userID, trimPrefix(e.ID))
 			if err == nil {
 				if episodePlaystate.Played {
 					playedEpisodes++
@@ -364,7 +364,7 @@ func (j *Jellyfin) makeJFItemShow(userID string, i *collection.Item, parentID st
 		}
 	}
 	if totalEpisodes != 0 {
-		playstate, err := j.db.UserDataRepo.Get(userID, i.ID)
+		playstate, err := j.db.UserDataRepo.Get(userID, trimPrefix(i.ID))
 		if err != nil {
 			playstate = database.UserData{
 				Timestamp: time.Now().UTC(),
@@ -426,20 +426,20 @@ func (j *Jellyfin) makeJFItemSeason(userID, seasonID string) (response JFItem, e
 	// Regular season? (>0)
 	if season.SeasonNo != 0 {
 		response.IndexNumber = season.SeasonNo
-		response.Name = fmt.Sprintf("Season %d", season.SeasonNo)
+		response.Name = makeSeasonName(season.SeasonNo)
 		response.SortName = fmt.Sprintf("%04d", season.SeasonNo)
 	} else {
 		// Specials tend to have season number 0, set season
 		// number to 99 to make it sort at the end
 		response.IndexNumber = 99
-		response.Name = "Specials"
+		response.Name = makeSeasonName(season.SeasonNo)
 		response.SortName = "9999"
 	}
 
 	var playedEpisodes int
 	var lastestPlayed time.Time
 	for _, e := range season.Episodes {
-		episodePlaystate, err := j.db.UserDataRepo.Get(userID, e.ID)
+		episodePlaystate, err := j.db.UserDataRepo.Get(userID, trimPrefix(e.ID))
 		if err == nil {
 			if episodePlaystate.Played {
 				playedEpisodes++
@@ -450,7 +450,7 @@ func (j *Jellyfin) makeJFItemSeason(userID, seasonID string) (response JFItem, e
 		}
 	}
 
-	playstate, err := j.db.UserDataRepo.Get(userID, seasonID)
+	playstate, err := j.db.UserDataRepo.Get(userID, trimPrefix(seasonID))
 	if err != nil {
 		playstate = database.UserData{
 			Timestamp: time.Now().UTC(),
@@ -478,9 +478,18 @@ func (j *Jellyfin) makeJFItemSeason(userID, seasonID string) (response JFItem, e
 	return response, nil
 }
 
+func makeSeasonName(seasonNo int) string {
+	// Regular season? (>0)
+	if seasonNo != 0 {
+		return fmt.Sprintf("Season %d", seasonNo)
+	} else {
+		return "Specials"
+	}
+}
+
 // makeJFItemEpisode makes an episode
 func (j *Jellyfin) makeJFItemEpisode(userID, episodeID string) (response JFItem, err error) {
-	_, show, _, episode := j.collections.GetEpisodeByID(trimPrefix(episodeID))
+	_, show, season, episode := j.collections.GetEpisodeByID(trimPrefix(episodeID))
 	if episode == nil {
 		err = errors.New("could not find episode")
 		return
@@ -493,6 +502,8 @@ func (j *Jellyfin) makeJFItemEpisode(userID, episodeID string) (response JFItem,
 		ServerID:     serverID,
 		SeriesName:   show.Name,
 		SeriesID:     idhash.IdHash(show.Name),
+		SeasonID:     season.ID,
+		SeasonName:   makeSeasonName(season.SeasonNo),
 		LocationType: "FileSystem",
 		Path:         "episode.mp4",
 		IsFolder:     false,
@@ -536,7 +547,7 @@ func (j *Jellyfin) makeJFItemEpisode(userID, episodeID string) (response JFItem,
 	response.RunTimeTicks = response.MediaSources[0].RunTimeTicks
 	response.MediaStreams = response.MediaSources[0].MediaStreams
 
-	if playstate, err := j.db.UserDataRepo.Get(userID, episodeID); err == nil {
+	if playstate, err := j.db.UserDataRepo.Get(userID, trimPrefix(episodeID)); err == nil {
 		response.UserData = j.makeJFUserData(userID, episodeID, playstate)
 	}
 	return response, nil

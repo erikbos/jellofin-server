@@ -154,6 +154,18 @@ type JFUsersItemsResumeResponse struct {
 	StartIndex       int      `json:"StartIndex"`
 }
 
+type JFUsersItemsSimilarResponse struct {
+	Items            []JFItem `json:"Items"`
+	TotalRecordCount int      `json:"TotalRecordCount"`
+	StartIndex       int      `json:"StartIndex"`
+}
+
+type JFUsersItemsSuggestionsResponse struct {
+	Items            []JFItem `json:"Items"`
+	TotalRecordCount int      `json:"TotalRecordCount"`
+	StartIndex       int      `json:"StartIndex"`
+}
+
 type JFSessionInfo struct {
 	PlayState          *JFPlayState `json:"PlayState,omitempty"`
 	RemoteEndPoint     string       `json:"RemoteEndPoint,omitempty"`

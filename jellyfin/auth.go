@@ -156,7 +156,7 @@ func (j *Jellyfin) authmiddleware(next http.Handler) http.Handler {
 			found = true
 		}
 		if !found {
-			log.Printf("no token found in request headers: %+v", r.Header)
+			// log.Printf("no token found in request headers: %+v", r.Header)
 			http.Error(w, "no token provided", http.StatusUnauthorized)
 			return
 		}

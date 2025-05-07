@@ -159,7 +159,7 @@ func (j *Jellyfin) userDataUpdate(userID, itemID string, positionTicks int, mark
 		duration = 60 * 60
 	}
 
-	playstate, err := j.db.UserDataRepo.Get(userID, itemID)
+	playstate, err := j.db.UserDataRepo.Get(userID, trimPrefix(itemID))
 	if err != nil {
 		playstate = database.UserData{
 			Timestamp: time.Now().UTC(),
@@ -195,7 +195,7 @@ func (j *Jellyfin) userFavoriteItemsPostHandler(w http.ResponseWriter, r *http.R
 	vars := mux.Vars(r)
 	itemID := vars["item"]
 
-	playstate, err := j.db.UserDataRepo.Get(accessToken.UserID, itemID)
+	playstate, err := j.db.UserDataRepo.Get(accessToken.UserID, trimPrefix(itemID))
 	if err != nil {
 		playstate = database.UserData{}
 	}
@@ -222,7 +222,7 @@ func (j *Jellyfin) userFavoriteItemsDeleteHandler(w http.ResponseWriter, r *http
 	vars := mux.Vars(r)
 	itemID := vars["item"]
 
-	playstate, err := j.db.UserDataRepo.Get(accessToken.UserID, itemID)
+	playstate, err := j.db.UserDataRepo.Get(accessToken.UserID, trimPrefix(itemID))
 	if err != nil {
 		playstate = database.UserData{}
 	}

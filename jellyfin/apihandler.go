@@ -180,7 +180,7 @@ func (j *Jellyfin) usersItemUserDataHandler(w http.ResponseWriter, r *http.Reque
 	vars := mux.Vars(r)
 	itemID := vars["item"]
 
-	playstate, err := j.db.UserDataRepo.Get(accessToken.UserID, itemID)
+	playstate, err := j.db.UserDataRepo.Get(accessToken.UserID, trimPrefix(itemID))
 	if err != nil {
 		playstate = database.UserData{}
 	}
@@ -250,8 +250,6 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 		collectionPopulated = true
 	}
 
-	searchTerm := queryparams.Get("searchTerm")
-
 	// Search for items in case favorites or playlist collection not requested
 	if !collectionPopulated {
 		var searchC *collection.Collection
@@ -259,6 +257,8 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 			collectionid := strings.TrimPrefix(searchCollection, itemprefix_collection)
 			searchC = j.collections.GetCollection(collectionid)
 		}
+
+		searchTerm := queryparams.Get("searchTerm")
 
 		for _, c := range j.collections.GetCollections() {
 			// Skip if we are searching in one particular collection?
@@ -277,12 +277,11 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	totalItemCount := len(items)
-
-	items = j.applyItemSorting(items, queryparams)
+	responseItems, startIndex := j.applyItemPaginating(j.applyItemSorting(items, queryparams), queryparams)
 	response := UserItemsResponse{
-		Items:            j.applyItemPaginating(items, queryparams),
+		Items:            responseItems,
+		StartIndex:       startIndex,
 		TotalRecordCount: totalItemCount,
-		StartIndex:       0,
 	}
 	serveJSON(response, w)
 }
@@ -333,6 +332,7 @@ func (j *Jellyfin) usersItemsLatestHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	queryparams := r.URL.Query()
+
 	searchCollection := queryparams.Get("parentId")
 	var searchC *collection.Collection
 	if searchCollection != "" {
@@ -358,7 +358,7 @@ func (j *Jellyfin) usersItemsLatestHandler(w http.ResponseWriter, r *http.Reques
 		return items[i].PremiereDate.After(items[j].PremiereDate)
 	})
 
-	items = j.applyItemPaginating(items, queryparams)
+	items, _ = j.applyItemPaginating(items, queryparams)
 
 	serveJSON(items, w)
 }
@@ -373,10 +373,9 @@ func (j *Jellyfin) searchHintsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	queryparams := r.URL.Query()
-	searchTerm := queryparams.Get("searchTerm")
-	searchCollection := queryparams.Get("parentId")
 
 	// Return playlist collection if requested
+	searchCollection := queryparams.Get("parentId")
 	if strings.HasPrefix(searchCollection, itemprefix_collection_playlist) {
 		response, _ := j.makeJFItemPlaylistOverview(accessToken.UserID)
 		serveJSON(response, w)
@@ -389,6 +388,7 @@ func (j *Jellyfin) searchHintsHandler(w http.ResponseWriter, r *http.Request) {
 		searchC = j.collections.GetCollection(collectionid)
 	}
 
+	searchTerm := queryparams.Get("searchTerm")
 	items := make([]JFItem, 0)
 	for _, c := range j.collections.GetCollections() {
 		// Skip if we are searching in one particular collection?
@@ -406,10 +406,10 @@ func (j *Jellyfin) searchHintsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	totalItemCount := len(items)
+	searchItems, _ := j.applyItemPaginating(j.applyItemSorting(items, queryparams), queryparams)
 
-	items = j.applyItemSorting(items, queryparams)
 	response := SearchHintsResponse{
-		SearchHints:      j.applyItemPaginating(items, queryparams),
+		SearchHints:      searchItems,
 		TotalRecordCount: totalItemCount,
 	}
 	serveJSON(response, w)
@@ -449,10 +449,52 @@ func (j *Jellyfin) usersItemsResumeHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	queryparams := r.URL.Query()
+
+	resumeItemIDs, err := j.db.UserDataRepo.GetResume(accessToken.UserID)
+	if err != nil {
+		http.Error(w, "Could not get resume items list", http.StatusInternalServerError)
+		return
+	}
+
+	items := make([]JFItem, 0)
+	for _, id := range resumeItemIDs {
+		if c, i := j.collections.GetItemByID(id); c != nil && i != nil {
+			if j.applyItemFilter(i, queryparams) {
+				items = append(items, j.makeJFItem(accessToken.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
+			}
+			continue
+		}
+		if _, i, _, e := j.collections.GetEpisodeByID(id); i != nil {
+			if j.applyItemFilter(i, queryparams) {
+				if episode, err := j.makeJFItemEpisode(accessToken.UserID, e.ID); err == nil {
+					items = append(items, episode)
+				}
+			}
+			continue
+		}
+		log.Printf("usersItemsResumeHandler: item %s not found\n", id)
+	}
+
+	// Sort by last played date so we can show most recent played items first
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].UserData.LastPlayedDate.After(items[j].UserData.LastPlayedDate)
+	})
+
+	// Apply user provided sorting
+	items = j.applyItemSorting(items, queryparams)
+
+	// No need to list all unwatched items of the past, limit to 10
+	if len(items) > 10 {
+		items = items[:10]
+	}
+
+	totalItemCount := len(items)
+	resumeItems, startIndex := j.applyItemPaginating(items, queryparams)
 	response := JFUsersItemsResumeResponse{
-		Items:            []JFItem{},
-		TotalRecordCount: 0,
-		StartIndex:       0,
+		Items:            resumeItems,
+		StartIndex:       startIndex,
+		TotalRecordCount: totalItemCount,
 	}
 	serveJSON(response, w)
 }
@@ -461,10 +503,10 @@ func (j *Jellyfin) usersItemsResumeHandler(w http.ResponseWriter, r *http.Reques
 //
 // usersItemsSimilarHandler returns a list of items that are similar
 func (j *Jellyfin) usersItemsSimilarHandler(w http.ResponseWriter, r *http.Request) {
-	response := JFUsersItemsResumeResponse{
+	response := JFUsersItemsSimilarResponse{
 		Items:            []JFItem{},
-		TotalRecordCount: 0,
 		StartIndex:       0,
+		TotalRecordCount: 0,
 	}
 	serveJSON(response, w)
 }
@@ -473,10 +515,10 @@ func (j *Jellyfin) usersItemsSimilarHandler(w http.ResponseWriter, r *http.Reque
 //
 // usersItemsSuggestionsHandler returns a list of items that are suggested for the user
 func (j *Jellyfin) usersItemsSuggestionsHandler(w http.ResponseWriter, r *http.Request) {
-	response := JFUsersItemsResumeResponse{
+	response := JFUsersItemsSuggestionsResponse{
 		Items:            []JFItem{},
-		TotalRecordCount: 0,
 		StartIndex:       0,
+		TotalRecordCount: 0,
 	}
 	serveJSON(response, w)
 }
@@ -651,7 +693,7 @@ func (j *Jellyfin) applyItemSorting(items []JFItem, queryparams url.Values) (sor
 }
 
 // apply pagination to a list of items
-func (j *Jellyfin) applyItemPaginating(items []JFItem, queryparams url.Values) (paginatedItems []JFItem) {
+func (j *Jellyfin) applyItemPaginating(items []JFItem, queryparams url.Values) (paginatedItems []JFItem, startIndex int) {
 	startIndex, startIndexErr := strconv.Atoi(queryparams.Get("startIndex"))
 	if startIndexErr == nil && startIndex >= 0 && startIndex < len(items) {
 		items = items[startIndex:]
@@ -660,7 +702,7 @@ func (j *Jellyfin) applyItemPaginating(items []JFItem, queryparams url.Values) (
 	if limitErr == nil && limit > 0 && limit < len(items) {
 		items = items[:limit]
 	}
-	return items
+	return items, startIndex
 }
 
 // curl -v http://127.0.0.1:9090/Library/VirtualFolders
@@ -988,6 +1030,7 @@ func (j *Jellyfin) serveImage(w http.ResponseWriter, r *http.Request, filename s
 	http.ServeContent(w, r, fileStat.Name(), fileStat.ModTime(), file)
 }
 
+// trimPrefix removes the type prefix from an item id.
 func trimPrefix(s string) string {
 	if i := strings.Index(s, itemprefix_separator); i != -1 {
 		return s[i+1:]

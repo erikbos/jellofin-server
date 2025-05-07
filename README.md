@@ -9,7 +9,7 @@ This is the Notflix backend server. It does a couple of things:
   - libraries (movies, tvshows, ...)
   - server configuration
   - user data (auth, favorites, seen, ...)
-- Jellyfin API support, a subset of the [Jellyfin API](https://api.jellyfin.org/) is supported, enough to serve contents to [Infuse 8+](https://firecore.com/infuse) clients.
+- Jellyfin API support, a subset of the [Jellyfin API](https://api.jellyfin.org/) is supported, enough to serve contents in DirectMode (no transcoding!) to [Infuse](https://firecore.com/infuse) and [Streamyfin](https://streamyfin.app/).
 - HTTP server for the webapp at /
 
 # Notflix API definition

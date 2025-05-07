@@ -3,7 +3,6 @@ package database
 import (
 	"errors"
 	"log"
-	"strings"
 	"sync"
 	"time"
 
@@ -13,16 +12,16 @@ import (
 // in-memory access play state store, synced to disk by StartSyncerToDB()
 
 type UserDataStorage struct {
-	dbHandle       *sqlx.DB
-	mu             sync.Mutex
-	state          map[UserDataKey]UserData
-	lastDBSyncTime time.Time
+	dbHandle        *sqlx.DB
+	mu              sync.Mutex
+	userDataEntries map[UserDataKey]UserData
+	lastDBSyncTime  time.Time
 }
 
 func NewUserDataStorage(d *sqlx.DB) *UserDataStorage {
 	p := &UserDataStorage{
-		dbHandle: d,
-		state:    make(map[UserDataKey]UserData),
+		dbHandle:        d,
+		userDataEntries: make(map[UserDataKey]UserData),
 	}
 	err := p.LoadStateFromDB()
 	if err != nil {
@@ -31,12 +30,13 @@ func NewUserDataStorage(d *sqlx.DB) *UserDataStorage {
 	return p
 }
 
-// UserDataKey is the key for the play state map.
+// UserDataKey is the key for the user data map.
 type UserDataKey struct {
 	userID string
 	itemID string
 }
 
+// UserData is the structure for storing user play state data.
 type UserData struct {
 	// Offset in seconds
 	Position int
@@ -51,67 +51,69 @@ type UserData struct {
 }
 
 var (
-	// FIXME: should come from jellyfin package
-	itemprefix_separator = "_"
-
 	ErrUserDataNotFound = errors.New("play state not found")
 )
 
-// Update stores the play state details for a user and item.
-func (p *UserDataStorage) Update(userID, itemID string, details UserData) error {
-	if i := strings.Index(itemID, itemprefix_separator); i != -1 {
-		// fixme: stripping prefix should be done by caller
-		itemID = itemID[i+1:]
-	}
-
-	details.Timestamp = time.Now().UTC()
-
-	// log.Printf("UserDataStorageUpdate: userID: %s, itemID: %s, data: %+v\n", userID, itemID, details)
-
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	key := UserDataKey{userID: userID, itemID: itemID}
-	p.state[key] = details
-
-	return nil
-}
-
 // Get the play state details for an item per user.
-func (p *UserDataStorage) Get(userID, itemID string) (details UserData, err error) {
-	if i := strings.Index(itemID, itemprefix_separator); i != -1 {
-		// fixme: stripping prefix should be done by caller
-		itemID = itemID[i+1:]
-	}
-	// log.Printf("sessionGet: userID: %s, itemID: %s\n", userID, itemID)
+func (u *UserDataStorage) Get(userID, itemID string) (details UserData, err error) {
+	// log.Printf("UserDataStorageGet: userID: %s, itemID: %s\n", userID, itemID)
 
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	u.mu.Lock()
+	defer u.mu.Unlock()
 
-	key := UserDataKey{userID: userID, itemID: itemID}
-	if details, ok := p.state[key]; ok {
+	key := makeKey(userID, itemID)
+	if details, ok := u.userDataEntries[key]; ok {
 		return details, nil
 	}
 	err = ErrUserDataNotFound
 	return
 }
 
-// GetFavorites returns all favorite items of a user.
-func (p *UserDataStorage) GetFavorites(userID string) (favoriteItems []string, err error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+// Update stores the play state details for a user and item.
+func (u *UserDataStorage) Update(userID, itemID string, details UserData) (err error) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
 
-	for key, state := range p.state {
+	details.Timestamp = time.Now().UTC()
+
+	// log.Printf("UserDataStorageUpdate: userID: %s, itemID: %s, data: %+v\n", userID, itemID, details)
+
+	key := makeKey(userID, itemID)
+	u.userDataEntries[key] = details
+
+	return
+}
+
+// GetFavorites returns all favorite items of a user.
+func (u *UserDataStorage) GetFavorites(userID string) (favoriteItemIDs []string, err error) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+
+	for key, state := range u.userDataEntries {
 		if key.userID == userID && state.Favorite {
-			favoriteItems = append(favoriteItems, key.itemID)
+			favoriteItemIDs = append(favoriteItemIDs, key.itemID)
+		}
+	}
+	return
+}
+
+// GetResume returns all items of that have not been fully watched.
+func (u *UserDataStorage) GetResume(userID string) (resumeItemIDs []string, err error) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+
+	for key, state := range u.userDataEntries {
+		if key.userID == userID && !state.Played &&
+			state.PlayedPercentage > 0 && state.PlayedPercentage < 100 {
+			resumeItemIDs = append(resumeItemIDs, key.itemID)
 		}
 	}
 	return
 }
 
 // LoadUserDataFromDB loads UserData table into memory.
-func (p *UserDataStorage) LoadStateFromDB() error {
-	if p.dbHandle == nil {
+func (u *UserDataStorage) LoadStateFromDB() error {
+	if u.dbHandle == nil {
 		return errors.New("db connection not available")
 	}
 
@@ -125,17 +127,17 @@ func (p *UserDataStorage) LoadStateFromDB() error {
 		Timestamp        time.Time `db:"timestamp"`
 	}
 
-	err := p.dbHandle.Select(&UserDatas, "SELECT * FROM playstate")
+	err := u.dbHandle.Select(&UserDatas, "SELECT * FROM playstate")
 	if err != nil {
 		return err
 	}
 
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	u.mu.Lock()
+	defer u.mu.Unlock()
 
 	for _, ps := range UserDatas {
-		key := UserDataKey{userID: ps.UserID, itemID: ps.ItemID}
-		p.state[key] = UserData{
+		key := makeKey(ps.UserID, ps.ItemID)
+		u.userDataEntries[key] = UserData{
 			Position:         ps.Position,
 			PlayedPercentage: ps.PlayedPercentage,
 			Played:           ps.Played,
@@ -147,22 +149,22 @@ func (p *UserDataStorage) LoadStateFromDB() error {
 }
 
 // writeUserDataToDB writes all changed entries in UserDataRepo.state to db.
-func (p *UserDataStorage) writeStateToDB() error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+func (u *UserDataStorage) writeStateToDB() error {
+	u.mu.Lock()
+	defer u.mu.Unlock()
 
-	if p.dbHandle == nil {
+	if u.dbHandle == nil {
 		return ErrNoDbHandle
 	}
 
-	tx, err := p.dbHandle.Beginx()
+	tx, err := u.dbHandle.Beginx()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	for key, value := range p.state {
-		if value.Timestamp.After(p.lastDBSyncTime) {
+	for key, value := range u.userDataEntries {
+		if value.Timestamp.After(u.lastDBSyncTime) {
 			// log.Printf("Persisting play state for user %s, item %s, details: %+v\n", key.userID, key.itemID, value)
 			_, err := tx.NamedExec(`INSERT OR REPLACE INTO playstate (userid, itemid, position, playedPercentage, played, favorite, timestamp)
                 VALUES (:userid, :itemid, :position, :playedPercentage, :played, :favorite, :timestamp)`,
@@ -181,22 +183,26 @@ func (p *UserDataStorage) writeStateToDB() error {
 		}
 	}
 
-	p.lastDBSyncTime = time.Now().UTC()
+	u.lastDBSyncTime = time.Now().UTC()
 	return tx.Commit()
 }
 
 // BackgroundJobs loads state and writes changed play state to database every 3 seconds.
-func (p *UserDataStorage) BackgroundJobs() {
-	if p.dbHandle == nil {
+func (u *UserDataStorage) BackgroundJobs() {
+	if u.dbHandle == nil {
 		log.Fatal(ErrNoDbHandle)
 	}
 
-	p.lastDBSyncTime = time.Now().UTC()
+	u.lastDBSyncTime = time.Now().UTC()
 
 	for {
-		if err := p.writeStateToDB(); err != nil {
+		if err := u.writeStateToDB(); err != nil {
 			log.Printf("Error writing play state to db: %s\n", err)
 		}
 		time.Sleep(10 * time.Second)
 	}
+}
+
+func makeKey(userID, itemID string) UserDataKey {
+	return UserDataKey{userID: userID, itemID: itemID}
 }
