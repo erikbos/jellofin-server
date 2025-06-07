@@ -2,6 +2,7 @@ package collection
 
 import (
 	"fmt"
+	"log"
 	"net/url"
 	"slices"
 	"strconv"
@@ -287,6 +288,96 @@ func (cr *CollectionRepo) GetEpisodeByID(episodeID string) (*Collection, *Item, 
 		}
 	}
 	return nil, nil, nil, nil
+}
+
+// Returns the nextup episodes in the collection based upon list of watched episodes
+func (cr *CollectionRepo) NextUp(watchedEpisodeIDs []string) (nextUpEpisodeIDs []string, e error) {
+
+	type ShowEntry struct {
+		show          *Item
+		seasonNumber  int
+		episodeNumber int
+		seasonIdx     int
+		epIdx         int
+	}
+	showMap := make(map[string]ShowEntry)
+
+	for _, episodeID := range watchedEpisodeIDs {
+
+		c, show, season, episode := cr.GetEpisodeByID(episodeID)
+		if c == nil || show == nil || season == nil || episode == nil {
+			continue
+		}
+
+		// NextUp skips everything apart from shows
+		if c.Type != CollectionShows {
+			continue
+		}
+
+		log.Printf("NextUp: %s(%s) %s, %d-%d\n", show.Name, show.ID, episode.ID, episode.SeasonNo, episode.EpisodeNo)
+
+		// Find season and episode index
+		seasonIdx, epIdx := -1, -1
+		// seasonIdx = season.SeasonNo - 1
+		// epIdx = episode.EpisodeNo - 1
+		for si, s := range show.Seasons {
+			if s.ID == season.ID {
+				seasonIdx = si
+				for ei, e := range s.Episodes {
+					if e.ID == episode.ID {
+						epIdx = ei
+						break
+					}
+				}
+				break
+			}
+		}
+		if seasonIdx == -1 || epIdx == -1 {
+			continue
+		}
+
+		entry, exists := showMap[show.ID]
+		// No entries for this show, add it
+		if !exists ||
+			// watched item is in next season
+			season.SeasonNo > entry.seasonNumber ||
+			// watched item is in same season but next episode
+			(season.SeasonNo == entry.seasonNumber && episode.EpisodeNo > entry.episodeNumber) {
+			showMap[show.ID] = ShowEntry{
+				show:          show,
+				seasonNumber:  season.SeasonNo,
+				episodeNumber: episode.EpisodeNo,
+				seasonIdx:     seasonIdx,
+				epIdx:         epIdx,
+			}
+		}
+	}
+
+	log.Printf("NextUp: showMap: %+v\n", showMap)
+
+	nextUpEpisodeIDs = make([]string, 0)
+	for _, entry := range showMap {
+		item := entry.show
+		seasonIdx := entry.seasonIdx
+		epIdx := entry.epIdx
+
+		if seasonIdx < len(item.Seasons) {
+			season := &item.Seasons[seasonIdx]
+			if epIdx+1 < len(season.Episodes) {
+				log.Printf("Adding: in same season %s(%s) %s, %d-%d\n", item.Name, item.ID, season.Episodes[epIdx+1].ID, seasonIdx, epIdx+1)
+				// Try next episode in same season
+				nextUpEpisodeIDs = append(nextUpEpisodeIDs, season.Episodes[epIdx+1].ID)
+				continue
+			}
+			// Try first episode in next season
+			if seasonIdx+1 < len(item.Seasons) && len(item.Seasons[seasonIdx+1].Episodes) > 0 {
+				log.Printf("Adding: in next season %s(%s) %s, %d-%d\n", item.Name, item.ID, item.Seasons[seasonIdx+1].Episodes[0].ID, seasonIdx+1, 0)
+				nextUpEpisodeIDs = append(nextUpEpisodeIDs, item.Seasons[seasonIdx+1].Episodes[0].ID)
+			}
+		}
+	}
+
+	return nextUpEpisodeIDs, nil
 }
 
 // Details returns collection details such as genres, tags, ratings, etc.

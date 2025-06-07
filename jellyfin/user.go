@@ -94,11 +94,32 @@ func makeJFUser(user *database.User) JFUser {
 		EnableAutoLogin:           false,
 		LastLoginDate:             time.Now().UTC(),
 		LastActivityDate:          time.Now().UTC(),
+		Configuration: JFUserConfiguration{
+			GroupedFolders:      []string{},
+			LatestItemsExcludes: []string{},
+			MyMediaExcludes:     []string{},
+			OrderedViews:        []string{},
+			SubtitleMode:        "Default",
+		},
 		Policy: JFUserPolicy{
 			// Needs to be true to allow Streamyfin to Cast
 			IsAdministrator: true,
 			// Checked by Streamyfin to permit download
-			EnableContentDownloading: true,
+			EnableContentDownloading:         true,
+			AccessSchedules:                  []string{},
+			AllowedTags:                      []string{},
+			BlockedChannels:                  []string{},
+			BlockedMediaFolders:              []string{},
+			BlockedTags:                      []string{},
+			BlockUnratedItems:                []string{},
+			EnabledChannels:                  []string{},
+			EnabledDevices:                   []string{},
+			EnabledFolders:                   []string{},
+			EnableContentDeletionFromFolders: []string{},
+			EnableMediaPlayback:              true,
+			EnableRemoteAccess:               true,
+			PasswordResetProviderID:          "Jellyfin.Server.Implementations.Users.DefaultPasswordResetProvider",
+			SyncPlayAccess:                   "CreateAndJoinGroups",
 		},
 	}
 }

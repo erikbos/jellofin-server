@@ -89,8 +89,9 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/Users", middleware(j.usersAllHandler))
 	r.Handle("/Users/Me", middleware(j.usersMeHandler))
 	r.Handle("/Users/Public", http.HandlerFunc(j.usersPublicHandler))
-
 	r.Handle("/Users/{user}", middleware(j.usersHandler))
+
+	// Legacy endpoints for Jellyfin <10.9
 	r.Handle("/Users/{user}/Views", middleware(j.usersViewsHandler))
 	r.Handle("/Users/{user}/GroupingOptions", middleware(j.usersGroupingOptionsHandler))
 	r.Handle("/Users/{user}/Items", middleware(j.usersItemsHandler))
@@ -100,12 +101,15 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/Users/{user}/Items/{item}", middleware(j.usersItemHandler))
 
 	r.Handle("/UserViews", middleware(j.usersViewsHandler))
+	r.Handle("/UserViews/GroupingOptions", middleware(j.usersGroupingOptionsHandler))
+
 	r.Handle("/UserItems/Resume", middleware(j.usersItemsResumeHandler))
 	r.Handle("/UserItems/{item}/Userdata", middleware(j.usersItemUserDataHandler))
 
 	r.Handle("/DisplayPreferences/usersettings", middleware(j.displayPreferencesHandler))
 
 	r.Handle("/Library/VirtualFolders", middleware(j.libraryVirtualFoldersHandler))
+
 	r.Handle("/Shows/NextUp", middleware(j.showsNextUpHandler))
 	r.Handle("/Shows/{show}/Seasons", middleware(j.showsSeasonsHandler))
 	r.Handle("/Shows/{show}/Episodes", middleware(j.showsEpisodesHandler))
@@ -137,15 +141,16 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/Persons", middleware(j.personsHandler))
 
 	// userdata
-	r.Handle("/UserPlayedItems/{item}", middleware(j.usersPlayedItemsPostHandler)).Methods("POST")
-	r.Handle("/UserPlayedItems/{item}", middleware(j.usersPlayedItemsDeleteHandler)).Methods("DELETE")
-	r.Handle("/Users/{user}/PlayedItems/{item}", middleware(j.usersPlayedItemsPostHandler)).Methods("POST")
-	r.Handle("/Users/{user}/PlayedItems/{item}", middleware(j.usersPlayedItemsDeleteHandler)).Methods("DELETE")
 	r.Handle("/Sessions/Playing", middleware(j.sessionsPlayingHandler)).Methods("POST")
 	r.Handle("/Sessions/Playing/Progress", middleware(j.sessionsPlayingProgressHandler)).Methods("POST")
 	r.Handle("/Sessions/Playing/Stopped", middleware(j.sessionsPlayingStoppedHandler)).Methods("POST")
+	r.Handle("/UserPlayedItems/{item}", middleware(j.usersPlayedItemsPostHandler)).Methods("POST")
+	r.Handle("/UserPlayedItems/{item}", middleware(j.usersPlayedItemsDeleteHandler)).Methods("DELETE")
 	r.Handle("/UserFavoriteItems/{item}", middleware(j.userFavoriteItemsPostHandler)).Methods("POST")
 	r.Handle("/UserFavoriteItems/{item}", middleware(j.userFavoriteItemsDeleteHandler)).Methods("DELETE")
+	// userdata legacy endpoints for Jellyfin <10.9
+	r.Handle("/Users/{user}/PlayedItems/{item}", middleware(j.usersPlayedItemsPostHandler)).Methods("POST")
+	r.Handle("/Users/{user}/PlayedItems/{item}", middleware(j.usersPlayedItemsDeleteHandler)).Methods("DELETE")
 
 	// sessions
 	r.Handle("/Sessions", middleware(j.sessionsHandler))
@@ -175,7 +180,6 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/Localization/Cultures", middleware(j.localizationCulturesHandler))
 	r.Handle("/Localization/Options", middleware(j.localizationOptionsHandler))
 	r.Handle("/Localization/ParentalRatings", middleware(j.localizationParentalRatingsHandler))
-
 }
 
 // lowercaseQueryParamNames lower cases the firstcharacter of each query parametername

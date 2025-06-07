@@ -72,7 +72,7 @@ func (j *Jellyfin) systemInfoPublicHandler(w http.ResponseWriter, r *http.Reques
 //
 // systemPingHandler returns static string
 func (j *Jellyfin) systemPingHandler(w http.ResponseWriter, r *http.Request) {
-	serveJSON("Pong", w)
+	serveJSON("Jellyfin Server", w)
 }
 
 // /Plugins

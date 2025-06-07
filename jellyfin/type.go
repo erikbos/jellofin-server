@@ -79,7 +79,7 @@ type JFUserConfiguration struct {
 	SubtitleLanguagePreference string   `json:"SubtitleLanguagePreference"`
 	DisplayMissingEpisodes     bool     `json:"DisplayMissingEpisodes"`
 	GroupedFolders             []string `json:"GroupedFolders"`
-	// SubtitleMode               string   `json:"SubtitleMode"`
+	SubtitleMode               string   `json:"SubtitleMode"`
 	DisplayCollectionsView     bool     `json:"DisplayCollectionsView"`
 	EnableLocalPassword        bool     `json:"EnableLocalPassword"`
 	OrderedViews               []string `json:"OrderedViews"`
@@ -285,6 +285,7 @@ type JFItem struct {
 	SeasonName               string             `json:"SeasonName,omitempty"`
 	IndexNumber              int                `json:"IndexNumber,omitempty"`
 	ParentIndexNumber        int                `json:"ParentIndexNumber,omitempty"`
+	ParentLogoItemId         string             `json:"ParentLogoItemId,omitempty"`
 	RecursiveItemCount       int                `json:"RecursiveItemCount,omitempty"`
 	HasSubtitles             bool               `json:"HasSubtitles,omitempty"`
 }

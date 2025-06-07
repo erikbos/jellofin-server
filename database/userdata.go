@@ -3,6 +3,7 @@ package database
 import (
 	"errors"
 	"log"
+	"sort"
 	"sync"
 	"time"
 
@@ -97,16 +98,38 @@ func (u *UserDataStorage) GetFavorites(userID string) (favoriteItemIDs []string,
 	return
 }
 
-// GetResume returns all items of that have not been fully watched.
-func (u *UserDataStorage) GetResume(userID string) (resumeItemIDs []string, err error) {
+// GetRecentlyWatched returns up to 10 most recently watched items that have not been fully watched.
+func (u *UserDataStorage) GetRecentlyWatched(userID string, includeFullyWatched bool) (resumeItemIDs []string, err error) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
+	type resumeItem struct {
+		itemID    string
+		timestamp time.Time
+	}
+	var resumeItems []resumeItem
+
 	for key, state := range u.userDataEntries {
-		if key.userID == userID && !state.Played &&
-			state.PlayedPercentage > 0 && state.PlayedPercentage < 100 {
-			resumeItemIDs = append(resumeItemIDs, key.itemID)
+		if key.userID == userID {
+			// add, if partial watched or fully watched.
+			if (!state.Played && state.PlayedPercentage > 0 && state.PlayedPercentage < 100) || includeFullyWatched {
+				i := resumeItem{
+					itemID:    key.itemID,
+					timestamp: state.Timestamp,
+				}
+				resumeItems = append(resumeItems, i)
+			}
 		}
+	}
+
+	// Sort by timestamp descending
+	sort.Slice(resumeItems, func(i, j int) bool {
+		return resumeItems[i].timestamp.After(resumeItems[j].timestamp)
+	})
+
+	// No need to list all unfinished items of the past, limit to 10 most recent items.
+	for i := range min(len(resumeItems), 10) {
+		resumeItemIDs = append(resumeItemIDs, resumeItems[i].itemID)
 	}
 	return
 }

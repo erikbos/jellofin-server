@@ -50,8 +50,8 @@ type (
 		Get(userID, itemID string) (details UserData, err error)
 		// Get all favorite items of a user.
 		GetFavorites(userID string) (favoriteItemIDs []string, err error)
-		// Get all items of that have not been fully watched.
-		GetResume(userID string) (resumeItemIDs []string, err error)
+		// GetRecentlyWatched returns up to 10 most recently watched items that have not been fully watched.
+		GetRecentlyWatched(userID string, includeFullyWatched bool) (resumeItemIDs []string, err error)
 		// Update stores the play state details for a user and item.
 		Update(userID, itemID string, details UserData) error
 		// BackgroundJobs syncs changed play state to periodically to database.

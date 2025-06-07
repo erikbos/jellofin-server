@@ -44,8 +44,6 @@ const (
 )
 
 func (j *Jellyfin) makeJFItemRoot() (response JFItem, e error) {
-	rootID := itemprefix_root + collectionRootID
-
 	childCount := len(j.collections.GetCollections())
 	// we add the favorites and playlist collections to the child count
 	childCount += 2
@@ -55,8 +53,8 @@ func (j *Jellyfin) makeJFItemRoot() (response JFItem, e error) {
 	response = JFItem{
 		Name:                     "Media Folders",
 		ServerID:                 serverID,
-		ID:                       rootID,
-		Etag:                     idhash.IdHash(rootID),
+		ID:                       itemprefix_root + collectionRootID,
+		Etag:                     idhash.IdHash(collectionRootID),
 		DateCreated:              time.Now().UTC(),
 		Type:                     "UserRootFolder",
 		IsFolder:                 true,
@@ -90,23 +88,22 @@ func (j *Jellyfin) makeJFItemRoot() (response JFItem, e error) {
 	return
 }
 
-func (j *Jellyfin) makeJItemCollection(itemid string) (response JFItem, e error) {
-	collectionid := strings.TrimPrefix(itemid, itemprefix_collection)
-	c := j.collections.GetCollection(collectionid)
+func (j *Jellyfin) makeJItemCollection(collectionID string) (response JFItem, e error) {
+	// collectionid := strings.TrimPrefix(itemid, itemprefix_collection)
+	// fixme: after collectionID is a real ID and not an int, this should be removed
+	c := j.collections.GetCollection(strings.TrimPrefix(collectionID, itemprefix_collection))
 	if c == nil {
 		e = errors.New("collection not found")
 		return
 	}
 	collectionGenres := c.Details().Genres
 
-	itemID := itemprefix_collection + collectionid
-	parentID := itemprefix_root + collectionRootID
-
 	response = JFItem{
 		Name:                     c.Name_,
 		ServerID:                 serverID,
-		ID:                       itemID,
-		Etag:                     idhash.IdHash(itemID),
+		ID:                       itemprefix_collection + collectionID,
+		ParentID:                 itemprefix_root + collectionRootID,
+		Etag:                     idhash.IdHash(collectionID),
 		DateCreated:              time.Now().UTC(),
 		PremiereDate:             time.Now().UTC(),
 		Type:                     "CollectionFolder",
@@ -122,7 +119,6 @@ func (j *Jellyfin) makeJItemCollection(itemid string) (response JFItem, e error)
 		Path:                     "/collection",
 		LockData:                 false,
 		MediaType:                "Unknown",
-		ParentID:                 parentID,
 		CanDelete:                false,
 		CanDownload:              true,
 		SpecialFeatureCount:      0,
@@ -146,20 +142,16 @@ func (j *Jellyfin) makeJItemCollection(itemid string) (response JFItem, e error)
 }
 
 func (j *Jellyfin) makeJFItemCollectionFavorites(userid string) (response JFItem, e error) {
-	favoriteIDs, err := j.db.UserDataRepo.GetFavorites(userid)
-
-	// In case of no favorites, we still want to return a collection item
 	var itemCount int
-	if err == nil {
+	if favoriteIDs, err := j.db.UserDataRepo.GetFavorites(userid); err == nil {
 		itemCount = len(favoriteIDs)
 	}
-	id := itemprefix_collection_favorites + favoritesCollectionID
 
 	response = JFItem{
 		Name:                     "Favorites",
 		ServerID:                 serverID,
-		ID:                       id,
-		Etag:                     idhash.IdHash(id),
+		ID:                       itemprefix_collection_favorites + favoritesCollectionID,
+		Etag:                     idhash.IdHash(favoritesCollectionID),
 		DateCreated:              time.Now().UTC(),
 		PremiereDate:             time.Now().UTC(),
 		CollectionType:           CollectionTypePlaylists,
@@ -198,13 +190,12 @@ func (j *Jellyfin) makeJFItemCollectionPlaylist(userid string) (response JFItem,
 	if err == nil {
 		itemCount = len(playlistIDs)
 	}
-	id := itemprefix_collection_playlist + playlistCollectionID
 
 	response = JFItem{
 		Name:                     "Playlists",
 		ServerID:                 serverID,
-		ID:                       id,
-		Etag:                     idhash.IdHash(id),
+		ID:                       itemprefix_collection_playlist + playlistCollectionID,
+		Etag:                     idhash.IdHash(playlistCollectionID),
 		DateCreated:              time.Now().UTC(),
 		PremiereDate:             time.Now().UTC(),
 		CollectionType:           CollectionTypePlaylists,
@@ -422,6 +413,7 @@ func (j *Jellyfin) makeJFItemSeason(userID, seasonID string) (response JFItem, e
 		ImageTags: &JFImageTags{
 			Primary: "season",
 		},
+		ParentLogoItemId: show.ID,
 	}
 	// Regular season? (>0)
 	if season.SeasonNo != 0 {
@@ -497,12 +489,12 @@ func (j *Jellyfin) makeJFItemEpisode(userID, episodeID string) (response JFItem,
 
 	response = JFItem{
 		Type:         "Episode",
-		ID:           episodeID,
+		ID:           itemprefix_episode + episodeID,
 		Etag:         idhash.IdHash(episodeID),
 		ServerID:     serverID,
 		SeriesName:   show.Name,
-		SeriesID:     idhash.IdHash(show.Name),
-		SeasonID:     season.ID,
+		SeriesID:     show.ID,
+		SeasonID:     itemprefix_season + season.ID,
 		SeasonName:   makeSeasonName(season.SeasonNo),
 		LocationType: "FileSystem",
 		Path:         "episode.mp4",
@@ -519,6 +511,7 @@ func (j *Jellyfin) makeJFItemEpisode(userID, episodeID string) (response JFItem,
 		ImageTags: &JFImageTags{
 			Primary: "episode",
 		},
+		ParentLogoItemId: show.ID,
 	}
 
 	// Get a bunch of metadata from show-level nfo
@@ -566,7 +559,7 @@ func (j *Jellyfin) makeJFItemFavoritesOverview(userID string) (items []JFItem, e
 	for _, itemID := range favoriteIDs {
 		c, i := j.collections.GetItemByID(itemID)
 		if i != nil {
-			item := j.makeJFItem(userID, i, genCollectionID(c.ID), c.Type, false)
+			item := j.makeJFItem(userID, i, CollectionIDToString(c.ID), c.Type, false)
 			items = append(items, item)
 		}
 	}
@@ -597,15 +590,14 @@ func (j *Jellyfin) makeJFItemPlaylist(userID, playlistID string) (response JFIte
 		return
 	}
 
-	id := itemprefix_playlist + playlist.ID
 	response = JFItem{
 		Type:                     "Playlist",
-		ID:                       id,
+		ID:                       itemprefix_playlist + playlist.ID,
 		ServerID:                 serverID,
 		ParentID:                 "1071671e7bffa0532e930debee501d2e", // fixme: this should be ID generated by makeJFItemCollectionPlaylist()
 		Name:                     playlist.Name,
 		SortName:                 playlist.Name,
-		Etag:                     idhash.IdHash(id),
+		Etag:                     idhash.IdHash(playlist.ID),
 		DateCreated:              time.Now().UTC(),
 		CanDelete:                true,
 		CanDownload:              true,
@@ -912,6 +904,6 @@ func (j *Jellyfin) makeMediaSource(filename string, n *collection.Nfo) (mediasou
 	return []JFMediaSources{mediasource}
 }
 
-func genCollectionID(id int) string {
-	return itemprefix_collection + fmt.Sprintf("%d", id)
+func CollectionIDToString(id int) string {
+	return fmt.Sprintf("%d", id)
 }
