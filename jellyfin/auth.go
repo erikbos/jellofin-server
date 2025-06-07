@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -106,28 +107,31 @@ func (j *Jellyfin) parseAuthHeader(r *http.Request) (*authSchemeValues, error) {
 
 	// MediaBrowser Client="Jellyfin%20Media%20Player", Device="mbp", DeviceId="0dabe147-5d08-4e70-adde-d6b778b725aa", Version="1.11.1", Token="aea78abca5744378b2a2badf710e7307"
 	// MediaBrowser Device="Mac", DeviceId="0dabe147-5d08-4e70-adde-d6b778b725aa", Token="826c2aa3596b47f2a386dd2811248649", Client="Infuse-Direct", Version="8.0.9"
+	// MediaBrowser Client="Jellyflix", Device="MacBookPro18,1", DeviceId="11C750BF-4CE0-54C1-89B8-075C36A97A17", Version="1.0.0", Token="ba644327ee654ef5ac7116367da81fe3"]
+
+	kvMatch := `(\w+)="(.*?)"`
+	re := regexp.MustCompile(kvMatch)
+	matches := re.FindAllStringSubmatch(authHeader, -1)
 
 	var result authSchemeValues
-	authHeader = strings.TrimPrefix(authHeader, "MediaBrowser ")
-	for part := range strings.SplitSeq(authHeader, ",") {
-		kv := strings.SplitN(strings.TrimSpace(part), "=", 2)
-		if len(kv) == 2 {
-			v := strings.Trim(kv[1], "\"")
-			switch kv[0] {
-			case "Device":
-				result.device = v
-			case "DeviceId":
-				result.deviceID = v
-			case "Token":
-				result.token = v
+	for _, match := range matches {
+		if len(match) == 3 {
+			switch match[1] {
 			case "Client":
-				result.client = v
+				result.client = match[2]
+			case "Device":
+				result.device = match[2]
+			case "DeviceId":
+				result.deviceID = match[2]
 			case "Version":
-				result.version = v
+				result.version = match[2]
+			case "Token":
+				result.token = match[2]
 			}
-		} else {
-			return nil, errEmbyAuthHeader
 		}
+	}
+	if result.client == "" || result.device == "" || result.deviceID == "" {
+		return nil, errEmbyAuthHeader
 	}
 	return &result, nil
 }
