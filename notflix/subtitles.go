@@ -12,7 +12,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/miquels/notflix-server/imageresize"
+	"github.com/erikbos/jellofin/imageresize"
 )
 
 var utf8BOM = "\xef\xbb\xbf"

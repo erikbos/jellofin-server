@@ -1,4 +1,4 @@
-module github.com/miquels/notflix-server
+module github.com/erikbos/jellofin
 
 go 1.24
 

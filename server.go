@@ -13,11 +13,11 @@ import (
 	"github.com/XS4ALL/curlyconf-go"
 	"github.com/gorilla/mux"
 
-	"github.com/miquels/notflix-server/collection"
-	"github.com/miquels/notflix-server/database"
-	"github.com/miquels/notflix-server/imageresize"
-	"github.com/miquels/notflix-server/jellyfin"
-	"github.com/miquels/notflix-server/notflix"
+	"github.com/erikbos/jellofin/collection"
+	"github.com/erikbos/jellofin/database"
+	"github.com/erikbos/jellofin/imageresize"
+	"github.com/erikbos/jellofin/jellyfin"
+	"github.com/erikbos/jellofin/notflix"
 )
 
 var configFile = "notflix-server.cfg"

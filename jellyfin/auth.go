@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/miquels/notflix-server/database"
+	"github.com/erikbos/jellofin/database"
 )
 
 // authSchemeValues holds parsed emby authorization scheme values

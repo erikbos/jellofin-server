@@ -9,7 +9,7 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/miquels/notflix-server/database"
+	"github.com/erikbos/jellofin/database"
 )
 
 const (

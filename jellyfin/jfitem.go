@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/miquels/notflix-server/collection"
-	"github.com/miquels/notflix-server/database"
-	"github.com/miquels/notflix-server/idhash"
+	"github.com/erikbos/jellofin/collection"
+	"github.com/erikbos/jellofin/database"
+	"github.com/erikbos/jellofin/idhash"
 )
 
 const (

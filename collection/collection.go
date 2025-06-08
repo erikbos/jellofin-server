@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/miquels/notflix-server/database"
+	"github.com/erikbos/jellofin/database"
 )
 
 type Options struct {

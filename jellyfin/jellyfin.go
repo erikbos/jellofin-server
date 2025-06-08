@@ -8,9 +8,9 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 
-	"github.com/miquels/notflix-server/collection"
-	"github.com/miquels/notflix-server/database"
-	"github.com/miquels/notflix-server/imageresize"
+	"github.com/erikbos/jellofin/collection"
+	"github.com/erikbos/jellofin/database"
+	"github.com/erikbos/jellofin/imageresize"
 )
 
 // API definitions: https://swagger.emby.media/ & https://api.jellyfin.org/
