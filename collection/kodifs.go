@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erikbos/jellofin/database"
-	"github.com/erikbos/jellofin/idhash"
+	"github.com/erikbos/jellofin-server/database"
+	"github.com/erikbos/jellofin-server/idhash"
 )
 
 var isVideo = regexp.MustCompile(`^(.*)\.(divx|mov|mp4|MP4|m4u|m4v)$`)

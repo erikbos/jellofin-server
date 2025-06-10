@@ -6,7 +6,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 
-	"github.com/erikbos/jellofin/idhash"
+	"github.com/erikbos/jellofin-server/idhash"
 )
 
 type PlaylistStorage struct {

@@ -15,9 +15,9 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/erikbos/jellofin/collection"
-	"github.com/erikbos/jellofin/database"
-	"github.com/erikbos/jellofin/idhash"
+	"github.com/erikbos/jellofin-server/collection"
+	"github.com/erikbos/jellofin-server/database"
+	"github.com/erikbos/jellofin-server/idhash"
 )
 
 type contextKey string

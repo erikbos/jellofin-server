@@ -6,7 +6,7 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/erikbos/jellofin/database"
+	"github.com/erikbos/jellofin-server/database"
 )
 
 const (

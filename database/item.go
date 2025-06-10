@@ -8,7 +8,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/erikbos/jellofin/idhash"
+	"github.com/erikbos/jellofin-server/idhash"
 )
 
 type ItemStorage struct {

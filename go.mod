@@ -1,4 +1,4 @@
-module github.com/erikbos/jellofin
+module github.com/erikbos/jellofin-server
 
 go 1.24
 

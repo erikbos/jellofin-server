@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/erikbos/jellofin/database"
+	"github.com/erikbos/jellofin-server/database"
 )
 
 type Options struct {

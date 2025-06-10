@@ -13,14 +13,14 @@ import (
 	"github.com/XS4ALL/curlyconf-go"
 	"github.com/gorilla/mux"
 
-	"github.com/erikbos/jellofin/collection"
-	"github.com/erikbos/jellofin/database"
-	"github.com/erikbos/jellofin/imageresize"
-	"github.com/erikbos/jellofin/jellyfin"
-	"github.com/erikbos/jellofin/notflix"
+	"github.com/erikbos/jellofin-server/collection"
+	"github.com/erikbos/jellofin-server/database"
+	"github.com/erikbos/jellofin-server/imageresize"
+	"github.com/erikbos/jellofin-server/jellyfin"
+	"github.com/erikbos/jellofin-server/notflix"
 )
 
-var configFile = "notflix-server.cfg"
+var configFile = "jellofin-server.cfg"
 
 type cfgMain struct {
 	Listen struct {

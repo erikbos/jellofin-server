@@ -11,9 +11,9 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 
-	"github.com/erikbos/jellofin/collection"
-	"github.com/erikbos/jellofin/database"
-	"github.com/erikbos/jellofin/imageresize"
+	"github.com/erikbos/jellofin-server/collection"
+	"github.com/erikbos/jellofin-server/database"
+	"github.com/erikbos/jellofin-server/imageresize"
 )
 
 type Options struct {

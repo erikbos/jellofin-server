@@ -12,7 +12,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/erikbos/jellofin/imageresize"
+	"github.com/erikbos/jellofin-server/imageresize"
 )
 
 var utf8BOM = "\xef\xbb\xbf"

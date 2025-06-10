@@ -6,7 +6,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/erikbos/jellofin/idhash"
+	"github.com/erikbos/jellofin-server/idhash"
 )
 
 type UserStorage struct {

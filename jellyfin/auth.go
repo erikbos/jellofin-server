@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erikbos/jellofin/database"
+	"github.com/erikbos/jellofin-server/database"
 )
 
 // authSchemeValues holds parsed emby authorization scheme values
