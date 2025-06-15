@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"io"
@@ -9,6 +10,8 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"sync"
+	"time"
 
 	"github.com/XS4ALL/curlyconf-go"
 	"github.com/gorilla/mux"
@@ -23,12 +26,7 @@ import (
 var configFile = "jellofin-server.cfg"
 
 type cfgMain struct {
-	Listen struct {
-		Port    int
-		Tls     bool
-		TlsCert string
-		TlsKey  string
-	}
+	Listen      cfgListen
 	Appdir      string
 	Cachedir    string
 	Dbdir       string
@@ -44,17 +42,17 @@ type cfgMain struct {
 	}
 }
 
-var resizer *imageresize.Resizer
+type cfgListen struct {
+	Port    int
+	Tls     bool
+	TlsCert string
+	TlsKey  string
+}
 
 func main() {
 	log.Printf("Parsing config file")
 	config := cfgMain{
-		Listen: struct {
-			Port    int
-			Tls     bool
-			TlsCert string
-			TlsKey  string
-		}{
+		Listen: cfgListen{
 			Port: 8080,
 		},
 	}
@@ -76,7 +74,7 @@ func main() {
 	log.Printf("setting logfile")
 	switch *logfile {
 	case "syslog":
-		logw, err := syslog.New(syslog.LOG_NOTICE, "notflix")
+		logw, err := syslog.New(syslog.LOG_NOTICE, "jellofin")
 		if err != nil {
 			log.Fatalf("error opening syslog: %v", err)
 		}
@@ -112,7 +110,7 @@ func main() {
 		Db:          database,
 	})
 
-	resizer = imageresize.New(imageresize.Options{
+	resizer := imageresize.New(imageresize.Options{
 		Cachedir: config.Cachedir,
 	})
 	// XXX FIXME
@@ -152,12 +150,77 @@ func main() {
 	go collection.Background()
 
 	addr := fmt.Sprintf(":%d", config.Listen.Port)
+
 	if config.Listen.TlsCert != "" && config.Listen.TlsKey != "" {
+		kpr, err := NewKeypairReloader(config.Listen.TlsCert, config.Listen.TlsKey)
+		if err != nil {
+			log.Fatalf("error loading keypair: %v", err)
+		}
+
+		srv := &http.Server{
+			Addr:    addr,
+			Handler: server,
+			TLSConfig: &tls.Config{
+				MinVersion:     tls.VersionTLS13,
+				GetCertificate: kpr.GetCertificateFunc(),
+			},
+		}
 		log.Printf("Serving HTTPS on %s", addr)
-		log.Fatal(http.ListenAndServeTLS(addr, config.Listen.TlsCert,
-			config.Listen.TlsKey, server))
+		srv.ListenAndServeTLS("", "")
 	} else {
 		log.Printf("Serving HTTP on %s", addr)
 		log.Fatal(http.ListenAndServe(addr, server))
 	}
+}
+
+type keypairReloader struct {
+	certMu   sync.RWMutex
+	cert     *tls.Certificate
+	certPath string
+	keyPath  string
+}
+
+// NewKeypairReloader creates a new keypair reloader that will reload the TLS certificate
+// and key from the specified paths every 15 seconds. If the certificate cannot be loaded,
+// it will log an error and keep the old certificate in use.
+func NewKeypairReloader(certPath, keyPath string) (*keypairReloader, error) {
+	result := &keypairReloader{
+		certPath: certPath,
+		keyPath:  keyPath,
+	}
+	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
+	if err != nil {
+		return nil, err
+	}
+	result.cert = &cert
+
+	go func() {
+		for {
+			// log.Printf("Attemping reloading TLS certificate and key from %q and %q", certPath, keyPath)
+			time.Sleep(15 * time.Second)
+			if err := result.maybeReload(); err != nil {
+				log.Printf("Keeping old TLS certificate because the new one could not be loaded: %v", err)
+			}
+		}
+	}()
+	return result, nil
+}
+
+func (kpr *keypairReloader) GetCertificateFunc() func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+	return func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		kpr.certMu.RLock()
+		defer kpr.certMu.RUnlock()
+		return kpr.cert, nil
+	}
+}
+
+func (kpr *keypairReloader) maybeReload() error {
+	newCert, err := tls.LoadX509KeyPair(kpr.certPath, kpr.keyPath)
+	if err != nil {
+		return err
+	}
+	kpr.certMu.Lock()
+	defer kpr.certMu.Unlock()
+	kpr.cert = &newCert
+	return nil
 }
