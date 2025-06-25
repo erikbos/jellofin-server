@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"crypto/rand"
 	"errors"
 	"log"
@@ -43,7 +44,7 @@ type AccessToken struct {
 }
 
 // Generate generates new token
-func (s *AccessTokenStorage) Generate(userID string) (string, error) {
+func (s *AccessTokenStorage) Generate(ctx context.Context, userID string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -65,7 +66,7 @@ func (s *AccessTokenStorage) Generate(userID string) (string, error) {
 }
 
 // Get accesstoken details by tokenid
-func (s *AccessTokenStorage) Get(token string) (*AccessToken, error) {
+func (s *AccessTokenStorage) Get(ctx context.Context, token string) (*AccessToken, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

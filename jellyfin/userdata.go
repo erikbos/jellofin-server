@@ -1,6 +1,7 @@
 package jellyfin
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -32,7 +33,7 @@ func (j *Jellyfin) usersPlayedItemsPostHandler(w http.ResponseWriter, r *http.Re
 	vars := mux.Vars(r)
 	itemID := vars["item"]
 
-	if err := j.userDataUpdate(accessToken.UserID, itemID, 0, true); err != nil {
+	if err := j.userDataUpdate(r.Context(), accessToken.UserID, itemID, 0, true); err != nil {
 		http.Error(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
 		return
 	}
@@ -52,7 +53,7 @@ func (j *Jellyfin) usersPlayedItemsDeleteHandler(w http.ResponseWriter, r *http.
 	vars := mux.Vars(r)
 	itemID := vars["item"]
 
-	if err := j.userDataUpdate(accessToken.UserID, itemID, 0, false); err != nil {
+	if err := j.userDataUpdate(r.Context(), accessToken.UserID, itemID, 0, false); err != nil {
 		http.Error(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
 		return
 	}
@@ -73,7 +74,7 @@ func (j *Jellyfin) sessionsPlayingHandler(w http.ResponseWriter, r *http.Request
 	}
 	// log.Printf("\nsessionsPlayingHandler UserID: %s, ItemId: %s, Progress: %d seconds\n\n",
 	// 	accessToken.UserID, request.ItemId, request.PositionTicks/TicsToSeconds)
-	if err := j.userDataUpdate(accessToken.UserID, request.ItemId, request.PositionTicks, false); err != nil {
+	if err := j.userDataUpdate(r.Context(), accessToken.UserID, request.ItemId, request.PositionTicks, false); err != nil {
 		http.Error(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
 		return
 	}
@@ -94,7 +95,7 @@ func (j *Jellyfin) sessionsPlayingProgressHandler(w http.ResponseWriter, r *http
 	}
 	// log.Printf("\nsessionsPlayingProgressHandler UserID: %s, ItemId: %s, Progress: %d seconds\n\n",
 	// 	accessToken.UserID, request.ItemId, request.PositionTicks/TicsToSeconds)
-	if err := j.userDataUpdate(accessToken.UserID, request.ItemId, request.PositionTicks, false); err != nil {
+	if err := j.userDataUpdate(r.Context(), accessToken.UserID, request.ItemId, request.PositionTicks, false); err != nil {
 		http.Error(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
 		return
 	}
@@ -115,14 +116,14 @@ func (j *Jellyfin) sessionsPlayingStoppedHandler(w http.ResponseWriter, r *http.
 	}
 	// log.Printf("\nsessionsPlayingStoppedHandler UserID: %s, ItemId: %s, Progress: %d seconds, canSeek: %t\n\n",
 	// 	accessToken.UserID, request.ItemId, request.PositionTicks/TicsToSeconds, request.CanSeek)
-	if err := j.userDataUpdate(accessToken.UserID, request.ItemId, request.PositionTicks, false); err != nil {
+	if err := j.userDataUpdate(r.Context(), accessToken.UserID, request.ItemId, request.PositionTicks, false); err != nil {
 		http.Error(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (j *Jellyfin) userDataUpdate(userID, itemID string, positionTicks int, markAsWatched bool) (err error) {
+func (j *Jellyfin) userDataUpdate(ctx context.Context, userID, itemID string, positionTicks int, markAsWatched bool) (err error) {
 	// log.Printf("playStateUpdate userID: %s, itemID: %s, Progress: %d sec\n",
 	// 	userID, itemID, positionTicks/TicsToSeconds)
 
@@ -159,7 +160,7 @@ func (j *Jellyfin) userDataUpdate(userID, itemID string, positionTicks int, mark
 		duration = 60 * 60
 	}
 
-	playstate, err := j.db.UserDataRepo.Get(userID, trimPrefix(itemID))
+	playstate, err := j.db.UserDataRepo.Get(ctx, userID, trimPrefix(itemID))
 	if err != nil {
 		playstate = database.UserData{
 			Timestamp: time.Now().UTC(),
@@ -180,7 +181,7 @@ func (j *Jellyfin) userDataUpdate(userID, itemID string, positionTicks int, mark
 		playstate.Played = false
 	}
 
-	return j.db.UserDataRepo.Update(userID, trimPrefix(itemID), playstate)
+	return j.db.UserDataRepo.Update(ctx, userID, trimPrefix(itemID), playstate)
 }
 
 // POST /UserFavoriteItems/{item}
@@ -195,14 +196,14 @@ func (j *Jellyfin) userFavoriteItemsPostHandler(w http.ResponseWriter, r *http.R
 	vars := mux.Vars(r)
 	itemID := vars["item"]
 
-	playstate, err := j.db.UserDataRepo.Get(accessToken.UserID, trimPrefix(itemID))
+	playstate, err := j.db.UserDataRepo.Get(r.Context(), accessToken.UserID, trimPrefix(itemID))
 	if err != nil {
 		playstate = database.UserData{}
 	}
 
 	playstate.Favorite = true
 
-	if err := j.db.UserDataRepo.Update(accessToken.UserID, itemID, playstate); err != nil {
+	if err := j.db.UserDataRepo.Update(r.Context(), accessToken.UserID, itemID, playstate); err != nil {
 		http.Error(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
 		return
 	}
@@ -222,14 +223,14 @@ func (j *Jellyfin) userFavoriteItemsDeleteHandler(w http.ResponseWriter, r *http
 	vars := mux.Vars(r)
 	itemID := vars["item"]
 
-	playstate, err := j.db.UserDataRepo.Get(accessToken.UserID, trimPrefix(itemID))
+	playstate, err := j.db.UserDataRepo.Get(r.Context(), accessToken.UserID, trimPrefix(itemID))
 	if err != nil {
 		playstate = database.UserData{}
 	}
 
 	playstate.Favorite = false
 
-	if err := j.db.UserDataRepo.Update(accessToken.UserID, itemID, playstate); err != nil {
+	if err := j.db.UserDataRepo.Update(r.Context(), accessToken.UserID, itemID, playstate); err != nil {
 		http.Error(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
 		return
 	}

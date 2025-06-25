@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"errors"
 	"log"
 	"sort"
@@ -56,7 +57,7 @@ var (
 )
 
 // Get the play state details for an item per user.
-func (u *UserDataStorage) Get(userID, itemID string) (details UserData, err error) {
+func (u *UserDataStorage) Get(ctx context.Context, userID, itemID string) (details UserData, err error) {
 	// log.Printf("UserDataStorageGet: userID: %s, itemID: %s\n", userID, itemID)
 
 	u.mu.Lock()
@@ -71,7 +72,7 @@ func (u *UserDataStorage) Get(userID, itemID string) (details UserData, err erro
 }
 
 // Update stores the play state details for a user and item.
-func (u *UserDataStorage) Update(userID, itemID string, details UserData) (err error) {
+func (u *UserDataStorage) Update(ctx context.Context, userID, itemID string, details UserData) (err error) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
@@ -86,7 +87,7 @@ func (u *UserDataStorage) Update(userID, itemID string, details UserData) (err e
 }
 
 // GetFavorites returns all favorite items of a user.
-func (u *UserDataStorage) GetFavorites(userID string) (favoriteItemIDs []string, err error) {
+func (u *UserDataStorage) GetFavorites(ctx context.Context, userID string) (favoriteItemIDs []string, err error) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
@@ -99,7 +100,7 @@ func (u *UserDataStorage) GetFavorites(userID string) (favoriteItemIDs []string,
 }
 
 // GetRecentlyWatched returns up to 10 most recently watched items that have not been fully watched.
-func (u *UserDataStorage) GetRecentlyWatched(userID string, includeFullyWatched bool) (resumeItemIDs []string, err error) {
+func (u *UserDataStorage) GetRecentlyWatched(ctx context.Context, userID string, includeFullyWatched bool) (resumeItemIDs []string, err error) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 

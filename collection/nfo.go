@@ -3,7 +3,6 @@ package collection
 
 import (
 	"encoding/xml"
-	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -81,13 +80,13 @@ type AudioDetails struct {
 	Language string `xml:"language,omitempty"`
 }
 
-func NfoDecode(r io.ReadSeeker) (nfo *Nfo) {
+func NfoDecode(r io.ReadSeeker) (*Nfo, error) {
 	// this is a really dirty hack to partially support <xbmcmultiepisode>
 	// for now. It just skips the tag and as a result parses just
 	// the first episode in the multiepisode list.
 	buf, err := io.ReadAll(r)
 	if err != nil || len(buf) < 18 {
-		return nil
+		return nil, err
 	}
 	if string(buf[:18]) == "<xbmcmultiepisode>" {
 		buf = buf[18:]
@@ -105,8 +104,8 @@ func NfoDecode(r io.ReadSeeker) (nfo *Nfo) {
 	err = d.Decode(data)
 	// fmt.Printf("data: %+v\nxmlData: %s\n", data, string(xmlData))
 	if err != nil {
-		fmt.Printf("Error unmarshalling from XML %v, %v\n", err, nfo)
-		return
+		// fmt.Printf("Error unmarshalling from XML %v, %v\n", err, nfo)
+		return nil, err
 	}
 
 	// Fix up genre.. bleh.
@@ -139,8 +138,7 @@ func NfoDecode(r io.ReadSeeker) (nfo *Nfo) {
 	data.Votes = parseInt(data.VotesString)
 	data.Year = parseInt(data.YearString)
 
-	nfo = data
-	return
+	return data, nil
 }
 
 func parseInt(s string) (i int) {

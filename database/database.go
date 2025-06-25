@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -25,18 +26,18 @@ type (
 	// UserRepo defines the interface for user database operations
 	UserRepo interface {
 		// GetByID retrieves a user from the database by their ID.
-		GetByID(userID string) (user *User, err error)
+		GetByID(ctx context.Context, userID string) (user *User, err error)
 		// Validate checks if the user exists and the password is correct.
-		Validate(username, password string) (user *User, err error)
+		Validate(ctx context.Context, username, password string) (user *User, err error)
 		// Insert inserts a new user into the database.
-		Insert(username, password string) (user *User, err error)
+		Insert(ctx context.Context, username, password string) (user *User, err error)
 	}
 
 	AccessTokenRepo interface {
 		// Get accesstoken details by tokenid
-		Get(token string) (*AccessToken, error)
+		Get(ctx context.Context, token string) (*AccessToken, error)
 		// Generate generates new access token
-		Generate(userID string) (string, error)
+		Generate(ctx context.Context, userID string) (string, error)
 		// BackgroundJobs syncs changed accesstokens periodically to database
 		BackgroundJobs()
 	}
@@ -47,25 +48,25 @@ type (
 
 	UserDataRepo interface {
 		// Get the play state details for an item per user.
-		Get(userID, itemID string) (details UserData, err error)
+		Get(ctx context.Context, userID, itemID string) (details UserData, err error)
 		// Get all favorite items of a user.
-		GetFavorites(userID string) (favoriteItemIDs []string, err error)
+		GetFavorites(ctx context.Context, userID string) (favoriteItemIDs []string, err error)
 		// GetRecentlyWatched returns up to 10 most recently watched items that have not been fully watched.
-		GetRecentlyWatched(userID string, includeFullyWatched bool) (resumeItemIDs []string, err error)
+		GetRecentlyWatched(ctx context.Context, userID string, includeFullyWatched bool) (resumeItemIDs []string, err error)
 		// Update stores the play state details for a user and item.
-		Update(userID, itemID string, details UserData) error
+		Update(ctx context.Context, userID, itemID string, details UserData) error
 		// BackgroundJobs syncs changed play state to periodically to database.
 		BackgroundJobs()
 	}
 
 	// PlaylistRepo defines the interface for database operations
 	PlaylistRepo interface {
-		CreatePlaylist(Playlist) (playlistID string, err error)
-		GetPlaylists(userID string) (playlistIDs []string, err error)
-		GetPlaylist(userID, playlistID string) (*Playlist, error)
-		AddItemsToPlaylist(userID, playlistID string, itemIDs []string) error
-		DeleteItemsFromPlaylist(playlistID string, itemIDs []string) error
-		MovePlaylistItem(playlistID string, itemID string, newIndex int) error
+		CreatePlaylist(ctx context.Context, p Playlist) (playlistID string, err error)
+		GetPlaylists(ctx context.Context, userID string) (playlistIDs []string, err error)
+		GetPlaylist(ctx context.Context, userID, playlistID string) (*Playlist, error)
+		AddItemsToPlaylist(ctx context.Context, userID, playlistID string, itemIDs []string) error
+		DeleteItemsFromPlaylist(ctx context.Context, playlistID string, itemIDs []string) error
+		MovePlaylistItem(ctx context.Context, playlistID string, itemID string, newIndex int) error
 	}
 )
 

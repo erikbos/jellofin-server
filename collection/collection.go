@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"time"
 
 	"github.com/erikbos/jellofin-server/database"
 )
@@ -174,7 +175,9 @@ func (p PathString) String() string {
 	return string(p)
 }
 
-func (cr *CollectionRepo) updateCollections(pace int) {
+// updateCollections updates the collections with the latest content from
+// the filesystem. ScanInterval is the time between file stat()s
+func (cr *CollectionRepo) updateCollections(scanInterval time.Duration) {
 	id := 1
 	for i := range cr.collections {
 		c := &(cr.collections[i])
@@ -182,9 +185,9 @@ func (cr *CollectionRepo) updateCollections(pace int) {
 		c.BaseUrl = fmt.Sprintf("/data/%d", id)
 		switch c.Type {
 		case CollectionMovies:
-			cr.buildMovies(c, pace)
+			cr.buildMovies(c, scanInterval)
 		case CollectionShows:
-			cr.buildShows(c, pace)
+			cr.buildShows(c, scanInterval)
 		}
 		id++
 	}
@@ -198,7 +201,7 @@ func (cr *CollectionRepo) Init() {
 // Background keeps scanning content collections for changes continously
 func (cr *CollectionRepo) Background() {
 	for {
-		cr.updateCollections(1)
+		cr.updateCollections(500 * time.Millisecond)
 	}
 }
 

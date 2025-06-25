@@ -22,7 +22,7 @@ func (j *Jellyfin) usersAllHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dbuser, err := j.db.UserRepo.GetByID(accessToken.UserID)
+	dbuser, err := j.db.UserRepo.GetByID(r.Context(), accessToken.UserID)
 	if err != nil {
 		http.Error(w, ErrUserIDNotFound, http.StatusNotFound)
 		return
@@ -42,7 +42,7 @@ func (j *Jellyfin) usersMeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dbuser, err := j.db.UserRepo.GetByID(accessToken.UserID)
+	dbuser, err := j.db.UserRepo.GetByID(r.Context(), accessToken.UserID)
 	if err != nil {
 		http.Error(w, ErrUserIDNotFound, http.StatusNotFound)
 		return
@@ -66,7 +66,7 @@ func (j *Jellyfin) usersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dbuser, err := j.db.UserRepo.GetByID(accessToken.UserID)
+	dbuser, err := j.db.UserRepo.GetByID(r.Context(), accessToken.UserID)
 	if err != nil {
 		http.Error(w, ErrUserIDNotFound, http.StatusNotFound)
 		return

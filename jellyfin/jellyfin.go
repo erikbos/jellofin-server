@@ -24,7 +24,7 @@ type Options struct {
 	// ServerName is name of server returned in info responses
 	ServerName string
 	// ServerPort is the port of the server
-	ServerPort int
+	ServerPort string
 	// Indicates if we should auto-register Jellyfin users
 	AutoRegister bool
 	// JPEG quality for posters
@@ -38,8 +38,6 @@ type Jellyfin struct {
 
 	// serverName is name of server returned in info responses
 	serverName string
-	// ServerPort is the port of the server
-	serverPort int
 	// Indicates if we should auto-register Jellyfin users
 	autoRegister bool
 	// JPEG quality for posters
@@ -54,7 +52,6 @@ func New(o *Options) *Jellyfin {
 		collections:        o.Collections,
 		db:                 o.Db,
 		serverName:         o.ServerName,
-		serverPort:         o.ServerPort,
 		imageresizer:       o.Imageresizer,
 		autoRegister:       o.AutoRegister,
 		imageQualityPoster: o.ImageQualityPoster,
@@ -69,7 +66,6 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r := s.UseEncodedPath()
 
 	r.Use(lowercaseQueryParamNames)
-
 	// middleware for endpoints to check valid auth token
 	middleware := func(handler http.HandlerFunc) http.Handler {
 		return handlers.CompressHandler(j.authmiddleware(http.HandlerFunc(handler)))
@@ -137,6 +133,9 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/MediaSegments/{item}", middleware(j.mediaSegmentsHandler))
 	r.Handle("/Videos/{item}/stream", middleware(j.videoStreamHandler))
 	r.Handle("/Videos/{item}/stream.{container}", middleware(j.videoStreamHandler))
+	// required for Vidhub to work
+	r.Handle("/videos/{item}/stream", middleware(j.videoStreamHandler))
+	r.Handle("/videos/{item}/stream.{container}", middleware(j.videoStreamHandler))
 
 	r.Handle("/Persons", middleware(j.personsHandler))
 

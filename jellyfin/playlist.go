@@ -68,7 +68,7 @@ func (j *Jellyfin) createPlaylistHandler(w http.ResponseWriter, r *http.Request)
 	}
 	// log.Printf("newPlaylist: %+v", newPlaylist)
 
-	playlistID, err := j.db.PlaylistRepo.CreatePlaylist(newPlaylist)
+	playlistID, err := j.db.PlaylistRepo.CreatePlaylist(r.Context(), newPlaylist)
 	log.Printf("playlistID: %s, err: %v", playlistID, err)
 	if err != nil {
 		http.Error(w, "Failed to create playlist", http.StatusInternalServerError)
@@ -119,7 +119,7 @@ func (j *Jellyfin) getPlaylistHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	playlistID := vars["playlist"]
 
-	playlist, err := j.db.PlaylistRepo.GetPlaylist(accessToken.UserID, trimPrefix(playlistID))
+	playlist, err := j.db.PlaylistRepo.GetPlaylist(r.Context(), accessToken.UserID, trimPrefix(playlistID))
 	// log.Printf("querying playlist: %+v, %+v\n", playlist, err)
 	if err != nil {
 		http.Error(w, "Playlist not found", http.StatusNotFound)
@@ -146,7 +146,7 @@ func (j *Jellyfin) getPlaylistItemsHandler(w http.ResponseWriter, r *http.Reques
 	vars := mux.Vars(r)
 	playlistID := vars["playlist"]
 
-	playlist, err := j.db.PlaylistRepo.GetPlaylist(accessToken.UserID, trimPrefix(playlistID))
+	playlist, err := j.db.PlaylistRepo.GetPlaylist(r.Context(), accessToken.UserID, trimPrefix(playlistID))
 	if err != nil {
 		http.Error(w, "Playlist not found", http.StatusNotFound)
 		return
@@ -156,7 +156,7 @@ func (j *Jellyfin) getPlaylistItemsHandler(w http.ResponseWriter, r *http.Reques
 	for _, itemID := range playlist.ItemIDs {
 		c, i := j.collections.GetItemByID(itemID)
 		if c != nil || i != nil {
-			items = append(items, j.makeJFItem(accessToken.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
+			items = append(items, j.makeJFItem(r.Context(), accessToken.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
 		}
 	}
 	response := UserItemsResponse{
@@ -185,7 +185,7 @@ func (j *Jellyfin) addPlaylistItemsHandler(w http.ResponseWriter, r *http.Reques
 		itemIDs = append(itemIDs, trimPrefix(ID))
 	}
 
-	if err := j.db.PlaylistRepo.AddItemsToPlaylist(accessToken.UserID, trimPrefix(playlistID), itemIDs); err != nil {
+	if err := j.db.PlaylistRepo.AddItemsToPlaylist(r.Context(), accessToken.UserID, trimPrefix(playlistID), itemIDs); err != nil {
 		http.Error(w, "Failed to add items", http.StatusInternalServerError)
 		return
 	}

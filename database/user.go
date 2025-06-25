@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"errors"
 
 	"github.com/jmoiron/sqlx"
@@ -31,7 +32,7 @@ var (
 )
 
 // GetByID retrieves a user from the database by their ID.
-func (u *UserStorage) GetByID(userID string) (user *User, err error) {
+func (u *UserStorage) GetByID(ctx context.Context, userID string) (user *User, err error) {
 	var data User
 	if err := u.dbHandle.Get(&data, "SELECT * FROM users WHERE id=? LIMIT 1", userID); err != nil {
 		return nil, ErrUserNotFound
@@ -42,7 +43,7 @@ func (u *UserStorage) GetByID(userID string) (user *User, err error) {
 }
 
 // Validate checks if the user exists and the password is correct.
-func (u *UserStorage) Validate(username, password string) (user *User, err error) {
+func (u *UserStorage) Validate(ctx context.Context, username, password string) (user *User, err error) {
 	var data User
 	sqlerr := u.dbHandle.Get(&data, "SELECT * FROM users WHERE username=? LIMIT 1", username)
 	if sqlerr != nil {
@@ -57,7 +58,7 @@ func (u *UserStorage) Validate(username, password string) (user *User, err error
 }
 
 // Insert inserts a new user into the database.
-func (u *UserStorage) Insert(username, password string) (user *User, err error) {
+func (u *UserStorage) Insert(ctx context.Context, username, password string) (user *User, err error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, err

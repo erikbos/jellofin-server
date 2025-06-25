@@ -5,6 +5,7 @@
 *.so
 *.dylib
 bin/*
+jellofin-server
 
 # Test binary, built with `go test -c`
 *.test
@@ -21,7 +22,6 @@ todo.txt
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
-notflix-server
-notflix-server.cfg
+jellofin-server.cfg
 screenlog.*
 *.db

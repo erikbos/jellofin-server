@@ -32,7 +32,7 @@ func (j *Jellyfin) genresHandler(w http.ResponseWriter, r *http.Request) {
 
 	genres := []JFItem{}
 	for _, g := range details.Genres {
-		genres = append(genres, j.makeJFItemGenre(g))
+		genres = append(genres, j.makeJFItemGenre(r.Context(), g))
 	}
 
 	response := UserItemsResponse{
@@ -62,7 +62,7 @@ func (j *Jellyfin) genreHandler(w http.ResponseWriter, r *http.Request) {
 
 	for _, genre := range j.collections.Details().Genres {
 		if genre == genreParam {
-			response := j.makeJFItemGenre(genre)
+			response := j.makeJFItemGenre(r.Context(), genre)
 			serveJSON(response, w)
 			return
 		}

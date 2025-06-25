@@ -40,7 +40,7 @@ func escapePath(p string) string {
 	return u.EscapedPath()
 }
 
-func (cr *CollectionRepo) buildMovies(coll *Collection, pace int) (items []*Item) {
+func (cr *CollectionRepo) buildMovies(coll *Collection, pace time.Duration) (items []*Item) {
 	f, err := OpenDir(coll.Directory)
 	if err != nil {
 		return
@@ -61,8 +61,7 @@ func (cr *CollectionRepo) buildMovies(coll *Collection, pace int) (items []*Item
 			items = append(items, m)
 		}
 		if pace > 0 {
-			d := time.Duration(int64(pace)) * time.Second
-			time.Sleep(d)
+			time.Sleep(pace)
 		}
 	}
 	coll.Items = items
@@ -207,7 +206,7 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Item)
 	return
 }
 
-func (cr *CollectionRepo) buildShows(coll *Collection, pace int) (items []*Item) {
+func (cr *CollectionRepo) buildShows(coll *Collection, pace time.Duration) (items []*Item) {
 	f, err := OpenDir(coll.Directory)
 	if err != nil {
 		return
@@ -228,8 +227,7 @@ func (cr *CollectionRepo) buildShows(coll *Collection, pace int) (items []*Item)
 			items = append(items, m)
 		}
 		if pace > 0 {
-			d := time.Duration(int64(pace)) * time.Second
-			time.Sleep(d)
+			time.Sleep(pace)
 		}
 	}
 	coll.Items = items
@@ -561,6 +559,9 @@ func loadNFO(n **Nfo, filename string) {
 	}
 	if file, err := os.Open(filename); err == nil {
 		defer file.Close()
-		*n = NfoDecode(file)
+		*n, err = NfoDecode(file)
+		if err != nil {
+			fmt.Printf("Error parsing NFO file %s: %v\n", filename, err)
+		}
 	}
 }

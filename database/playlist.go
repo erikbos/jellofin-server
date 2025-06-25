@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"log"
 	"time"
 
@@ -26,7 +27,7 @@ type Playlist struct {
 	ItemIDs []string
 }
 
-func (p *PlaylistStorage) CreatePlaylist(newPlaylist Playlist) (playlistID string, err error) {
+func (p *PlaylistStorage) CreatePlaylist(ctx context.Context, newPlaylist Playlist) (playlistID string, err error) {
 	log.Printf("CreatePlaylist: %+v", newPlaylist)
 
 	// newPlaylist.ID = idhash.IdHash(newPlaylist.Name)
@@ -68,7 +69,7 @@ func (p *PlaylistStorage) CreatePlaylist(newPlaylist Playlist) (playlistID strin
 	return newPlaylist.ID, tx.Commit()
 }
 
-func (p *PlaylistStorage) GetPlaylists(userID string) (playlistIDs []string, err error) {
+func (p *PlaylistStorage) GetPlaylists(ctx context.Context, userID string) (playlistIDs []string, err error) {
 	var playlistIDEntries []struct {
 		ID string `db:"id"`
 	}
@@ -82,7 +83,7 @@ func (p *PlaylistStorage) GetPlaylists(userID string) (playlistIDs []string, err
 	return
 }
 
-func (p *PlaylistStorage) GetPlaylist(userID, playlistID string) (*Playlist, error) {
+func (p *PlaylistStorage) GetPlaylist(ctx context.Context, userID, playlistID string) (*Playlist, error) {
 	// log.Printf("db - GetPlaylist: %s\n", playlistID)
 
 	var playlist struct {
@@ -118,7 +119,7 @@ func (p *PlaylistStorage) GetPlaylist(userID, playlistID string) (*Playlist, err
 	return result, nil
 }
 
-func (p *PlaylistStorage) AddItemsToPlaylist(UserID, playlistID string, itemIDs []string) error {
+func (p *PlaylistStorage) AddItemsToPlaylist(ctx context.Context, UserID, playlistID string, itemIDs []string) error {
 	log.Printf("AddItemsToPlaylist: %s, %s, %+v\n", UserID, playlistID, itemIDs)
 
 	tx, err := p.dbHandle.Beginx()
@@ -154,13 +155,13 @@ func (p *PlaylistStorage) AddItemsToPlaylist(UserID, playlistID string, itemIDs 
 	return tx.Commit()
 }
 
-func (p *PlaylistStorage) DeleteItemsFromPlaylist(playlistID string, itemIDs []string) error {
+func (p *PlaylistStorage) DeleteItemsFromPlaylist(ctx context.Context, playlistID string, itemIDs []string) error {
 	log.Printf("DeleteItemsFromPlaylist: %s, %+v\n", playlistID, itemIDs)
 	return nil
 
 }
 
-func (p *PlaylistStorage) MovePlaylistItem(playlistID string, itemID string, newIndex int) error {
+func (p *PlaylistStorage) MovePlaylistItem(ctx context.Context, playlistID string, itemID string, newIndex int) error {
 	log.Printf("MovePlaylistItem: %s, %s, %d", playlistID, itemID, newIndex)
 	return nil
 }

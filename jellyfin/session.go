@@ -13,7 +13,7 @@ func (j *Jellyfin) sessionsHandler(w http.ResponseWriter, r *http.Request) {
 	if accessToken == nil {
 		return
 	}
-	dbuser, err := j.db.UserRepo.GetByID(accessToken.UserID)
+	dbuser, err := j.db.UserRepo.GetByID(r.Context(), accessToken.UserID)
 	if err != nil {
 		http.Error(w, ErrUserIDNotFound, http.StatusNotFound)
 		return

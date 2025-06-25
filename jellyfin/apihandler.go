@@ -46,11 +46,11 @@ func (j *Jellyfin) usersViewsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add favorites and playlist collections
-	favoriteCollection, err := j.makeJFItemCollectionFavorites(accessToken.UserID)
+	favoriteCollection, err := j.makeJFItemCollectionFavorites(r.Context(), accessToken.UserID)
 	if err == nil {
 		items = append(items, favoriteCollection)
 	}
-	playlistCollection, err := j.makeJFItemCollectionPlaylist(accessToken.UserID)
+	playlistCollection, err := j.makeJFItemCollectionPlaylist(r.Context(), accessToken.UserID)
 	if err == nil {
 		items = append(items, playlistCollection)
 	}
@@ -116,7 +116,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 			serveJSON(collectionItem, w)
 			return
 		case itemprefix_collection_favorites:
-			collectionItem, err := j.makeJFItemCollectionFavorites(accessToken.UserID)
+			collectionItem, err := j.makeJFItemCollectionFavorites(r.Context(), accessToken.UserID)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusNotFound)
 				return
@@ -125,7 +125,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 			serveJSON(collectionItem, w)
 			return
 		case itemprefix_collection_playlist:
-			collectionItem, err := j.makeJFItemCollectionPlaylist(accessToken.UserID)
+			collectionItem, err := j.makeJFItemCollectionPlaylist(r.Context(), accessToken.UserID)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusNotFound)
 				return
@@ -134,7 +134,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 			serveJSON(collectionItem, w)
 			return
 		case itemprefix_season:
-			seasonItem, err := j.makeJFItemSeason(accessToken.UserID, itemID)
+			seasonItem, err := j.makeJFItemSeason(r.Context(), accessToken.UserID, itemID)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusNotFound)
 				return
@@ -142,7 +142,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 			serveJSON(seasonItem, w)
 			return
 		case itemprefix_episode:
-			episodeItem, err := j.makeJFItemEpisode(accessToken.UserID, itemID)
+			episodeItem, err := j.makeJFItemEpisode(r.Context(), accessToken.UserID, itemID)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusNotFound)
 				return
@@ -150,7 +150,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 			serveJSON(episodeItem, w)
 			return
 		case itemprefix_playlist:
-			playlistItem, err := j.makeJFItemPlaylist(accessToken.UserID, itemID)
+			playlistItem, err := j.makeJFItemPlaylist(r.Context(), accessToken.UserID, itemID)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusNotFound)
 				return
@@ -170,7 +170,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Item not found", http.StatusNotFound)
 		return
 	}
-	serveJSON(j.makeJFItem(accessToken.UserID, i, idhash.IdHash(c.Name_), c.Type, false), w)
+	serveJSON(j.makeJFItem(r.Context(), accessToken.UserID, i, idhash.IdHash(c.Name_), c.Type, false), w)
 }
 
 // /UserItems/1d57ee2251656c5fb9a05becdf0e62a3/Userdata
@@ -185,7 +185,7 @@ func (j *Jellyfin) usersItemUserDataHandler(w http.ResponseWriter, r *http.Reque
 	vars := mux.Vars(r)
 	itemID := vars["item"]
 
-	playstate, err := j.db.UserDataRepo.Get(accessToken.UserID, trimPrefix(itemID))
+	playstate, err := j.db.UserDataRepo.Get(r.Context(), accessToken.UserID, trimPrefix(itemID))
 	if err != nil {
 		playstate = database.UserData{}
 	}
@@ -237,7 +237,7 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Return favorites collection if requested
 	if strings.HasPrefix(searchCollection, itemprefix_collection_favorites) {
-		items, err = j.makeJFItemFavoritesOverview(accessToken.UserID)
+		items, err = j.makeJFItemFavoritesOverview(r.Context(), accessToken.UserID)
 		if err != nil {
 			http.Error(w, "Could not find favorites collection", http.StatusNotFound)
 			return
@@ -247,7 +247,7 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Return playlist collection if requested
 	if strings.HasPrefix(searchCollection, itemprefix_collection_playlist) {
-		items, err = j.makeJFItemPlaylistOverview(accessToken.UserID)
+		items, err = j.makeJFItemPlaylistOverview(r.Context(), accessToken.UserID)
 		if err != nil {
 			http.Error(w, "Could not find playlist collection", http.StatusNotFound)
 			return
@@ -274,7 +274,7 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 			for _, i := range c.Items {
 				if searchTerm == "" || strings.Contains(strings.ToLower(i.Name), strings.ToLower(searchTerm)) {
 					if j.applyItemFilter(i, queryparams) {
-						items = append(items, j.makeJFItem(accessToken.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
+						items = append(items, j.makeJFItem(r.Context(), accessToken.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
 					}
 				}
 			}
@@ -353,7 +353,7 @@ func (j *Jellyfin) usersItemsLatestHandler(w http.ResponseWriter, r *http.Reques
 		}
 		for _, i := range c.Items {
 			if j.applyItemFilter(i, queryparams) {
-				items = append(items, j.makeJFItem(accessToken.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
+				items = append(items, j.makeJFItem(r.Context(), accessToken.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
 			}
 		}
 	}
@@ -382,7 +382,7 @@ func (j *Jellyfin) searchHintsHandler(w http.ResponseWriter, r *http.Request) {
 	// Return playlist collection if requested
 	searchCollection := queryparams.Get("parentId")
 	if strings.HasPrefix(searchCollection, itemprefix_collection_playlist) {
-		response, _ := j.makeJFItemPlaylistOverview(accessToken.UserID)
+		response, _ := j.makeJFItemPlaylistOverview(r.Context(), accessToken.UserID)
 		serveJSON(response, w)
 		return
 	}
@@ -404,7 +404,7 @@ func (j *Jellyfin) searchHintsHandler(w http.ResponseWriter, r *http.Request) {
 		for _, i := range c.Items {
 			if searchTerm == "" || strings.Contains(strings.ToLower(i.Name), strings.ToLower(searchTerm)) {
 				if j.applyItemFilter(i, queryparams) {
-					items = append(items, j.makeJFItem(accessToken.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
+					items = append(items, j.makeJFItem(r.Context(), accessToken.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
 				}
 			}
 		}
@@ -435,7 +435,7 @@ func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 
 	queryparams := r.URL.Query()
 
-	recentlyWatchedIDs, err := j.db.UserDataRepo.GetRecentlyWatched(accessToken.UserID, true)
+	recentlyWatchedIDs, err := j.db.UserDataRepo.GetRecentlyWatched(r.Context(), accessToken.UserID, true)
 	if err != nil {
 		http.Error(w, "Could not get recently watched items list", http.StatusInternalServerError)
 		return
@@ -456,7 +456,7 @@ func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 		// }
 		if _, i, _, e := j.collections.GetEpisodeByID(id); i != nil {
 			if j.applyItemFilter(i, queryparams) {
-				if episode, err := j.makeJFItemEpisode(accessToken.UserID, e.ID); err == nil {
+				if episode, err := j.makeJFItemEpisode(r.Context(), accessToken.UserID, e.ID); err == nil {
 					items = append(items, episode)
 				}
 			}
@@ -500,7 +500,7 @@ func (j *Jellyfin) usersItemsResumeHandler(w http.ResponseWriter, r *http.Reques
 
 	queryparams := r.URL.Query()
 
-	resumeItemIDs, err := j.db.UserDataRepo.GetRecentlyWatched(accessToken.UserID, false)
+	resumeItemIDs, err := j.db.UserDataRepo.GetRecentlyWatched(r.Context(), accessToken.UserID, false)
 	if err != nil {
 		http.Error(w, "Could not get resume items list", http.StatusInternalServerError)
 		return
@@ -510,13 +510,13 @@ func (j *Jellyfin) usersItemsResumeHandler(w http.ResponseWriter, r *http.Reques
 	for _, id := range resumeItemIDs {
 		if c, i := j.collections.GetItemByID(id); c != nil && i != nil {
 			if j.applyItemFilter(i, queryparams) {
-				items = append(items, j.makeJFItem(accessToken.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
+				items = append(items, j.makeJFItem(r.Context(), accessToken.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
 			}
 			continue
 		}
 		if _, i, _, e := j.collections.GetEpisodeByID(id); i != nil {
 			if j.applyItemFilter(i, queryparams) {
-				if episode, err := j.makeJFItemEpisode(accessToken.UserID, e.ID); err == nil {
+				if episode, err := j.makeJFItemEpisode(r.Context(), accessToken.UserID, e.ID); err == nil {
 					items = append(items, episode)
 				}
 			}
@@ -799,7 +799,7 @@ func (j *Jellyfin) showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
 	// Create API response
 	seasons := make([]JFItem, 0)
 	for _, s := range i.Seasons {
-		season, err := j.makeJFItemSeason(accessToken.UserID, s.ID)
+		season, err := j.makeJFItemSeason(r.Context(), accessToken.UserID, s.ID)
 		if err != nil {
 			log.Printf("makeJFItemSeason returned error %s", err)
 			continue
@@ -838,6 +838,11 @@ func (j *Jellyfin) showsEpisodesHandler(w http.ResponseWriter, r *http.Request) 
 	// Do we need to filter down overview by a particular season?
 	RequestedSeasonID := r.URL.Query().Get("seasonId")
 
+	// FIXME/HACK: vidhub provides wrong season ids, so we cannot use them
+	if strings.Contains(r.Header.Get("User-Agent"), "VidHub") {
+		RequestedSeasonID = ""
+	}
+
 	// Create API response for requested season
 	episodes := make([]JFItem, 0)
 	for _, s := range i.Seasons {
@@ -846,7 +851,7 @@ func (j *Jellyfin) showsEpisodesHandler(w http.ResponseWriter, r *http.Request) 
 			continue
 		}
 		for _, e := range s.Episodes {
-			if episode, err := j.makeJFItemEpisode(accessToken.UserID, e.ID); err == nil {
+			if episode, err := j.makeJFItemEpisode(r.Context(), accessToken.UserID, e.ID); err == nil {
 				episodes = append(episodes, episode)
 			}
 		}

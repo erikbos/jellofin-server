@@ -14,6 +14,10 @@ import (
 	"github.com/erikbos/jellofin-server/database"
 )
 
+// Authentication specs:
+// Emby - https://dev.emby.media/doc/restapi/User-Authentication.html.
+// Jellyfin - https://gist.github.com/nielsvanvelzen/ea047d9028f676185832e51ffaf12a6f
+
 // authSchemeValues holds parsed emby authorization scheme values
 type authSchemeValues struct {
 	device   string
@@ -44,10 +48,10 @@ func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	user, err := j.db.UserRepo.Validate(request.Username, request.Pw)
+	user, err := j.db.UserRepo.Validate(r.Context(), request.Username, request.Pw)
 	if err != nil {
 		if err == database.ErrUserNotFound && j.autoRegister {
-			user, err = j.db.UserRepo.Insert(request.Username, request.Pw)
+			user, err = j.db.UserRepo.Insert(r.Context(), request.Username, request.Pw)
 			if err != nil {
 				http.Error(w, "Failed to auto-register user", http.StatusInternalServerError)
 				return
@@ -73,7 +77,7 @@ func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http
 		IsActive:           true,
 	}
 
-	accesstoken, err := j.db.AccessTokenRepo.Generate(user.ID)
+	accesstoken, err := j.db.AccessTokenRepo.Generate(r.Context(), user.ID)
 	if err != nil {
 		http.Error(w, "Failed to generate access token", http.StatusInternalServerError)
 		return
@@ -101,7 +105,8 @@ func (j *Jellyfin) parseAuthHeader(r *http.Request) (*authSchemeValues, error) {
 			found = true
 		}
 	}
-	if !found || !strings.HasPrefix(authHeader, "MediaBrowser ") {
+	if !found ||
+		!(strings.HasPrefix(authHeader, "MediaBrowser ") || strings.HasPrefix(authHeader, "Emby ")) {
 		return nil, errEmbyAuthHeader
 	}
 
@@ -154,7 +159,11 @@ func (j *Jellyfin) authmiddleware(next http.Handler) http.Handler {
 			token = t
 			found = true
 		}
-		// Needed for Streamyfin's embedded VLC
+		if t := r.URL.Query().Get("ApiKey"); t != "" {
+			token = t
+			found = true
+		}
+		// Deprecated: needed for VidhubPro & Streamyfin's embedded VLC
 		if t := r.URL.Query().Get("api_key"); t != "" {
 			token = t
 			found = true
@@ -165,7 +174,7 @@ func (j *Jellyfin) authmiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		tokendetails, err := j.db.AccessTokenRepo.Get(token)
+		tokendetails, err := j.db.AccessTokenRepo.Get(r.Context(), token)
 		if err != nil {
 			log.Printf("invalid access token: %s", err)
 			http.Error(w, "invalid access token", http.StatusUnauthorized)

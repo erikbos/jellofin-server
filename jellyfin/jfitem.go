@@ -1,6 +1,7 @@
 package jellyfin
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -141,9 +142,9 @@ func (j *Jellyfin) makeJItemCollection(collectionID string) (response JFItem, e 
 	return
 }
 
-func (j *Jellyfin) makeJFItemCollectionFavorites(userid string) (response JFItem, e error) {
+func (j *Jellyfin) makeJFItemCollectionFavorites(ctx context.Context, userID string) (response JFItem, e error) {
 	var itemCount int
-	if favoriteIDs, err := j.db.UserDataRepo.GetFavorites(userid); err == nil {
+	if favoriteIDs, err := j.db.UserDataRepo.GetFavorites(ctx, userID); err == nil {
 		itemCount = len(favoriteIDs)
 	}
 
@@ -182,8 +183,8 @@ func (j *Jellyfin) makeJFItemCollectionFavorites(userid string) (response JFItem
 	return
 }
 
-func (j *Jellyfin) makeJFItemCollectionPlaylist(userid string) (response JFItem, e error) {
-	playlistIDs, err := j.db.PlaylistRepo.GetPlaylists(userid)
+func (j *Jellyfin) makeJFItemCollectionPlaylist(ctx context.Context, userID string) (response JFItem, e error) {
+	playlistIDs, err := j.db.PlaylistRepo.GetPlaylists(ctx, userID)
 
 	// In case of no playlists, we still want to return a collection item
 	var itemCount int
@@ -227,19 +228,19 @@ func (j *Jellyfin) makeJFItemCollectionPlaylist(userid string) (response JFItem,
 }
 
 // makeJFItem make movie or show from provided item
-func (j *Jellyfin) makeJFItem(userID string, item *collection.Item, parentID, collectionType string, listView bool) (response JFItem) {
+func (j *Jellyfin) makeJFItem(ctx context.Context, userID string, item *collection.Item, parentID, collectionType string, listView bool) (response JFItem) {
 	switch collectionType {
 	case collection.CollectionMovies:
-		return j.makeJFItemMovie(userID, item, parentID, listView)
+		return j.makeJFItemMovie(ctx, userID, item, parentID, listView)
 	case collection.CollectionShows:
-		return j.makeJFItemShow(userID, item, parentID)
+		return j.makeJFItemShow(ctx, userID, item, parentID)
 	}
 	log.Printf("makeJFItem: unknown item type: %+v", item)
 	return JFItem{}
 }
 
 // makeJFItem make movie item
-func (j *Jellyfin) makeJFItemMovie(userID string, i *collection.Item, parentID string, listView bool) (response JFItem) {
+func (j *Jellyfin) makeJFItemMovie(ctx context.Context, userID string, i *collection.Item, parentID string, listView bool) (response JFItem) {
 	response = JFItem{
 		Type:                    "Movie",
 		ID:                      i.ID,
@@ -291,14 +292,14 @@ func (j *Jellyfin) makeJFItemMovie(userID string, i *collection.Item, parentID s
 		i.Year = response.ProductionYear
 	}
 
-	if playstate, err := j.db.UserDataRepo.Get(userID, trimPrefix(i.ID)); err == nil {
+	if playstate, err := j.db.UserDataRepo.Get(ctx, userID, trimPrefix(i.ID)); err == nil {
 		response.UserData = j.makeJFUserData(userID, i.ID, playstate)
 	}
 	return response
 }
 
 // makeJFItemShow makes show item
-func (j *Jellyfin) makeJFItemShow(userID string, i *collection.Item, parentID string) (response JFItem) {
+func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, i *collection.Item, parentID string) (response JFItem) {
 	response = JFItem{
 		Type:                    "Series",
 		ID:                      i.ID,
@@ -343,7 +344,7 @@ func (j *Jellyfin) makeJFItemShow(userID string, i *collection.Item, parentID st
 	for _, s := range i.Seasons {
 		for _, e := range s.Episodes {
 			totalEpisodes++
-			episodePlaystate, err := j.db.UserDataRepo.Get(userID, trimPrefix(e.ID))
+			episodePlaystate, err := j.db.UserDataRepo.Get(ctx, userID, trimPrefix(e.ID))
 			if err == nil {
 				if episodePlaystate.Played {
 					playedEpisodes++
@@ -355,7 +356,7 @@ func (j *Jellyfin) makeJFItemShow(userID string, i *collection.Item, parentID st
 		}
 	}
 	if totalEpisodes != 0 {
-		playstate, err := j.db.UserDataRepo.Get(userID, trimPrefix(i.ID))
+		playstate, err := j.db.UserDataRepo.Get(ctx, userID, trimPrefix(i.ID))
 		if err != nil {
 			playstate = database.UserData{
 				Timestamp: time.Now().UTC(),
@@ -385,7 +386,7 @@ func (j *Jellyfin) makeJFItemShow(userID string, i *collection.Item, parentID st
 }
 
 // makeJFItemSeason makes a season
-func (j *Jellyfin) makeJFItemSeason(userID, seasonID string) (response JFItem, err error) {
+func (j *Jellyfin) makeJFItemSeason(ctx context.Context, userID, seasonID string) (response JFItem, err error) {
 	_, show, season := j.collections.GetSeasonByID(trimPrefix(seasonID))
 	if season == nil {
 		err = errors.New("could not find season")
@@ -431,7 +432,7 @@ func (j *Jellyfin) makeJFItemSeason(userID, seasonID string) (response JFItem, e
 	var playedEpisodes int
 	var lastestPlayed time.Time
 	for _, e := range season.Episodes {
-		episodePlaystate, err := j.db.UserDataRepo.Get(userID, trimPrefix(e.ID))
+		episodePlaystate, err := j.db.UserDataRepo.Get(ctx, userID, trimPrefix(e.ID))
 		if err == nil {
 			if episodePlaystate.Played {
 				playedEpisodes++
@@ -442,7 +443,7 @@ func (j *Jellyfin) makeJFItemSeason(userID, seasonID string) (response JFItem, e
 		}
 	}
 
-	playstate, err := j.db.UserDataRepo.Get(userID, trimPrefix(seasonID))
+	playstate, err := j.db.UserDataRepo.Get(ctx, userID, trimPrefix(seasonID))
 	if err != nil {
 		playstate = database.UserData{
 			Timestamp: time.Now().UTC(),
@@ -480,7 +481,7 @@ func makeSeasonName(seasonNo int) string {
 }
 
 // makeJFItemEpisode makes an episode
-func (j *Jellyfin) makeJFItemEpisode(userID, episodeID string) (response JFItem, err error) {
+func (j *Jellyfin) makeJFItemEpisode(ctx context.Context, userID, episodeID string) (response JFItem, err error) {
 	_, show, season, episode := j.collections.GetEpisodeByID(trimPrefix(episodeID))
 	if episode == nil {
 		err = errors.New("could not find episode")
@@ -540,15 +541,15 @@ func (j *Jellyfin) makeJFItemEpisode(userID, episodeID string) (response JFItem,
 	response.RunTimeTicks = response.MediaSources[0].RunTimeTicks
 	response.MediaStreams = response.MediaSources[0].MediaStreams
 
-	if playstate, err := j.db.UserDataRepo.Get(userID, trimPrefix(episodeID)); err == nil {
+	if playstate, err := j.db.UserDataRepo.Get(ctx, userID, trimPrefix(episodeID)); err == nil {
 		response.UserData = j.makeJFUserData(userID, episodeID, playstate)
 	}
 	return response, nil
 }
 
 // makeJFItemFavoritesOverview creates a list of favorite items
-func (j *Jellyfin) makeJFItemFavoritesOverview(userID string) (items []JFItem, err error) {
-	favoriteIDs, err := j.db.UserDataRepo.GetFavorites(userID)
+func (j *Jellyfin) makeJFItemFavoritesOverview(ctx context.Context, userID string) (items []JFItem, err error) {
+	favoriteIDs, err := j.db.UserDataRepo.GetFavorites(ctx, userID)
 
 	// log.Printf("makeJFItemFavoritesOverview: %+v, %+v", favoriteIDs, err)
 	if err != nil {
@@ -559,15 +560,15 @@ func (j *Jellyfin) makeJFItemFavoritesOverview(userID string) (items []JFItem, e
 	for _, itemID := range favoriteIDs {
 		c, i := j.collections.GetItemByID(itemID)
 		if i != nil {
-			item := j.makeJFItem(userID, i, CollectionIDToString(c.ID), c.Type, false)
+			item := j.makeJFItem(ctx, userID, i, CollectionIDToString(c.ID), c.Type, false)
 			items = append(items, item)
 		}
 	}
 	return
 }
 
-func (j *Jellyfin) makeJFItemPlaylistOverview(userID string) (items []JFItem, err error) {
-	playlistIDs, err := j.db.PlaylistRepo.GetPlaylists(userID)
+func (j *Jellyfin) makeJFItemPlaylistOverview(ctx context.Context, userID string) (items []JFItem, err error) {
+	playlistIDs, err := j.db.PlaylistRepo.GetPlaylists(ctx, userID)
 
 	log.Printf("makeJFItemPlaylistOverview: %+v, %+v", playlistIDs, err)
 	if err != nil {
@@ -575,7 +576,7 @@ func (j *Jellyfin) makeJFItemPlaylistOverview(userID string) (items []JFItem, er
 	}
 	// In case we have playlists populate, otherwise leave empty list
 	for _, playlistID := range playlistIDs {
-		item, err := j.makeJFItemPlaylist(userID, playlistID)
+		item, err := j.makeJFItemPlaylist(ctx, userID, playlistID)
 		if err == nil {
 			items = append(items, item)
 		}
@@ -583,8 +584,8 @@ func (j *Jellyfin) makeJFItemPlaylistOverview(userID string) (items []JFItem, er
 	return
 }
 
-func (j *Jellyfin) makeJFItemPlaylist(userID, playlistID string) (response JFItem, err error) {
-	playlist, err := j.db.PlaylistRepo.GetPlaylist(userID, trimPrefix(playlistID))
+func (j *Jellyfin) makeJFItemPlaylist(ctx context.Context, userID, playlistID string) (response JFItem, err error) {
+	playlist, err := j.db.PlaylistRepo.GetPlaylist(ctx, userID, trimPrefix(playlistID))
 	if playlist == nil {
 		err = errors.New("could not find playlist")
 		return
@@ -615,7 +616,7 @@ func (j *Jellyfin) makeJFItemPlaylist(userID, playlistID string) (response JFIte
 	return
 }
 
-func (j *Jellyfin) makeJFItemGenre(genre string) (response JFItem) {
+func (j *Jellyfin) makeJFItemGenre(ctx context.Context, genre string) (response JFItem) {
 
 	response = JFItem{
 		ID:           idhash.IdHash(genre),

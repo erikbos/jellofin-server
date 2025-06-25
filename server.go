@@ -3,13 +3,14 @@ package main
 import (
 	"crypto/tls"
 	"flag"
-	"fmt"
 	"io"
 	"log"
 	"log/syslog"
+	"net"
 	"net/http"
 	"os"
 	"path"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,17 +44,17 @@ type cfgMain struct {
 }
 
 type cfgListen struct {
-	Port    int
-	Tls     bool
-	TlsCert string
-	TlsKey  string
+	Address string // Address to listen on, empty for all interfaces
+	Port    string // Port to listen on
+	TlsCert string // Path to TLS certificate file
+	TlsKey  string // Path to TLS key file
 }
 
 func main() {
 	log.Printf("Parsing config file")
 	config := cfgMain{
 		Listen: cfgListen{
-			Port: 8080,
+			Port: "8096",
 		},
 	}
 	p, err := curlyconf.NewParser(configFile, curlyconf.ParserNL)
@@ -61,7 +62,7 @@ func main() {
 		err = p.Parse(&config)
 	}
 	if err != nil {
-		fmt.Println(err.(*curlyconf.ParseError).LongError())
+		log.Print(err.(*curlyconf.ParseError).LongError())
 		return
 	}
 
@@ -71,7 +72,7 @@ func main() {
 			"for standard output, or 'none' to disable logging.")
 	flag.Parse()
 
-	log.Printf("setting logfile")
+	log.Printf("Setting logfile")
 	switch *logfile {
 	case "syslog":
 		logw, err := syslog.New(syslog.LOG_NOTICE, "jellofin")
@@ -91,16 +92,16 @@ func main() {
 			log.Fatalf("error opening file: %v", err)
 		}
 		defer f.Close()
+		log.Printf("Setting logfile to %s", *logfile)
 		log.SetOutput(f)
 	}
-	log.SetFlags(0)
 
 	log.Printf("dbinit")
 	database, err := database.New(&database.Options{
 		Filename: path.Join(config.Dbdir, "tink-items.db"),
 	})
 	if err != nil {
-		log.Fatalf("database.New: %s", err)
+		log.Fatalf("database.New: %s", err.Error())
 	}
 	go database.AccessTokenRepo.BackgroundJobs()
 	go database.UserDataRepo.BackgroundJobs()
@@ -143,13 +144,13 @@ func main() {
 
 	r.PathPrefix("/").Handler(http.FileServer(http.Dir(config.Appdir)))
 
-	server := HttpLog(r)
-
 	log.Printf("Initializing collections..")
 	collection.Init()
 	go collection.Background()
 
-	addr := fmt.Sprintf(":%d", config.Listen.Port)
+	addr := net.JoinHostPort(config.Listen.Address, config.Listen.Port)
+
+	server := stripEmbyPath(HttpLog(r))
 
 	if config.Listen.TlsCert != "" && config.Listen.TlsKey != "" {
 		kpr, err := NewKeypairReloader(config.Listen.TlsCert, config.Listen.TlsKey)
@@ -166,7 +167,7 @@ func main() {
 			},
 		}
 		log.Printf("Serving HTTPS on %s", addr)
-		srv.ListenAndServeTLS("", "")
+		log.Fatal(srv.ListenAndServeTLS("", ""))
 	} else {
 		log.Printf("Serving HTTP on %s", addr)
 		log.Fatal(http.ListenAndServe(addr, server))
@@ -223,4 +224,14 @@ func (kpr *keypairReloader) maybeReload() error {
 	defer kpr.certMu.Unlock()
 	kpr.cert = &newCert
 	return nil
+}
+
+// stripEmbyPath is a middleware that strips the "/emby" prefix from the request URL path.
+func stripEmbyPath(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/emby/") {
+			r.URL.Path = strings.TrimPrefix(r.URL.Path, "/emby")
+		}
+		next.ServeHTTP(w, r)
+	})
 }
