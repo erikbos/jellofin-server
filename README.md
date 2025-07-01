@@ -7,7 +7,17 @@ This is the Jellofin backend server. It support serving contents to clients usin
 
 ## Jellyfin API
 
-This server supports a subset of the [Jellyfin API](https://api.jellyfin.org/). Most (all?) of the collection and media library endpoints are implemented. This server can be used to serve contents to [Infuse](https://firecore.com/infuse) and [Streamyfin](https://streamyfin.app/). Transcoding of contents is not supported.
+This server supports a subset of the [Jellyfin API](https://api.jellyfin.org/). Most (all?) of the collection and media library endpoints are implemented. Transcoding of contents is not supported.
+
+### Tested clients
+
+The following clients can connect to Jellofin:
+
+| Client                                           | Status      | Notes                 |
+| :----------------------------------------------: | :---------: | :-------------------: |
+| [Infuse](https://firecore.com/infuse)            | ✅  | Full functionality    |
+| [Streamyfin](https://streamyfin.app/)            | ✅  | Full functionality    |
+| [VidHub](https://okaapps.com/product/1659622164) | ✅ & ❌ | Partial functionality: movie browsing and video works, tv show folders can yet not be opened due to vidhub bug |
 
 ## Notflix API
 
@@ -19,9 +29,9 @@ This server supports a subset of the [Jellyfin API](https://api.jellyfin.org/). 
 
 ## Installation
 
-1. `go build` will compile `jellofin-server`
+1. run `go build` to compile `jellofin-server`
 2. copy `jellofin-server.example.cfg` to `jellofin-server.cfg` and edit collection configuration details
-4. start `jellofin-server`
+3. run `./jellofin-server` to start the server
 
 ## Collection format
 

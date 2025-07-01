@@ -86,8 +86,8 @@ func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http
 	response := JFAuthenticateByNameResponse{
 		AccessToken: accesstoken,
 		SessionInfo: session,
-		ServerId:    serverID,
-		User:        makeJFUser(user),
+		ServerId:    j.serverID,
+		User:        j.makeJFUser(user),
 	}
 	serveJSON(response, w)
 }

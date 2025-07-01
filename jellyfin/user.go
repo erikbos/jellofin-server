@@ -28,7 +28,7 @@ func (j *Jellyfin) usersAllHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response := []JFUser{
-		makeJFUser(dbuser),
+		j.makeJFUser(dbuser),
 	}
 	serveJSON(response, w)
 }
@@ -47,7 +47,7 @@ func (j *Jellyfin) usersMeHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, ErrUserIDNotFound, http.StatusNotFound)
 		return
 	}
-	response := makeJFUser(dbuser)
+	response := j.makeJFUser(dbuser)
 	serveJSON(response, w)
 }
 
@@ -71,7 +71,7 @@ func (j *Jellyfin) usersHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, ErrUserIDNotFound, http.StatusNotFound)
 		return
 	}
-	response := makeJFUser(dbuser)
+	response := j.makeJFUser(dbuser)
 	serveJSON(response, w)
 }
 
@@ -83,11 +83,11 @@ func (j *Jellyfin) usersPublicHandler(w http.ResponseWriter, r *http.Request) {
 	serveJSON(response, w)
 }
 
-func makeJFUser(user *database.User) JFUser {
+func (j *Jellyfin) makeJFUser(user *database.User) JFUser {
 	return JFUser{
 		Id:                        user.ID,
 		Name:                      user.Username,
-		ServerId:                  serverID,
+		ServerId:                  j.serverID,
 		HasPassword:               true,
 		HasConfiguredPassword:     true,
 		HasConfiguredEasyPassword: false,

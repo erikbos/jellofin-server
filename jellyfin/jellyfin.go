@@ -1,8 +1,10 @@
 package jellyfin
 
 import (
+	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/gorilla/handlers"
@@ -10,6 +12,7 @@ import (
 
 	"github.com/erikbos/jellofin-server/collection"
 	"github.com/erikbos/jellofin-server/database"
+	"github.com/erikbos/jellofin-server/idhash"
 	"github.com/erikbos/jellofin-server/imageresize"
 )
 
@@ -20,7 +23,8 @@ type Options struct {
 	Collections  *collection.CollectionRepo
 	Db           *database.DatabaseRepo
 	Imageresizer *imageresize.Resizer
-
+	// Unique ID of this server, used in API responses
+	ServerID string
 	// ServerName is name of server returned in info responses
 	ServerName string
 	// ServerPort is the port of the server
@@ -35,7 +39,8 @@ type Jellyfin struct {
 	collections  *collection.CollectionRepo
 	db           *database.DatabaseRepo
 	imageresizer *imageresize.Resizer
-
+	// Unique ID of this server, used in API responses
+	serverID string
 	// serverName is name of server returned in info responses
 	serverName string
 	// Indicates if we should auto-register Jellyfin users
@@ -51,13 +56,23 @@ func New(o *Options) *Jellyfin {
 	j := &Jellyfin{
 		collections:        o.Collections,
 		db:                 o.Db,
+		serverID:           o.ServerID,
 		serverName:         o.ServerName,
 		imageresizer:       o.Imageresizer,
 		autoRegister:       o.AutoRegister,
 		imageQualityPoster: o.ImageQualityPoster,
 	}
+	if j.serverID == "" {
+		if hostname, err := os.Hostname(); err == nil {
+			j.serverID = idhash.IdHash(hostname)
+		} else {
+			// fallback to a fixed ID if hostname cannot be determined}
+			j.serverID = "2b11644442754f02a0c1e45d2a9f5c71"
+		}
+	}
+	log.Printf("Using server ID: %s", j.serverID)
 	if j.serverName == "" {
-		j.serverName = "Jellyfin"
+		j.serverName = "Jellofin"
 	}
 	return j
 }
@@ -150,6 +165,8 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	// userdata legacy endpoints for Jellyfin <10.9
 	r.Handle("/Users/{user}/PlayedItems/{item}", middleware(j.usersPlayedItemsPostHandler)).Methods("POST")
 	r.Handle("/Users/{user}/PlayedItems/{item}", middleware(j.usersPlayedItemsDeleteHandler)).Methods("DELETE")
+	r.Handle("/Users/{user}/FavoriteItems/{item}", middleware(j.userFavoriteItemsPostHandler)).Methods("POST")
+	r.Handle("/Users/{user}/FavoriteItems/{item}", middleware(j.userFavoriteItemsDeleteHandler)).Methods("DELETE")
 
 	// sessions
 	r.Handle("/Sessions", middleware(j.sessionsHandler))

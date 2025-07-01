@@ -14,7 +14,7 @@ const (
 // systemInfoHandler returns server info
 func (j *Jellyfin) systemInfoHandler(w http.ResponseWriter, r *http.Request) {
 	response := JFSystemInfoResponse{
-		Id:                         serverID,
+		Id:                         j.serverID,
 		OperatingSystemDisplayName: "",
 		HasPendingRestart:          false,
 		IsShuttingDown:             false,
@@ -56,7 +56,7 @@ func (j *Jellyfin) systemInfoHandler(w http.ResponseWriter, r *http.Request) {
 // systemInfoPublicHandler returns basic server info
 func (j *Jellyfin) systemInfoPublicHandler(w http.ResponseWriter, r *http.Request) {
 	response := JFSystemInfoPublicResponse{
-		Id:           serverID,
+		Id:           j.serverID,
 		LocalAddress: localAddress(r),
 		// Jellyfin native client checks for exact productname ..
 		// https://github.com/jellyfin/jellyfin-expo/blob/7dedbc72fb53fc4b83c3967c9a8c6c071916425b/utils/ServerValidator.js#L82C49-L82C64

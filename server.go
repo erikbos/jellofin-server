@@ -34,6 +34,8 @@ type cfgMain struct {
 	Logfile     string
 	Collections []collection.Collection `cc:"collection"`
 	Jellyfin    struct {
+		// Unique ID of the server, used in API responses
+		ServerID string
 		// ServerName is name of server returned in info responses
 		ServerName string
 		// Indicates if we should auto-register Jellyfin users
@@ -85,6 +87,7 @@ func main() {
 	case "":
 		fallthrough
 	case "stdout":
+		log.SetFlags(0)
 	default:
 		f, err := os.OpenFile(*logfile,
 			os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
@@ -136,6 +139,7 @@ func main() {
 		Db:                 database,
 		Imageresizer:       resizer,
 		ServerPort:         config.Listen.Port,
+		ServerID:           config.Jellyfin.ServerID,
 		ServerName:         config.Jellyfin.ServerName,
 		AutoRegister:       config.Jellyfin.AutoRegister,
 		ImageQualityPoster: config.Jellyfin.ImageQualityPoster,

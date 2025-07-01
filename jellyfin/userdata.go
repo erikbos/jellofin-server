@@ -188,6 +188,8 @@ func (j *Jellyfin) userDataUpdate(ctx context.Context, userID, itemID string, po
 //
 // // userFavoriteItemsPostHandler marks an item as favorite.
 func (j *Jellyfin) userFavoriteItemsPostHandler(w http.ResponseWriter, r *http.Request) {
+	log.Printf("userFavoriteItemsPostHandler: %s\n", r.URL.Path)
+
 	accessToken := j.getAccessTokenDetails(w, r)
 	if accessToken == nil {
 		return

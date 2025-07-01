@@ -36,7 +36,7 @@ func (j *Jellyfin) sessionsHandler(w http.ResponseWriter, r *http.Request) {
 		SupportsMediaControl:  false,
 		SupportsRemoteControl: false,
 		HasCustomDeviceName:   false,
-		ServerID:              serverID,
+		ServerID:              j.serverID,
 		AdditionalUsers:       []string{},
 		PlayState: JFSessionResponsePlayState{
 			RepeatMode:    "RepeatNone",

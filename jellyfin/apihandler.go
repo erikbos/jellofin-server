@@ -837,7 +837,6 @@ func (j *Jellyfin) showsEpisodesHandler(w http.ResponseWriter, r *http.Request) 
 
 	// Do we need to filter down overview by a particular season?
 	RequestedSeasonID := r.URL.Query().Get("seasonId")
-
 	// FIXME/HACK: vidhub provides wrong season ids, so we cannot use them
 	if strings.Contains(r.Header.Get("User-Agent"), "VidHub") {
 		RequestedSeasonID = ""
