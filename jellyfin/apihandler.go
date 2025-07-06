@@ -40,7 +40,7 @@ func (j *Jellyfin) usersViewsHandler(w http.ResponseWriter, r *http.Request) {
 
 	items := make([]JFItem, 0)
 	for _, c := range j.collections.GetCollections() {
-		if item, err := j.makeJItemCollection(CollectionIDToString(c.ID)); err == nil {
+		if item, err := j.makeJItemCollection(c.ID); err == nil {
 			items = append(items, item)
 		}
 	}
@@ -67,7 +67,7 @@ func (j *Jellyfin) usersViewsHandler(w http.ResponseWriter, r *http.Request) {
 func (j *Jellyfin) usersGroupingOptionsHandler(w http.ResponseWriter, r *http.Request) {
 	collections := []JFCollection{}
 	for _, c := range j.collections.GetCollections() {
-		collectionItem, err := j.makeJItemCollection(CollectionIDToString(c.ID))
+		collectionItem, err := j.makeJItemCollection(c.ID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -170,7 +170,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Item not found", http.StatusNotFound)
 		return
 	}
-	serveJSON(j.makeJFItem(r.Context(), accessToken.UserID, i, idhash.IdHash(c.Name_), c.Type, false), w)
+	serveJSON(j.makeJFItem(r.Context(), accessToken.UserID, i, idhash.IdHash(c.Name), c.Type, false), w)
 }
 
 // /UserItems/1d57ee2251656c5fb9a05becdf0e62a3/Userdata
@@ -274,7 +274,7 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 			for _, i := range c.Items {
 				if searchTerm == "" || strings.Contains(strings.ToLower(i.Name), strings.ToLower(searchTerm)) {
 					if j.applyItemFilter(i, queryparams) {
-						items = append(items, j.makeJFItem(r.Context(), accessToken.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
+						items = append(items, j.makeJFItem(r.Context(), accessToken.UserID, i, idhash.IdHash(c.Name), c.Type, true))
 					}
 				}
 			}
@@ -309,7 +309,7 @@ func (j *Jellyfin) usersItemsAncestorsHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	collectionItem, err := j.makeJItemCollection(CollectionIDToString(c.ID))
+	collectionItem, err := j.makeJItemCollection(c.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
@@ -353,7 +353,7 @@ func (j *Jellyfin) usersItemsLatestHandler(w http.ResponseWriter, r *http.Reques
 		}
 		for _, i := range c.Items {
 			if j.applyItemFilter(i, queryparams) {
-				items = append(items, j.makeJFItem(r.Context(), accessToken.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
+				items = append(items, j.makeJFItem(r.Context(), accessToken.UserID, i, idhash.IdHash(c.Name), c.Type, true))
 			}
 		}
 	}
@@ -404,7 +404,7 @@ func (j *Jellyfin) searchHintsHandler(w http.ResponseWriter, r *http.Request) {
 		for _, i := range c.Items {
 			if searchTerm == "" || strings.Contains(strings.ToLower(i.Name), strings.ToLower(searchTerm)) {
 				if j.applyItemFilter(i, queryparams) {
-					items = append(items, j.makeJFItem(r.Context(), accessToken.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
+					items = append(items, j.makeJFItem(r.Context(), accessToken.UserID, i, idhash.IdHash(c.Name), c.Type, true))
 				}
 			}
 		}
@@ -510,7 +510,7 @@ func (j *Jellyfin) usersItemsResumeHandler(w http.ResponseWriter, r *http.Reques
 	for _, id := range resumeItemIDs {
 		if c, i := j.collections.GetItemByID(id); c != nil && i != nil {
 			if j.applyItemFilter(i, queryparams) {
-				items = append(items, j.makeJFItem(r.Context(), accessToken.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
+				items = append(items, j.makeJFItem(r.Context(), accessToken.UserID, i, idhash.IdHash(c.Name), c.Type, true))
 			}
 			continue
 		}
@@ -764,7 +764,7 @@ func (j *Jellyfin) applyItemPaginating(items []JFItem, queryparams url.Values) (
 func (j *Jellyfin) libraryVirtualFoldersHandler(w http.ResponseWriter, r *http.Request) {
 	libraries := []JFMediaLibrary{}
 	for _, c := range j.collections.GetCollections() {
-		collectionItem, err := j.makeJItemCollection(CollectionIDToString(c.ID))
+		collectionItem, err := j.makeJItemCollection(c.ID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

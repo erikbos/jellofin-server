@@ -1,14 +1,13 @@
 package collection
 
 import (
-	"fmt"
 	"log"
 	"net/url"
 	"slices"
-	"strconv"
 	"time"
 
 	"github.com/erikbos/jellofin-server/database"
+	"github.com/erikbos/jellofin-server/idhash"
 )
 
 type Options struct {
@@ -30,12 +29,12 @@ func New(options *Options) *CollectionRepo {
 }
 
 type Collection struct {
-	ID        int
-	Name_     string
+	ID        string
+	Name      string
 	Type      string
 	Items     []*Item
 	Directory string
-	BaseUrl   string
+	// BaseUrl   string
 	HlsServer string
 }
 
@@ -178,22 +177,42 @@ func (p PathString) String() string {
 // updateCollections updates the collections with the latest content from
 // the filesystem. ScanInterval is the time between file stat()s
 func (cr *CollectionRepo) updateCollections(scanInterval time.Duration) {
-	id := 1
-	for i := range cr.collections {
-		c := &(cr.collections[i])
-		c.ID = id
-		c.BaseUrl = fmt.Sprintf("/data/%d", id)
+	for _, c := range cr.collections {
+		// c := &(cr.collections[i])
 		switch c.Type {
 		case CollectionMovies:
-			cr.buildMovies(c, scanInterval)
+			cr.buildMovies(&c, scanInterval)
 		case CollectionShows:
-			cr.buildShows(c, scanInterval)
+			cr.buildShows(&c, scanInterval)
+		default:
+			log.Printf("Unknown collection type %s, skipping", c.Type)
 		}
-		id++
 	}
 }
 
-// Init initalizes content collections
+// AddCollection adds a new content collection to the repository.
+func (cr *CollectionRepo) AddCollection(name string, ID string,
+	collType string, directory string, baseUrl string, hlsServer string) {
+
+	c := Collection{
+		Name:      name,
+		ID:        ID,
+		Type:      collType,
+		Directory: directory,
+		// BaseUrl:   baseUrl,
+		HlsServer: hlsServer,
+	}
+	// If no collection ID is provided, generate one based upon the name
+	if c.ID == "" {
+		c.ID = idhash.IdHash(c.Name)
+	}
+
+	log.Printf("Adding collection %s (%s), type: %s, directory: %s\n", c.Name, c.ID, c.Type, c.Directory)
+
+	cr.collections = append(cr.collections, c)
+}
+
+// Init starts content scanning for the first time.
 func (cr *CollectionRepo) Init() {
 	cr.updateCollections(0)
 }
@@ -209,12 +228,12 @@ func (cr *CollectionRepo) GetCollections() Collections {
 	return cr.collections
 }
 
-func (cr *CollectionRepo) GetCollectionItems(collName string) []Item {
+func (cr *CollectionRepo) GetCollectionItems(colllectionID string) []Item {
 	items := make([]Item, 0)
 
 	for _, c := range cr.collections {
 		// Skip if we are searching in one particular collection?
-		if collName != "" && collName != c.Name_ {
+		if c.ID != colllectionID {
 			continue
 		}
 		for _, i := range c.Items {
@@ -224,14 +243,9 @@ func (cr *CollectionRepo) GetCollectionItems(collName string) []Item {
 	return items
 }
 
-func (cr *CollectionRepo) GetCollection(collName string) (c *Collection) {
-	sourceId := -1
-	if n, err := strconv.Atoi(collName); err == nil {
-		sourceId = n
-	}
+func (cr *CollectionRepo) GetCollection(collectionID string) (c *Collection) {
 	for n := range cr.collections {
-		if cr.collections[n].Name_ == collName ||
-			cr.collections[n].ID == sourceId {
+		if cr.collections[n].ID == collectionID {
 			c = &(cr.collections[n])
 			return
 		}
@@ -239,8 +253,8 @@ func (cr *CollectionRepo) GetCollection(collName string) (c *Collection) {
 	return
 }
 
-func (cr *CollectionRepo) GetItem(collName string, itemName string) (i *Item) {
-	c := cr.GetCollection(collName)
+func (cr *CollectionRepo) GetItem(collectionID string, itemName string) (i *Item) {
+	c := cr.GetCollection(collectionID)
 	if c == nil {
 		return
 	}
@@ -255,7 +269,7 @@ func (cr *CollectionRepo) GetItem(collName string, itemName string) (i *Item) {
 
 func (cr *CollectionRepo) GetItemByID(itemID string) (c *Collection, i *Item) {
 	for _, c := range cr.collections {
-		if i = cr.GetItem(c.Name_, itemID); i != nil {
+		if i = cr.GetItem(c.ID, itemID); i != nil {
 			return &c, i
 		}
 	}

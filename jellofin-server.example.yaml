@@ -1,0 +1,19 @@
+listen:
+  port: 8096
+
+cachedir: /var/tmp/jellofin-img-cache
+appdir: /usr/local/jellofin/ui
+dbdir: /usr/local/jellofin/db
+
+jellyfin:
+  servername: jellofin
+  autoregister: yes
+  imagequalityposter: 40
+
+collections:
+  - name: Movies
+    type: movies
+    directory: /media/movies
+  - name: TV Shows
+    type: shows
+    directory: /media/tv-series

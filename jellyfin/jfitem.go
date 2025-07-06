@@ -99,7 +99,7 @@ func (j *Jellyfin) makeJItemCollection(collectionID string) (response JFItem, e 
 	collectionGenres := c.Details().Genres
 
 	response = JFItem{
-		Name:                     c.Name_,
+		Name:                     c.Name,
 		ServerID:                 j.serverID,
 		ID:                       itemprefix_collection + collectionID,
 		ParentID:                 itemprefix_root + collectionRootID,
@@ -559,7 +559,7 @@ func (j *Jellyfin) makeJFItemFavoritesOverview(ctx context.Context, userID strin
 	for _, itemID := range favoriteIDs {
 		c, i := j.collections.GetItemByID(itemID)
 		if i != nil {
-			item := j.makeJFItem(ctx, userID, i, CollectionIDToString(c.ID), c.Type, false)
+			item := j.makeJFItem(ctx, userID, i, c.ID, c.Type, false)
 			items = append(items, item)
 		}
 	}
@@ -902,8 +902,4 @@ func (j *Jellyfin) makeMediaSource(filename string, n *collection.Nfo) (mediasou
 	mediasource.MediaStreams = append(mediasource.MediaStreams, audiostream)
 
 	return []JFMediaSources{mediasource}
-}
-
-func CollectionIDToString(id int) string {
-	return fmt.Sprintf("%d", id)
 }

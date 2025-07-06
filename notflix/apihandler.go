@@ -257,7 +257,7 @@ func (n *Notflix) indexHandler(w http.ResponseWriter, r *http.Request) {
 func copyCollection(c collection.Collection) Collection {
 	cc := Collection{
 		ID:   c.ID,
-		Name: c.Name_,
+		Name: c.Name,
 		Type: c.Type,
 	}
 	return cc

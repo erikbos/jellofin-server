@@ -1,7 +1,6 @@
 package jellyfin
 
 import (
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -70,7 +69,6 @@ func New(o *Options) *Jellyfin {
 			j.serverID = "2b11644442754f02a0c1e45d2a9f5c71"
 		}
 	}
-	log.Printf("Using server ID: %s", j.serverID)
 	if j.serverName == "" {
 		j.serverName = "Jellofin"
 	}

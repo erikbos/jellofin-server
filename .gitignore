@@ -23,5 +23,7 @@ todo.txt
 # vendor/
 
 jellofin-server.cfg
+jellofin-server*.yaml
+!jellofin-server.example.yaml
 screenlog.*
 *.db

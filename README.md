@@ -1,13 +1,13 @@
 # Jellofin Server
 
-This is the Jellofin backend server. It support serving contents to clients using two different server APIs:
+This is the Jellofin Media Server server. It support serving contents to clients using two different server APIs:
 
 1. Jellyfin API
 2. Notflix API
 
 ## Jellyfin API
 
-This server supports a subset of the [Jellyfin API](https://api.jellyfin.org/). Most (all?) of the collection and media library endpoints are implemented. Transcoding of contents is not supported.
+This server supports a subset of the [Jellyfin API](https://api.jellyfin.org/). Most (all?) of the collection and media library endpoints are implemented. All contents is served as is. Transcoding of contents is not supported and is not foreseen to be added.
 
 ### Tested clients
 
@@ -32,6 +32,91 @@ The following clients can connect to Jellofin:
 1. run `go build` to compile `jellofin-server`
 2. copy `jellofin-server.example.cfg` to `jellofin-server.cfg` and edit collection configuration details
 3. run `./jellofin-server` to start the server
+
+## Configuration File
+
+The server uses a YAML configuration file (default: `jellofin-server.yaml`). Below are all supported configuration values and their descriptions:
+
+## Top-level keys
+
+| Key         | Type    | Description                                                                 |
+|-------------|---------|-----------------------------------------------------------------------------|
+| `listen`    | object  | Network settings for the server.                                            |
+| `appdir`    | string  | Path to the directory containing the web UI/static files.                   |
+| `cachedir`  | string  | Path to the directory for image cache storage.                              |
+| `dbdir`     | string  | Path to the directory for the database files.                               |
+| `logfile`   | string  | Log output: file path, `stdout`, `syslog`, or `none`.                      |
+| `collections` | array | List of media collections served by the server.                             |
+| `jellyfin`  | object  | Jellyfin API-specific settings.                                          |
+
+---
+
+### `listen` section
+
+| Key       | Type   | Description                                  |
+|-----------|--------|----------------------------------------------|
+| `address` | string | Address to bind the server (e.g., `0.0.0.0`).|
+| `port`    | string | Port to listen on (e.g., `8096`).            |
+| `tlscert` | string | Path to TLS certificate file (optional).     |
+| `tlskey`  | string | Path to TLS private key file (optional).     |
+
+---
+
+### `collections` section
+
+Each entry defines a media collection:
+
+| Key         | Type   | Description                                                     |
+| ----------- | ------ | --------------------------------------------------------------- |
+| `name`      | string | Display name of the collection.                                 |
+| `type`      | string | Type of collection: `movies`, `shows`.                          |
+| `directory` | string | Filesystem path to the media files.                             |
+| `baseurl`   | string | Base URL for accessing the collection (optional).               |
+| `hlsserver` | string | URL of the HLS server for streaming (optional).                 |
+| `id`        | string | Can be used to override ID of collection (optional, expert use!) |
+
+---
+
+### `jellyfin` section
+
+| Key                  | Type    | Description                                                  |
+| -------------------- | ------- | ------------------------------------------------------------ |
+| `servername`         | string  | Name of the server as shown to clients.                      |
+| `autoregister`       | boolean | If set to true, unknown users will be auto registered        |
+| `imagequalityposter` | int     | Poster image quality (1-100, lower = smaller).               |
+| `serverid`           | string  | Can be used to set unique server identifier (optional). |
+
+---
+
+## Example
+
+```yaml
+listen:
+  address: 0.0.0.0
+  port: "8096"
+
+appdir: /srv/jellofin/ui
+cachedir: /srv/jellofin/cache
+dbdir: /srv/jellofin/db
+logfile: stdout
+
+collections:
+  - id: movies
+    name: Movies
+    type: movies
+    directory: /srv/media/movies
+    baseurl: /media/movies
+    hlsserver: http://localhost:6453/media/movies/
+  - id: shows
+    name: TV Shows
+    type: shows
+    directory: /srv/media/shows
+    baseurl: /media/shows
+    hlsserver: http://localhost:6453/media/shows/
+
+jellyfin:
+  servername: My media server
+  autoregister: true
 
 ## Collection format
 
@@ -59,6 +144,8 @@ tvshows/
         ├── S02E01 - EpisodeName.mp4
         └── S02E02 - EpisodeName.mp4
 ```
+
+Tvshows season number 0 are renamed to 'Specials' and
 
 ### Data
 

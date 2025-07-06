@@ -2,7 +2,6 @@ package main
 
 import (
 	"crypto/tls"
-	"flag"
 	"io"
 	"log"
 	"log/syslog"
@@ -14,8 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/XS4ALL/curlyconf-go"
 	"github.com/gorilla/mux"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 
 	"github.com/erikbos/jellofin-server/collection"
 	"github.com/erikbos/jellofin-server/database"
@@ -24,58 +24,61 @@ import (
 	"github.com/erikbos/jellofin-server/notflix"
 )
 
-var configFile = "jellofin-server.cfg"
-
-type cfgMain struct {
-	Listen      cfgListen
+type configFile struct {
+	Listen struct {
+		Address string
+		Port    string
+		TlsCert string
+		TlsKey  string
+	}
 	Appdir      string
 	Cachedir    string
 	Dbdir       string
 	Logfile     string
-	Collections []collection.Collection `cc:"collection"`
-	Jellyfin    struct {
-		// Unique ID of the server, used in API responses
-		ServerID string
-		// ServerName is name of server returned in info responses
-		ServerName string
-		// Indicates if we should auto-register Jellyfin users
-		AutoRegister bool
-		// JPEG quality for posters
+	Collections []struct {
+		ID        string
+		Name      string
+		Type      string
+		Directory string
+		BaseUrl   string
+		HlsServer string
+	}
+	Jellyfin struct {
+		ServerID           string
+		ServerName         string
+		AutoRegister       bool
 		ImageQualityPoster int
 	}
 }
 
-type cfgListen struct {
-	Address string // Address to listen on, empty for all interfaces
-	Port    string // Port to listen on
-	TlsCert string // Path to TLS certificate file
-	TlsKey  string // Path to TLS key file
-}
-
 func main() {
-	log.Printf("Parsing config file")
-	config := cfgMain{
-		Listen: cfgListen{
-			Port: "8096",
-		},
+	const configFileNameKey = "config"
+
+	// Set up viper for config file and command line flags
+	viper.SetConfigType("yaml")
+	viper.SetDefault("listen.port", "8096")
+	viper.SetDefault("logfile", "stdout")
+
+	pflag.String("config", "jellofin-server.yaml", "Path to configuration file.")
+	viper.BindPFlag(configFileNameKey, pflag.Lookup("config"))
+	pflag.Parse()
+
+	// Read config file
+	cf := viper.GetString(configFileNameKey)
+	log.Printf("Using config file %s", cf)
+	viper.SetConfigFile(cf)
+	if err := viper.ReadInConfig(); err != nil {
+		log.Fatalf("Error reading config file: %v", err)
 	}
-	p, err := curlyconf.NewParser(configFile, curlyconf.ParserNL)
-	if err == nil {
-		err = p.Parse(&config)
-	}
-	if err != nil {
-		log.Print(err.(*curlyconf.ParseError).LongError())
-		return
+	var config configFile
+	if err := viper.Unmarshal(&config); err != nil {
+		log.Fatalf("Unable to decode config into struct: %v", err)
 	}
 
-	log.Printf("Parsing flags")
-	logfile := flag.String("logfile", config.Logfile,
-		"Path of logfile. Use 'syslog' for syslog, 'stdout' "+
-			"for standard output, or 'none' to disable logging.")
-	flag.Parse()
-
-	log.Printf("Setting logfile")
-	switch *logfile {
+	// Set up logging
+	logfile := viper.GetString("logfile")
+	log.Printf("Setting logfile to %s", logfile)
+	switch logfile {
 	case "syslog":
 		logw, err := syslog.New(syslog.LOG_NOTICE, "jellofin")
 		if err != nil {
@@ -89,13 +92,13 @@ func main() {
 	case "stdout":
 		log.SetFlags(0)
 	default:
-		f, err := os.OpenFile(*logfile,
+		f, err := os.OpenFile(logfile,
 			os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 		if err != nil {
 			log.Fatalf("error opening file: %v", err)
 		}
 		defer f.Close()
-		log.Printf("Setting logfile to %s", *logfile)
+		log.Printf("Setting logfile to %s", logfile)
 		log.SetOutput(f)
 	}
 
@@ -109,10 +112,20 @@ func main() {
 	go database.AccessTokenRepo.BackgroundJobs()
 	go database.UserDataRepo.BackgroundJobs()
 
+	// Initialize collection and add them to the collection manager
 	collection := collection.New(&collection.Options{
-		Collections: config.Collections,
-		Db:          database,
+		Db: database,
 	})
+	for _, coll := range config.Collections {
+		collection.AddCollection(
+			coll.Name,
+			coll.ID,
+			coll.Type,
+			coll.Directory,
+			coll.BaseUrl,
+			coll.HlsServer,
+		)
+	}
 
 	resizer := imageresize.New(imageresize.Options{
 		Cachedir: config.Cachedir,

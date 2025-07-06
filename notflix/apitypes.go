@@ -1,7 +1,7 @@
 package notflix
 
 type Collection struct {
-	ID    int    `json:"id"`
+	ID    string `json:"id"`
 	Name  string `json:"name"`
 	Type  string `json:"type"`
 	Items []Item `json:"items,omitempty"`

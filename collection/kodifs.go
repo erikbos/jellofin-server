@@ -112,10 +112,10 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Item)
 	}
 
 	movie = &Item{
-		ID:         idhash.IdHash(mname),
-		Name:       mname,
-		Year:       year,
-		BaseUrl:    coll.BaseUrl,
+		ID:   idhash.IdHash(mname),
+		Name: mname,
+		Year: year,
+		// BaseUrl:    coll.BaseUrl,
 		Path:       escapePath(dir),
 		Video:      escapePath(video),
 		FirstVideo: created,
@@ -459,13 +459,12 @@ func (cr *CollectionRepo) showScanDir(baseDir string, dir string, seasonHint int
 }
 
 func (cr *CollectionRepo) buildShow(coll *Collection, dir string) (show *Item) {
-
 	item := &Item{
-		ID:      idhash.IdHash(path.Base(dir)),
-		Name:    path.Base(dir),
-		BaseUrl: coll.BaseUrl,
-		Path:    escapePath(dir),
-		Type:    ItemTypeShow,
+		ID:   idhash.IdHash(path.Base(dir)),
+		Name: path.Base(dir),
+		// BaseUrl: coll.BaseUrl,
+		Path: escapePath(dir),
+		Type: ItemTypeShow,
 	}
 	d := path.Join(coll.Directory, dir)
 	cr.showScanDir(d, "", -1, item)
