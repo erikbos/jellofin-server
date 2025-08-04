@@ -68,11 +68,19 @@ func (j *Jellyfin) systemInfoPublicHandler(w http.ResponseWriter, r *http.Reques
 	serveJSON(response, w)
 }
 
+// /health
+//
+// healthHandler returns health status
+func (j *Jellyfin) healthHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("cache-control", "no-cache, no-store")
+	w.Write([]byte("Healthy"))
+}
+
 // /System/Ping
 //
 // systemPingHandler returns static string
 func (j *Jellyfin) systemPingHandler(w http.ResponseWriter, r *http.Request) {
-	serveJSON("Jellyfin Server", w)
+	w.Write([]byte("\"Jellyfin Server\""))
 }
 
 // /Plugins

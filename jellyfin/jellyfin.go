@@ -84,6 +84,7 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 		return handlers.CompressHandler(j.authmiddleware(http.HandlerFunc(handler)))
 	}
 
+	r.Handle("/health", http.HandlerFunc(j.healthHandler))
 	r.Handle("/System/Ping", http.HandlerFunc(j.systemPingHandler))
 	r.Handle("/System/Info", middleware(j.systemInfoHandler))
 	r.Handle("/System/Info/Public", http.HandlerFunc(j.systemInfoPublicHandler))

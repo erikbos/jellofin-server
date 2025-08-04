@@ -36,16 +36,16 @@ func HttpLog(handle http.Handler) http.HandlerFunc {
 		handle = http.DefaultServeMux
 	}
 	return func(w http.ResponseWriter, request *http.Request) {
-		if request.URL.Path == "/System/Ping" {
-			// Don't log ping requests
-			return
-		}
-
 		start := time.Now()
 		writer := statusWriter{w, 0, 0}
 		handle.ServeHTTP(&writer, request)
 		end := time.Now()
 		latency := end.Sub(start)
+
+		if request.URL.Path == "/health" || request.URL.Path == "/System/Ping" {
+			// Don't log health & ping requests
+			return
+		}
 
 		if writer.status > 200 {
 			log.Printf("\n")
