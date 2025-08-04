@@ -36,6 +36,11 @@ func HttpLog(handle http.Handler) http.HandlerFunc {
 		handle = http.DefaultServeMux
 	}
 	return func(w http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/System/Ping" {
+			// Don't log ping requests
+			return
+		}
+
 		start := time.Now()
 		writer := statusWriter{w, 0, 0}
 		handle.ServeHTTP(&writer, request)
