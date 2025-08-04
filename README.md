@@ -30,7 +30,7 @@ The following clients can connect to Jellofin:
 ## Installation
 
 1. run `go build` to compile `jellofin-server`
-2. copy `jellofin-server.example.cfg` to `jellofin-server.cfg` and edit collection configuration details
+2. copy `jellofin-server.example.yaml` to `jellofin-server.yaml` and edit collection configuration details
 3. run `./jellofin-server` to start the server
 
 ## Configuration File
@@ -117,6 +117,7 @@ collections:
 jellyfin:
   servername: My media server
   autoregister: true
+```
 
 ## Collection format
 

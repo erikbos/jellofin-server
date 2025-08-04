@@ -323,9 +323,9 @@ func copyEpisode(episode collection.Episode, doNfo bool) Episode {
 		SeasonNo:  episode.SeasonNo,
 		EpisodeNo: episode.EpisodeNo,
 		Double:    episode.Double,
-		SortName:  episode.SortName,
-		Video:     episode.Video,
-		Thumb:     episode.Thumb,
+		// SortName:  episode.SortName,
+		Video: episode.Video,
+		Thumb: episode.Thumb,
 		// SrtSubs:   c.SrtSubs,
 		// VttSubs:   c.VttSubs,
 	}

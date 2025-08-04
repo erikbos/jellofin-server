@@ -130,9 +130,9 @@ func (j *Jellyfin) makeJItemCollection(collectionID string) (response JFItem, e 
 		// },
 	}
 	switch c.Type {
-	case collection.CollectionMovies:
+	case collection.CollectionTypeMovies:
 		response.CollectionType = collectionTypeMovies
-	case collection.CollectionShows:
+	case collection.CollectionTypeShows:
 		response.CollectionType = collectionTypeTVShows
 	default:
 		log.Printf("makeJItemCollection: unknown collection type: %s", c.Type)
@@ -229,9 +229,9 @@ func (j *Jellyfin) makeJFItemCollectionPlaylist(ctx context.Context, userID stri
 // makeJFItem make movie or show from provided item
 func (j *Jellyfin) makeJFItem(ctx context.Context, userID string, item *collection.Item, parentID, collectionType string, listView bool) (response JFItem) {
 	switch collectionType {
-	case collection.CollectionMovies:
+	case collection.CollectionTypeMovies:
 		return j.makeJFItemMovie(ctx, userID, item, parentID, listView)
-	case collection.CollectionShows:
+	case collection.CollectionTypeShows:
 		return j.makeJFItemShow(ctx, userID, item, parentID)
 	}
 	log.Printf("makeJFItem: unknown item type: %+v", item)
@@ -615,7 +615,7 @@ func (j *Jellyfin) makeJFItemPlaylist(ctx context.Context, userID, playlistID st
 	return
 }
 
-func (j *Jellyfin) makeJFItemGenre(ctx context.Context, genre string) (response JFItem) {
+func (j *Jellyfin) makeJFItemGenre(_ context.Context, genre string) (response JFItem) {
 
 	response = JFItem{
 		ID:           idhash.IdHash(genre),

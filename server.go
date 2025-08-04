@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"io"
 	"log"
-	"log/syslog"
 	"net"
 	"net/http"
 	"os"
@@ -57,7 +56,7 @@ func main() {
 	// Set up viper for config file and command line flags
 	viper.SetConfigType("yaml")
 	viper.SetDefault("listen.port", "8096")
-	viper.SetDefault("logfile", "stdout")
+	viper.SetDefault("logfile", "/dev/stdout")
 
 	pflag.String("config", "jellofin-server.yaml", "Path to configuration file.")
 	viper.BindPFlag(configFileNameKey, pflag.Lookup("config"))
@@ -79,26 +78,14 @@ func main() {
 	logfile := viper.GetString("logfile")
 	log.Printf("Setting logfile to %s", logfile)
 	switch logfile {
-	case "syslog":
-		logw, err := syslog.New(syslog.LOG_NOTICE, "jellofin")
-		if err != nil {
-			log.Fatalf("error opening syslog: %v", err)
-		}
-		log.SetOutput(logw)
 	case "none":
 		log.SetOutput(io.Discard)
-	case "":
-		fallthrough
-	case "stdout":
-		log.SetFlags(0)
 	default:
-		f, err := os.OpenFile(logfile,
-			os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+		f, err := os.OpenFile(logfile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 		if err != nil {
 			log.Fatalf("error opening file: %v", err)
 		}
 		defer f.Close()
-		log.Printf("Setting logfile to %s", logfile)
 		log.SetOutput(f)
 	}
 
@@ -202,15 +189,15 @@ type keypairReloader struct {
 // and key from the specified paths every 15 seconds. If the certificate cannot be loaded,
 // it will log an error and keep the old certificate in use.
 func NewKeypairReloader(certPath, keyPath string) (*keypairReloader, error) {
-	result := &keypairReloader{
-		certPath: certPath,
-		keyPath:  keyPath,
-	}
 	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
 	if err != nil {
 		return nil, err
 	}
-	result.cert = &cert
+	result := &keypairReloader{
+		certPath: certPath,
+		keyPath:  keyPath,
+		cert:     &cert,
+	}
 
 	go func() {
 		for {

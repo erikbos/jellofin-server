@@ -31,7 +31,7 @@ const (
 )
 
 type epMapType struct {
-	eps *[]Episode
+	eps *Episodes
 	idx int
 }
 
@@ -40,6 +40,9 @@ func escapePath(p string) string {
 	return u.EscapedPath()
 }
 
+// buildMovies builds the movies in a collection. pace is the time to wait
+// between processing each movie directory, to avoid overloading the filesystem.
+// If pace is 0, no waiting is done.
 func (cr *CollectionRepo) buildMovies(coll *Collection, pace time.Duration) (items []*Item) {
 	f, err := OpenDir(coll.Directory)
 	if err != nil {
@@ -68,6 +71,8 @@ func (cr *CollectionRepo) buildMovies(coll *Collection, pace time.Duration) (ite
 	return
 }
 
+// buildMovie builds a movie item from a movie directory. It scans the directory
+// for video files and images, and returns an Item.
 func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Item) {
 	d := path.Join(coll.Directory, dir)
 	f, err := OpenDir(d)
@@ -206,6 +211,9 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Item)
 	return
 }
 
+// buildMovies builds the movies in a collection. pace is the time to wait
+// between processing each movie directory, to avoid overloading the filesystem.
+// If pace is 0, no waiting is done.
 func (cr *CollectionRepo) buildShows(coll *Collection, pace time.Duration) (items []*Item) {
 	f, err := OpenDir(coll.Directory)
 	if err != nil {
@@ -253,7 +261,7 @@ func (cr *CollectionRepo) getSeason(show *Item, seasonNo int) (s *Season) {
 			break
 		}
 	}
-	tmp := make([]Season, 0, len(show.Seasons)+1)
+	tmp := make(Seasons, 0, len(show.Seasons)+1)
 	tmp = append(tmp, show.Seasons[:i]...)
 	tmp = append(tmp, *sn)
 	tmp = append(tmp, show.Seasons[i:]...)
@@ -276,6 +284,8 @@ func epMatch(epMap map[string]epMapType, s []string) (ep *Episode, aux, ext stri
 	return
 }
 
+// showScanDir scans a show directory for episodes and images. It updates the
+// show item with the found episodes and images.
 func (cr *CollectionRepo) showScanDir(baseDir string, dir string, seasonHint int, show *Item) {
 
 	d := path.Join(baseDir, dir)
@@ -458,6 +468,8 @@ func (cr *CollectionRepo) showScanDir(baseDir string, dir string, seasonHint int
 	}
 }
 
+// buildShow builds a show item from a show directory.
+// It scans the directory for episodes and images, and returns an Item
 func (cr *CollectionRepo) buildShow(coll *Collection, dir string) (show *Item) {
 	item := &Item{
 		ID:   idhash.IdHash(path.Base(dir)),
@@ -472,7 +484,7 @@ func (cr *CollectionRepo) buildShow(coll *Collection, dir string) (show *Item) {
 	for i := range item.Seasons {
 		s := &(item.Seasons[i])
 		// remove episodes without video
-		eps := make([]Episode, 0, len(s.Episodes))
+		eps := make(Episodes, 0, len(s.Episodes))
 		for i := range s.Episodes {
 			if s.Episodes[i].Video != "" {
 				eps = append(eps, s.Episodes[i])
@@ -480,11 +492,11 @@ func (cr *CollectionRepo) buildShow(coll *Collection, dir string) (show *Item) {
 		}
 		// and sort episodes
 		s.Episodes = eps
-		sort.Sort(byEpisode(s.Episodes))
+		sort.Sort(Episodes(s.Episodes))
 	}
 
 	// remove seasons without episodes
-	ssn := make([]Season, 0, len(item.Seasons))
+	ssn := make(Seasons, 0, len(item.Seasons))
 	for i := range item.Seasons {
 		if len(item.Seasons[i].Episodes) > 0 {
 			ssn = append(ssn, item.Seasons[i])
@@ -492,7 +504,7 @@ func (cr *CollectionRepo) buildShow(coll *Collection, dir string) (show *Item) {
 	}
 	// and sort seasons
 	item.Seasons = ssn
-	sort.Sort(bySeason(item.Seasons))
+	sort.Sort(Seasons(item.Seasons))
 
 	if len(item.Seasons) > 0 {
 		fs := item.Seasons[0]
@@ -539,7 +551,7 @@ func (cr *CollectionRepo) buildShow(coll *Collection, dir string) (show *Item) {
 	return
 }
 
-func (cr *CollectionRepo) copySrtVttSubs(srt []Subs, vtt *[]Subs) {
+func (cr *CollectionRepo) copySrtVttSubs(srt Subtitles, vtt *Subtitles) {
 	for i := range srt {
 		sub := Subs{Lang: srt[i].Lang}
 		path := srt[i].Path
