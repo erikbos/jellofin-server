@@ -78,7 +78,7 @@ func New(o *Options) *Jellyfin {
 func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r := s.UseEncodedPath()
 
-	r.Use(lowercaseQueryParamNames)
+	r.Use(normalizeRequest)
 	// middleware for endpoints to check valid auth token
 	middleware := func(handler http.HandlerFunc) http.Handler {
 		return handlers.CompressHandler(j.authmiddleware(http.HandlerFunc(handler)))
@@ -197,14 +197,18 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/Localization/ParentalRatings", middleware(j.localizationParentalRatingsHandler))
 }
 
-// lowercaseQueryParamNames lower cases the firstcharacter of each query parametername
-// this is to handle Infuse's incorrect naming of query parameters:
-//
-// ParentId -> parentId
-// SeasonId -> seasonId
-func lowercaseQueryParamNames(next http.Handler) http.Handler {
+// normalizeRequest is a middleware that normalizes the request:
+//  1. Removes double slashes in path.
+//  2. Lowercase query parameter names.
+func normalizeRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Replace the query parameters with lowercased names
+		// Remove double slashes in path.
+		for strings.Contains(r.URL.Path, "//") {
+			r.URL.Path = strings.ReplaceAll(r.URL.Path, "//", "/")
+		}
+		// Lowercase query parameter names.
+		// This is to handle Infuse's < 8.x incorrect naming of query parameters,
+		// E.g. ParentId should have been parentId, SeasonId -> seasonId
 		newParams := url.Values{}
 		for key, values := range r.URL.Query() {
 			for _, value := range values {
