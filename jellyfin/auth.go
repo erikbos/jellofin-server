@@ -42,12 +42,6 @@ func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	embyHeader, err := j.parseAuthHeader(r)
-	if err != nil || embyHeader == nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
-		return
-	}
-
 	user, err := j.db.UserRepo.Validate(r.Context(), request.Username, request.Pw)
 	if err != nil {
 		if err == database.ErrUserNotFound && j.autoRegister {
@@ -60,6 +54,12 @@ func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http
 			http.Error(w, "Invalid username/password", http.StatusUnauthorized)
 			return
 		}
+	}
+
+	// Try to get a few client details from auth header
+	embyHeader, err := j.parseAuthHeader(r)
+	if err != nil || embyHeader == nil {
+		embyHeader = &authSchemeValues{}
 	}
 
 	remoteAddress, _, _ := net.SplitHostPort(r.RemoteAddr)
@@ -135,10 +135,6 @@ func (j *Jellyfin) parseAuthHeader(r *http.Request) (*authSchemeValues, error) {
 			}
 		}
 	}
-	// A client must provide Token, other fields are optional.
-	if result.token == "" {
-		return nil, errEmbyAuthHeader
-	}
 	return &result, nil
 }
 
@@ -148,7 +144,7 @@ func (j *Jellyfin) authmiddleware(next http.Handler) http.Handler {
 		var token string
 		found := false
 
-		if embyHeader, err := j.parseAuthHeader(r); err == nil {
+		if embyHeader, err := j.parseAuthHeader(r); err == nil && embyHeader.token != "" {
 			token = embyHeader.token
 			found = true
 		}
