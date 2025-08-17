@@ -135,7 +135,8 @@ func (j *Jellyfin) parseAuthHeader(r *http.Request) (*authSchemeValues, error) {
 			}
 		}
 	}
-	if result.client == "" || result.device == "" || result.deviceID == "" {
+	// A client must provide Token, other fields are optional.
+	if result.token == "" {
 		return nil, errEmbyAuthHeader
 	}
 	return &result, nil
