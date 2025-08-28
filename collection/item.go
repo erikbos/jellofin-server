@@ -1,11 +1,18 @@
 package collection
 
+import (
+	"strings"
+	"unicode"
+)
+
 // An 'item' can be a movie, a tv-show, a folder, etc.
 type Item struct {
 	// ID is the unique identifier for the item. Typically Idhash() of name.
 	ID string
 	// Name is the name of the item, e.g. "Casablanca (1949)"
 	Name string
+	// SortName is used to sort on.
+	SortName string
 	// Type indicates item type, e.g., "movie" or "show".
 	Type string
 	// Path is the directory to the item, relative to collection root.
@@ -95,6 +102,8 @@ type Episode struct {
 	ID string
 	// Name is the human-readable name of the episode.
 	Name string
+	// SortName is the name of the item when sorting is applied.
+	SortName string
 	// SeasonNo is the season number, e.g., 1, 2, etc. 0 is used for specials.
 	SeasonNo int
 	// EpisodeNo is the episode number within the season, e.g., 1, 2, etc.
@@ -164,4 +173,25 @@ func (i *Item) LoadNfo() {
 // LoadNfo loads the NFO file for the episode if not loaded already
 func (e *Episode) LoadNfo() {
 	loadNFO(&e.Nfo, e.nfoPath)
+}
+
+// makeSortName returns a name suitable for sorting.
+func makeSortName(name string) string {
+	// Start with lowercasing and trimming whitespace.
+	title := strings.ToLower(strings.TrimSpace(name))
+
+	// Remove leading articles.
+	for _, prefix := range []string{"the ", "a ", "an "} {
+		if strings.HasPrefix(title, prefix) {
+			title = strings.TrimSpace(title[len(prefix):])
+			break
+		}
+	}
+
+	// Remove whitespace and punctuation.
+	title = strings.TrimLeftFunc(title, func(r rune) bool {
+		return unicode.IsSpace(r) || unicode.IsPunct(r)
+	})
+
+	return title
 }

@@ -16,26 +16,25 @@ import (
 )
 
 const (
-	// Misc IDs for api responses
-	sessionID               = "e3a869b7a901f8894de8ee65688db6c0"
-	collectionRootID        = "e9d5075a555c1cbc394eec4cef295274"
-	playlistCollectionID    = "2f0340563593c4d98b97c9bfa21ce23c"
-	favoritesCollectionID   = "f4a0b1c2d3e5c4b8a9e6f7d8e9a0b1c2"
-	displayPreferencesID    = "f137a2dd21bbc1b99aa5c0f6bf02a805"
-	collectionTypeMovies    = "movies"
-	collectionTypeTVShows   = "tvshows"
-	CollectionTypePlaylists = "playlists"
-
-	// itemid prefixes
-	itemprefix_separator            = "_"
-	itemprefix_root                 = "root_"
-	itemprefix_collection           = "collection_"
-	itemprefix_collection_favorites = "collectionfavorites_"
-	itemprefix_collection_playlist  = "collectionplaylist_"
-	itemprefix_show                 = "show_"
-	itemprefix_season               = "season_"
-	itemprefix_episode              = "episode_"
-	itemprefix_playlist             = "playlist_"
+	// sessionID is a unique ID for authenticated session
+	sessionID = "e3a869b7a901f8894de8ee65688db6c0"
+	// Top-level ID parent of all collections
+	collectionRootID = "e9d5075a555c1cbc394eec4cef295274"
+	// ID of dynamically generated Playlist collection
+	playlistCollectionID = "2f0340563593c4d98b97c9bfa21ce23c"
+	// ID of dynamically generated favorites collection
+	favoritesCollectionID = "f4a0b1c2d3e5c4b8a9e6f7d8e9a0b1c2"
+	// ID of display preferences
+	displayPreferencesID     = "f137a2dd21bbc1b99aa5c0f6bf02a805"
+	collectionTypeMovies     = "movies"
+	collectionTypeTVShows    = "tvshows"
+	CollectionTypePlaylists  = "playlists"
+	itemTypeCollectionFolder = "CollectionFolder"
+	itemTypeUserView         = "UserView"
+	itemTypeMovie            = "Movie"
+	itemTypeShow             = "Series"
+	itemTypeSeason           = "Season"
+	itemTypeEpisode          = "Episode"
 
 	// imagetag prefix will get HTTP-redirected
 	tagprefix_redirect = "redirect_"
@@ -53,7 +52,7 @@ func (j *Jellyfin) makeJFItemRoot() (response JFItem, e error) {
 	response = JFItem{
 		Name:                     "Media Folders",
 		ServerID:                 j.serverID,
-		ID:                       itemprefix_root + collectionRootID,
+		ID:                       makeJFRootID(collectionRootID),
 		Etag:                     idhash.IdHash(collectionRootID),
 		DateCreated:              time.Now().UTC(),
 		Type:                     "UserRootFolder",
@@ -88,10 +87,8 @@ func (j *Jellyfin) makeJFItemRoot() (response JFItem, e error) {
 	return
 }
 
-func (j *Jellyfin) makeJItemCollection(collectionID string) (response JFItem, e error) {
-	// collectionid := strings.TrimPrefix(itemid, itemprefix_collection)
-	// fixme: after collectionID is a real ID and not an int, this should be removed
-	c := j.collections.GetCollection(strings.TrimPrefix(collectionID, itemprefix_collection))
+func (j *Jellyfin) makeJFItemCollection(collectionID string) (response JFItem, e error) {
+	c := j.collections.GetCollection(collectionID)
 	if c == nil {
 		e = errors.New("collection not found")
 		return
@@ -101,12 +98,12 @@ func (j *Jellyfin) makeJItemCollection(collectionID string) (response JFItem, e 
 	response = JFItem{
 		Name:                     c.Name,
 		ServerID:                 j.serverID,
-		ID:                       itemprefix_collection + collectionID,
-		ParentID:                 itemprefix_root + collectionRootID,
+		ID:                       makeJFCollectionID(collectionID),
+		ParentID:                 makeJFRootID(collectionRootID),
 		Etag:                     idhash.IdHash(collectionID),
 		DateCreated:              time.Now().UTC(),
 		PremiereDate:             time.Now().UTC(),
-		Type:                     "CollectionFolder",
+		Type:                     itemTypeCollectionFolder,
 		IsFolder:                 true,
 		EnableMediaSourceDisplay: true,
 		ChildCount:               len(c.Items),
@@ -150,13 +147,14 @@ func (j *Jellyfin) makeJFItemCollectionFavorites(ctx context.Context, userID str
 	response = JFItem{
 		Name:                     "Favorites",
 		ServerID:                 j.serverID,
-		ID:                       itemprefix_collection_favorites + favoritesCollectionID,
+		ID:                       makeJFCollectionFavoritesID(favoritesCollectionID),
+		ParentID:                 makeJFRootID(collectionRootID),
 		Etag:                     idhash.IdHash(favoritesCollectionID),
 		DateCreated:              time.Now().UTC(),
 		PremiereDate:             time.Now().UTC(),
 		CollectionType:           CollectionTypePlaylists,
 		SortName:                 CollectionTypePlaylists,
-		Type:                     "UserView",
+		Type:                     itemTypeUserView,
 		IsFolder:                 true,
 		EnableMediaSourceDisplay: true,
 		ChildCount:               itemCount,
@@ -169,7 +167,6 @@ func (j *Jellyfin) makeJFItemCollectionFavorites(ctx context.Context, userID str
 		Path:                     "/collection",
 		LockData:                 false,
 		MediaType:                "Unknown",
-		ParentID:                 collectionRootID,
 		CanDelete:                false,
 		CanDownload:              true,
 		SpecialFeatureCount:      0,
@@ -194,13 +191,14 @@ func (j *Jellyfin) makeJFItemCollectionPlaylist(ctx context.Context, userID stri
 	response = JFItem{
 		Name:                     "Playlists",
 		ServerID:                 j.serverID,
-		ID:                       itemprefix_collection_playlist + playlistCollectionID,
+		ID:                       makeJFCollectionPlaylistID(playlistCollectionID),
+		ParentID:                 makeJFRootID(collectionRootID),
 		Etag:                     idhash.IdHash(playlistCollectionID),
 		DateCreated:              time.Now().UTC(),
 		PremiereDate:             time.Now().UTC(),
 		CollectionType:           CollectionTypePlaylists,
 		SortName:                 CollectionTypePlaylists,
-		Type:                     "UserView",
+		Type:                     itemTypeUserView,
 		IsFolder:                 true,
 		EnableMediaSourceDisplay: true,
 		ChildCount:               itemCount,
@@ -213,7 +211,6 @@ func (j *Jellyfin) makeJFItemCollectionPlaylist(ctx context.Context, userID stri
 		Path:                     "/collection",
 		LockData:                 false,
 		MediaType:                "Unknown",
-		ParentID:                 collectionRootID,
 		CanDelete:                false,
 		CanDownload:              true,
 		SpecialFeatureCount:      0,
@@ -241,14 +238,14 @@ func (j *Jellyfin) makeJFItem(ctx context.Context, userID string, item *collecti
 // makeJFItem make movie item
 func (j *Jellyfin) makeJFItemMovie(ctx context.Context, userID string, i *collection.Item, parentID string, listView bool) (response JFItem) {
 	response = JFItem{
-		Type:                    "Movie",
+		Type:                    itemTypeMovie,
 		ID:                      i.ID,
-		ParentID:                parentID,
+		ParentID:                makeJFCollectionID(parentID),
 		ServerID:                j.serverID,
 		Name:                    i.Name,
 		OriginalTitle:           i.Name,
-		SortName:                i.Name,
-		ForcedSortName:          i.Name,
+		SortName:                i.SortName,
+		ForcedSortName:          i.SortName,
 		IsFolder:                false,
 		LocationType:            "FileSystem",
 		Path:                    "file.mp4",
@@ -291,23 +288,26 @@ func (j *Jellyfin) makeJFItemMovie(ctx context.Context, userID string, i *collec
 		i.Year = response.ProductionYear
 	}
 
-	if playstate, err := j.db.UserDataRepo.Get(ctx, userID, trimPrefix(i.ID)); err == nil {
-		response.UserData = j.makeJFUserData(userID, i.ID, playstate)
+	if playstate, err := j.db.UserDataRepo.Get(ctx, userID, i.ID); err == nil {
+		response.UserData = j.makeJFUserData(userID, i.ID, &playstate)
+	} else {
+		response.UserData = j.makeJFUserData(userID, i.ID, nil)
 	}
+
 	return response
 }
 
 // makeJFItemShow makes show item
 func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, i *collection.Item, parentID string) (response JFItem) {
 	response = JFItem{
-		Type:                    "Series",
+		Type:                    itemTypeShow,
 		ID:                      i.ID,
-		ParentID:                parentID,
+		ParentID:                makeJFCollectionID(parentID),
 		ServerID:                j.serverID,
 		Name:                    i.Name,
 		OriginalTitle:           i.Name,
-		SortName:                i.Name,
-		ForcedSortName:          i.Name,
+		SortName:                i.SortName,
+		ForcedSortName:          i.SortName,
 		IsFolder:                true,
 		Etag:                    idhash.IdHash(i.ID),
 		DateCreated:             time.Unix(i.FirstVideo/1000, 0).UTC(),
@@ -343,7 +343,7 @@ func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, i *collect
 	for _, s := range i.Seasons {
 		for _, e := range s.Episodes {
 			totalEpisodes++
-			episodePlaystate, err := j.db.UserDataRepo.Get(ctx, userID, trimPrefix(e.ID))
+			episodePlaystate, err := j.db.UserDataRepo.Get(ctx, userID, e.ID)
 			if err == nil {
 				if episodePlaystate.Played {
 					playedEpisodes++
@@ -355,13 +355,13 @@ func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, i *collect
 		}
 	}
 	if totalEpisodes != 0 {
-		playstate, err := j.db.UserDataRepo.Get(ctx, userID, trimPrefix(i.ID))
+		playstate, err := j.db.UserDataRepo.Get(ctx, userID, i.ID)
 		if err != nil {
 			playstate = database.UserData{
 				Timestamp: time.Now().UTC(),
 			}
 		}
-		response.UserData = j.makeJFUserData(userID, i.ID, playstate)
+		response.UserData = j.makeJFUserData(userID, i.ID, &playstate)
 
 		response.UserData.UnplayedItemCount = totalEpisodes - playedEpisodes
 		response.UserData.PlayedPercentage = 100 * playedEpisodes / totalEpisodes
@@ -386,18 +386,18 @@ func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, i *collect
 
 // makeJFItemSeason makes a season
 func (j *Jellyfin) makeJFItemSeason(ctx context.Context, userID, seasonID string) (response JFItem, err error) {
-	_, show, season := j.collections.GetSeasonByID(trimPrefix(seasonID))
+	_, show, season := j.collections.GetSeasonByID(seasonID)
 	if season == nil {
 		err = errors.New("could not find season")
 		return
 	}
 
 	response = JFItem{
-		Type:               "Season",
+		Type:               itemTypeSeason,
 		ServerID:           j.serverID,
 		ParentID:           show.ID,
 		SeriesID:           show.ID,
-		ID:                 itemprefix_season + seasonID,
+		ID:                 makeJFSeasonID(seasonID),
 		Etag:               idhash.IdHash(seasonID),
 		SeriesName:         show.Name,
 		IsFolder:           true,
@@ -411,7 +411,7 @@ func (j *Jellyfin) makeJFItemSeason(ctx context.Context, userID, seasonID string
 		CanDownload:        true,
 		PlayAccess:         "Full",
 		ImageTags: &JFImageTags{
-			Primary: "season",
+			Primary: makeJFSeasonID(seasonID),
 		},
 		ParentLogoItemId: show.ID,
 	}
@@ -431,7 +431,7 @@ func (j *Jellyfin) makeJFItemSeason(ctx context.Context, userID, seasonID string
 	var playedEpisodes int
 	var lastestPlayed time.Time
 	for _, e := range season.Episodes {
-		episodePlaystate, err := j.db.UserDataRepo.Get(ctx, userID, trimPrefix(e.ID))
+		episodePlaystate, err := j.db.UserDataRepo.Get(ctx, userID, e.ID)
 		if err == nil {
 			if episodePlaystate.Played {
 				playedEpisodes++
@@ -442,13 +442,13 @@ func (j *Jellyfin) makeJFItemSeason(ctx context.Context, userID, seasonID string
 		}
 	}
 
-	playstate, err := j.db.UserDataRepo.Get(ctx, userID, trimPrefix(seasonID))
+	playstate, err := j.db.UserDataRepo.Get(ctx, userID, seasonID)
 	if err != nil {
 		playstate = database.UserData{
 			Timestamp: time.Now().UTC(),
 		}
 	}
-	response.UserData = j.makeJFUserData(userID, seasonID, playstate)
+	response.UserData = j.makeJFUserData(userID, seasonID, &playstate)
 
 	response.UserData.UnplayedItemCount = response.ChildCount - playedEpisodes
 	response.UserData.PlayedPercentage = 100 * playedEpisodes / response.ChildCount
@@ -481,20 +481,20 @@ func makeSeasonName(seasonNo int) string {
 
 // makeJFItemEpisode makes an episode
 func (j *Jellyfin) makeJFItemEpisode(ctx context.Context, userID, episodeID string) (response JFItem, err error) {
-	_, show, season, episode := j.collections.GetEpisodeByID(trimPrefix(episodeID))
+	_, show, season, episode := j.collections.GetEpisodeByID(episodeID)
 	if episode == nil {
 		err = errors.New("could not find episode")
 		return
 	}
 
 	response = JFItem{
-		Type:         "Episode",
-		ID:           itemprefix_episode + episodeID,
+		Type:         itemTypeEpisode,
+		ID:           makeJFEpisodeID(episodeID),
 		Etag:         idhash.IdHash(episodeID),
 		ServerID:     j.serverID,
 		SeriesName:   show.Name,
 		SeriesID:     show.ID,
-		SeasonID:     itemprefix_season + season.ID,
+		SeasonID:     makeJFSeasonID(season.ID),
 		SeasonName:   makeSeasonName(season.SeasonNo),
 		LocationType: "FileSystem",
 		Path:         "episode.mp4",
@@ -508,10 +508,15 @@ func (j *Jellyfin) makeJFItemEpisode(ctx context.Context, userID, episodeID stri
 		CanDelete:    false,
 		CanDownload:  true,
 		PlayAccess:   "Full",
-		ImageTags: &JFImageTags{
-			Primary: "episode",
-		},
+		// ImageTags: &JFImageTags{
+		// 	Primary: "episode",
+		// },
 		ParentLogoItemId: show.ID,
+	}
+	if episode.Thumb != "" {
+		response.ImageTags = &JFImageTags{
+			Primary: episodeID,
+		}
 	}
 
 	// Get a bunch of metadata from show-level nfo
@@ -540,8 +545,10 @@ func (j *Jellyfin) makeJFItemEpisode(ctx context.Context, userID, episodeID stri
 	response.RunTimeTicks = response.MediaSources[0].RunTimeTicks
 	response.MediaStreams = response.MediaSources[0].MediaStreams
 
-	if playstate, err := j.db.UserDataRepo.Get(ctx, userID, trimPrefix(episodeID)); err == nil {
-		response.UserData = j.makeJFUserData(userID, episodeID, playstate)
+	if playstate, err := j.db.UserDataRepo.Get(ctx, userID, episodeID); err == nil {
+		response.UserData = j.makeJFUserData(userID, episodeID, &playstate)
+	} else {
+		response.UserData = j.makeJFUserData(userID, episodeID, nil)
 	}
 	return response, nil
 }
@@ -566,6 +573,7 @@ func (j *Jellyfin) makeJFItemFavoritesOverview(ctx context.Context, userID strin
 	return
 }
 
+// makeJFItemPlaylistOverview creates a list of playlists of the user.
 func (j *Jellyfin) makeJFItemPlaylistOverview(ctx context.Context, userID string) (items []JFItem, err error) {
 	playlistIDs, err := j.db.PlaylistRepo.GetPlaylists(ctx, userID)
 
@@ -584,7 +592,7 @@ func (j *Jellyfin) makeJFItemPlaylistOverview(ctx context.Context, userID string
 }
 
 func (j *Jellyfin) makeJFItemPlaylist(ctx context.Context, userID, playlistID string) (response JFItem, err error) {
-	playlist, err := j.db.PlaylistRepo.GetPlaylist(ctx, userID, trimPrefix(playlistID))
+	playlist, err := j.db.PlaylistRepo.GetPlaylist(ctx, userID, playlistID)
 	if playlist == nil {
 		err = errors.New("could not find playlist")
 		return
@@ -592,9 +600,9 @@ func (j *Jellyfin) makeJFItemPlaylist(ctx context.Context, userID, playlistID st
 
 	response = JFItem{
 		Type:                     "Playlist",
-		ID:                       itemprefix_playlist + playlist.ID,
+		ID:                       makeJFCollectionPlaylistID(playlist.ID),
 		ServerID:                 j.serverID,
-		ParentID:                 "1071671e7bffa0532e930debee501d2e", // fixme: this should be ID generated by makeJFItemCollectionPlaylist()
+		ParentID:                 makeJFCollectionPlaylistID(playlistCollectionID),
 		Name:                     playlist.Name,
 		SortName:                 playlist.Name,
 		Etag:                     idhash.IdHash(playlist.ID),
@@ -611,19 +619,18 @@ func (j *Jellyfin) makeJFItemPlaylist(ctx context.Context, userID, playlistID st
 		DisplayPreferencesID:     displayPreferencesID,
 		EnableMediaSourceDisplay: true,
 	}
-
 	return
 }
 
 func (j *Jellyfin) makeJFItemGenre(_ context.Context, genre string) (response JFItem) {
 
 	response = JFItem{
-		ID:           idhash.IdHash(genre),
+		ID:           makeJFGenreID(genre),
 		ServerID:     j.serverID,
 		Type:         "Genre",
 		Name:         genre,
 		SortName:     genre,
-		Etag:         idhash.IdHash(genre),
+		Etag:         makeJFGenreID(genre),
 		DateCreated:  time.Now().UTC(),
 		PremiereDate: time.Now().UTC(),
 		LocationType: "FileSystem",
@@ -640,17 +647,20 @@ func (j *Jellyfin) makeJFItemGenre(_ context.Context, genre string) (response JF
 	return
 }
 
-// makeJFUserData creates a JFUserData object from Userdata
-func (j *Jellyfin) makeJFUserData(UserID, itemID string, p database.UserData) (response *JFUserData) {
+// makeJFUserData creates a JFUserData object, and populates from Userdata if provided
+func (j *Jellyfin) makeJFUserData(UserID, itemID string, p *database.UserData) (response *JFUserData) {
 	response = &JFUserData{
-		PlaybackPositionTicks: p.Position * TicsToSeconds,
-		PlayedPercentage:      p.PlayedPercentage,
-		Played:                p.Played,
-		IsFavorite:            p.Favorite,
-		LastPlayedDate:        p.Timestamp,
-		Key:                   UserID + "/" + itemID,
-		ItemID:                "00000000000000000000000000000000",
+		Key:    UserID + "/" + itemID,
+		ItemID: "00000000000000000000000000000000",
 	}
+	if p != nil {
+		response.IsFavorite = p.Favorite
+		response.LastPlayedDate = p.Timestamp
+		response.PlaybackPositionTicks = p.Position * TicsToSeconds
+		response.PlayedPercentage = p.PlayedPercentage
+		response.Played = p.Played
+	}
+
 	return
 }
 
@@ -902,4 +912,100 @@ func (j *Jellyfin) makeMediaSource(filename string, n *collection.Nfo) (mediasou
 	mediasource.MediaStreams = append(mediasource.MediaStreams, audiostream)
 
 	return []JFMediaSources{mediasource}
+}
+
+// Most internal IDs get a prefixed when used in an API response.This helps
+// to determine the type of response when receiving an ID from
+// a client on an endpoints like /Items/{id}.
+//
+// Movies and shows do not get a prefix for backwards compatibility reasons.
+
+const (
+	itemprefix_separator            = "_"
+	itemprefix_root                 = "root_"
+	itemprefix_collection           = "collection_"
+	itemprefix_collection_favorites = "collectionfavorites_"
+	itemprefix_collection_playlist  = "collectionplaylist_"
+	itemprefix_show                 = "show_"
+	itemprefix_season               = "season_"
+	itemprefix_episode              = "episode_"
+	itemprefix_playlist             = "playlist_"
+)
+
+// makeJFRootID returns an external id for the root folder.
+func makeJFRootID(rootID string) string {
+	return itemprefix_root + rootID
+}
+
+// makeJFCollectionID returns an external id for a collection.
+func makeJFCollectionID(collectionID string) string {
+	return itemprefix_collection + collectionID
+}
+
+// makeJFCollectionFavoritesID returns an external id for a favorites collection.
+func makeJFCollectionFavoritesID(favoritesID string) string {
+	return itemprefix_collection_favorites + favoritesID
+}
+
+// makeJFCollectionPlaylistID returns an external id for a playlist collection.
+func makeJFCollectionPlaylistID(playlistID string) string {
+	return itemprefix_collection_playlist + playlistID
+}
+
+// makeJFSeasonID returns an external id for a season ID.
+func makeJFSeasonID(seasonID string) string {
+	return itemprefix_season + seasonID
+}
+
+// makeJFEpisodeID returns an external id for an episode ID.
+func makeJFEpisodeID(episodeID string) string {
+	return itemprefix_episode + episodeID
+}
+
+// makeJFGenreID returns an external id for a genre name.
+func makeJFGenreID(genre string) string {
+	return idhash.IdHash(genre)
+}
+
+// trimPrefix removes the type prefix from an item id.
+func trimPrefix(s string) string {
+	if i := strings.Index(s, itemprefix_separator); i != -1 {
+		return s[i+1:]
+	}
+	return s
+}
+
+// isJFRootID checks if the provided ID is a root ID.
+func isJFRootID(id string) bool {
+	return strings.HasPrefix(id, itemprefix_root)
+}
+
+// isJFCollectionID checks if the provided ID is a collection ID.
+func isJFCollectionID(id string) bool {
+	return strings.HasPrefix(id, itemprefix_collection)
+}
+
+// isJFCollectionFavoritesID checks if the provided ID is a favorites collection ID.
+func isJFCollectionFavoritesID(id string) bool {
+	return strings.HasPrefix(id, itemprefix_collection_favorites)
+}
+
+// isJFCollectionPlaylistID checks if the provided ID is a playlist collection ID.
+func isJFCollectionPlaylistID(id string) bool {
+	return strings.HasPrefix(id, itemprefix_collection_playlist)
+}
+
+// isJFPlaylistID checks if the provided ID is a playlist ID.
+func isJFPlaylistID(id string) bool {
+	return strings.HasPrefix(id, itemprefix_playlist)
+}
+
+// isJFSeasonID checks if the provided ID is a season ID.
+func isJFSeasonID(id string) bool {
+	return strings.HasPrefix(id, itemprefix_season)
+}
+
+// isJFEpisodeID checks if the provided ID is an episode ID.
+func isJFEpisodeID(id string) bool {
+	return strings.HasPrefix(id, itemprefix_episode)
 }

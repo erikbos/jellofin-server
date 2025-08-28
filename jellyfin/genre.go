@@ -8,7 +8,6 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/erikbos/jellofin-server/collection"
-	"github.com/erikbos/jellofin-server/idhash"
 )
 
 // /Genres
@@ -129,7 +128,7 @@ func makeJFGenreItems(array []string) (genreItems []JFGenreItem) {
 	for _, v := range array {
 		genreItems = append(genreItems, JFGenreItem{
 			Name: v,
-			ID:   idhash.IdHash(v),
+			ID:   makeJFGenreID(v),
 		})
 	}
 	return genreItems

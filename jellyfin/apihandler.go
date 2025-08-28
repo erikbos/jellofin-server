@@ -17,7 +17,6 @@ import (
 
 	"github.com/erikbos/jellofin-server/collection"
 	"github.com/erikbos/jellofin-server/database"
-	"github.com/erikbos/jellofin-server/idhash"
 )
 
 type contextKey string
@@ -40,7 +39,7 @@ func (j *Jellyfin) usersViewsHandler(w http.ResponseWriter, r *http.Request) {
 
 	items := make([]JFItem, 0)
 	for _, c := range j.collections.GetCollections() {
-		if item, err := j.makeJItemCollection(c.ID); err == nil {
+		if item, err := j.makeJFItemCollection(c.ID); err == nil {
 			items = append(items, item)
 		}
 	}
@@ -67,7 +66,7 @@ func (j *Jellyfin) usersViewsHandler(w http.ResponseWriter, r *http.Request) {
 func (j *Jellyfin) usersGroupingOptionsHandler(w http.ResponseWriter, r *http.Request) {
 	collections := []JFCollection{}
 	for _, c := range j.collections.GetCollections() {
-		collectionItem, err := j.makeJItemCollection(c.ID)
+		collectionItem, err := j.makeJFItemCollection(c.ID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -81,8 +80,11 @@ func (j *Jellyfin) usersGroupingOptionsHandler(w http.ResponseWriter, r *http.Re
 	serveJSON(collections, w)
 }
 
-// curl -v 'http://127.0.0.1:9090/Users/2b1ec0a52b09456c9823a367d84ac9e5/Items/f137a2dd21bbc1b99aa5c0f6bf02a805?Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount'
-// handle individual item: any type: collection, a movie/show or individual file
+// /Users/2b1ec0a52b09456c9823a367d84ac9e5/Items/f137a2dd21bbc1b99aa5c0f6bf02a805?Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount'
+//
+// /Items/f137a2dd21bbc1b99aa5c0f6bf02a805?Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount'
+//
+// usersItemHandler returns details for a specific item
 func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 	accessToken := j.getAccessTokenDetails(w, r)
 	if accessToken == nil {
@@ -90,87 +92,78 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vars := mux.Vars(r)
-	// itemID := vars["item"]
+	itemID := vars["item"]
 
-	splitted := strings.Split(vars["item"], itemprefix_separator)
-	if len(splitted) == 2 {
-		itemprefix := splitted[0] + itemprefix_separator
-		itemID := splitted[1]
-		switch itemprefix {
-		case itemprefix_root:
-			collectionItem, err := j.makeJFItemRoot()
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusNotFound)
-				return
+	switch {
+	case isJFRootID(itemID):
+		collectionItem, err := j.makeJFItemRoot()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
 
-			}
-			serveJSON(collectionItem, w)
+		}
+		serveJSON(collectionItem, w)
+		return
+	case isJFCollectionID(itemID):
+		collectionItem, err := j.makeJFItemCollection(trimPrefix(itemID))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
 			return
-		case itemprefix_collection:
-			collectionItem, err := j.makeJItemCollection(itemID)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusNotFound)
-				return
 
-			}
-			serveJSON(collectionItem, w)
+		}
+		serveJSON(collectionItem, w)
+		return
+	case isJFCollectionFavoritesID(itemID):
+		collectionItem, err := j.makeJFItemCollectionFavorites(r.Context(), accessToken.UserID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
 			return
-		case itemprefix_collection_favorites:
-			collectionItem, err := j.makeJFItemCollectionFavorites(r.Context(), accessToken.UserID)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusNotFound)
-				return
 
-			}
-			serveJSON(collectionItem, w)
+		}
+		serveJSON(collectionItem, w)
+		return
+	case isJFCollectionPlaylistID(itemID):
+		collectionItem, err := j.makeJFItemCollectionPlaylist(r.Context(), accessToken.UserID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
 			return
-		case itemprefix_collection_playlist:
-			collectionItem, err := j.makeJFItemCollectionPlaylist(r.Context(), accessToken.UserID)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusNotFound)
-				return
 
-			}
-			serveJSON(collectionItem, w)
-			return
-		case itemprefix_season:
-			seasonItem, err := j.makeJFItemSeason(r.Context(), accessToken.UserID, itemID)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusNotFound)
-				return
-			}
-			serveJSON(seasonItem, w)
-			return
-		case itemprefix_episode:
-			episodeItem, err := j.makeJFItemEpisode(r.Context(), accessToken.UserID, itemID)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusNotFound)
-				return
-			}
-			serveJSON(episodeItem, w)
-			return
-		case itemprefix_playlist:
-			playlistItem, err := j.makeJFItemPlaylist(r.Context(), accessToken.UserID, itemID)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusNotFound)
-				return
-			}
-			serveJSON(playlistItem, w)
-			return
-		default:
-			log.Print("Item request for unknown prefix!")
-			http.Error(w, "Unknown item prefix", http.StatusInternalServerError)
+		}
+		serveJSON(collectionItem, w)
+		return
+	case isJFSeasonID(itemID):
+		seasonItem, err := j.makeJFItemSeason(r.Context(), accessToken.UserID, trimPrefix(itemID))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
+		serveJSON(seasonItem, w)
+		return
+	case isJFEpisodeID(itemID):
+		episodeItem, err := j.makeJFItemEpisode(r.Context(), accessToken.UserID, trimPrefix(itemID))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		serveJSON(episodeItem, w)
+		return
+	case isJFPlaylistID(itemID):
+		playlistItem, err := j.makeJFItemPlaylist(r.Context(), accessToken.UserID, trimPrefix(itemID))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		serveJSON(playlistItem, w)
+		return
 	}
 
-	// Try to find individual item
-	c, i := j.collections.GetItemByID(vars["item"])
+	// Try to fetch individual item: movie or show
+	c, i := j.collections.GetItemByID(itemID)
 	if i == nil {
 		http.Error(w, "Item not found", http.StatusNotFound)
 		return
 	}
-	serveJSON(j.makeJFItem(r.Context(), accessToken.UserID, i, idhash.IdHash(c.Name), c.Type, false), w)
+	serveJSON(j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID, c.Type, false), w)
 }
 
 // /UserItems/1d57ee2251656c5fb9a05becdf0e62a3/Userdata
@@ -187,10 +180,11 @@ func (j *Jellyfin) usersItemUserDataHandler(w http.ResponseWriter, r *http.Reque
 
 	playstate, err := j.db.UserDataRepo.Get(r.Context(), accessToken.UserID, trimPrefix(itemID))
 	if err != nil {
+		// TODO: should we return an empty object or a 404?
 		playstate = database.UserData{}
 	}
 
-	userData := j.makeJFUserData(accessToken.UserID, itemID, playstate)
+	userData := j.makeJFUserData(accessToken.UserID, itemID, &playstate)
 	serveJSON(userData, w)
 }
 
@@ -198,26 +192,9 @@ func (j *Jellyfin) usersItemUserDataHandler(w http.ResponseWriter, r *http.Reque
 //
 // /Users/{user}/Items
 //
-// // curl -v 'http://127.0.0.1:9090/Users/2b1ec0a52b09456c9823a367d84ac9e5/Items?
+// usersItemsHandler returns list of items based upon provided quary params
 //
-//	ExcludeLocationTypes=Virtual&
-//	Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount&ParentId=f137a2dd21bbc1b99aa5c0f6bf02a805&
-//	SortBy=SortName,ProductionYear&
-//	SortOrder=Ascending&
-//	IncludeItemTypes=Movie&
-//	Recursive=true&
-//	StartIndex=0&Limit=50'
-//
-// find based upon title
-// curl -v 'http://127.0.0.1:9090/Users/2b1ec0a52b09456c9823a367d84ac9e5/Items?
-//
-//	ExcludeLocationTypes=Virtual&
-//	Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount&
-//	SearchTerm=p&
-//	Recursive=true&Limit=24
-//
-// generate list of items based upon provided ParentId or a text searchTerm
-// query params:
+// Supported query params:
 // - ParentId, if provided scope result set to this collection
 // - SearchTerm, substring to match on
 // - StartIndex, index of first result item
@@ -245,7 +222,7 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 		collectionPopulated = true
 	}
 
-	// Return playlist collection if requested
+	// Return playlist collection list if requested
 	if strings.HasPrefix(searchCollection, itemprefix_collection_playlist) {
 		items, err = j.makeJFItemPlaylistOverview(r.Context(), accessToken.UserID)
 		if err != nil {
@@ -273,8 +250,9 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 
 			for _, i := range c.Items {
 				if searchTerm == "" || strings.Contains(strings.ToLower(i.Name), strings.ToLower(searchTerm)) {
-					if j.applyItemFilter(i, queryparams) {
-						items = append(items, j.makeJFItem(r.Context(), accessToken.UserID, i, idhash.IdHash(c.Name), c.Type, true))
+					jfitem := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID, c.Type, true)
+					if j.applyItemFilter(&jfitem, queryparams) {
+						items = append(items, jfitem)
 					}
 				}
 			}
@@ -293,7 +271,7 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 
 // /Items/ecd73bbc2244591343737b626e91418e/Ancestors
 //
-// returns array with parent and root item
+// usersItemsAncestorsHandler returns array with parent and root item
 func (j *Jellyfin) usersItemsAncestorsHandler(w http.ResponseWriter, r *http.Request) {
 	accessToken := j.getAccessTokenDetails(w, r)
 	if accessToken == nil {
@@ -309,7 +287,7 @@ func (j *Jellyfin) usersItemsAncestorsHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	collectionItem, err := j.makeJItemCollection(c.ID)
+	collectionItem, err := j.makeJFItemCollection(c.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
@@ -325,8 +303,9 @@ func (j *Jellyfin) usersItemsAncestorsHandler(w http.ResponseWriter, r *http.Req
 
 // /Users/2b1ec0a52b09456c9823a367d84ac9e5/Items/Latest?Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount&ParentId=f137a2dd21bbc1b99aa5c0f6bf02a805&StartIndex=0&Limit=20'
 //
-// generate list of new items based upon provided ParentId
-// query params:
+// usersItemsLatestHandler returns list of new items based upon provided quary params
+//
+// Supported query params:
 // - ParentId, if provided scope result set to this collection
 // - StartIndex, index of first result item
 // - Limit=50, number of items to return
@@ -352,8 +331,9 @@ func (j *Jellyfin) usersItemsLatestHandler(w http.ResponseWriter, r *http.Reques
 			continue
 		}
 		for _, i := range c.Items {
-			if j.applyItemFilter(i, queryparams) {
-				items = append(items, j.makeJFItem(r.Context(), accessToken.UserID, i, idhash.IdHash(c.Name), c.Type, true))
+			jfitem := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID, c.Type, true)
+			if j.applyItemFilter(&jfitem, queryparams) {
+				items = append(items, jfitem)
 			}
 		}
 	}
@@ -403,8 +383,9 @@ func (j *Jellyfin) searchHintsHandler(w http.ResponseWriter, r *http.Request) {
 
 		for _, i := range c.Items {
 			if searchTerm == "" || strings.Contains(strings.ToLower(i.Name), strings.ToLower(searchTerm)) {
-				if j.applyItemFilter(i, queryparams) {
-					items = append(items, j.makeJFItem(r.Context(), accessToken.UserID, i, idhash.IdHash(c.Name), c.Type, true))
+				jfitem := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID, c.Type, true)
+				if j.applyItemFilter(&jfitem, queryparams) {
+					items = append(items, jfitem)
 				}
 			}
 		}
@@ -448,17 +429,17 @@ func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 
 	items := make([]JFItem, 0)
 	for _, id := range nextUpItemIDs {
+		// Any movies we should include?
 		// if c, i := j.collections.GetItemByID(id); c != nil && i != nil {
-		// 	if j.applyItemFilter(i, queryparams) {
+		// 	if j.applyItemFilter(r.Context(), i, queryparams) {
 		// 		items = append(items, j.makeJFItem(accessToken.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
 		// 	}
 		// 	continue
 		// }
 		if _, i, _, e := j.collections.GetEpisodeByID(id); i != nil {
-			if j.applyItemFilter(i, queryparams) {
-				if episode, err := j.makeJFItemEpisode(r.Context(), accessToken.UserID, e.ID); err == nil {
-					items = append(items, episode)
-				}
+			jfitem, err := j.makeJFItemEpisode(r.Context(), accessToken.UserID, e.ID)
+			if err == nil && j.applyItemFilter(&jfitem, queryparams) {
+				items = append(items, jfitem)
 			}
 			continue
 		}
@@ -476,16 +457,6 @@ func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 		TotalRecordCount: totalItemCount,
 	}
 	serveJSON(response, w)
-
-	// c, i := j.collections.GetItemByID("rVFG3EzPthk2wowNkqUl")
-	// response = JFShowsNextUpResponse{
-	// 	Items: []JFItem{
-	// 		j.makeJFItem(accessToken.UserID, i, idhash.IdHash(c.Name_), c.Type, true),
-	// 	},
-	// 	TotalRecordCount: 1,
-	// 	StartIndex:       0,
-	// }
-	// serveJSON(response, w)
 }
 
 // /UserItems/Resume?userId=XAOVn7iqiBujnIQY8sd0&enableImageTypes=Primary&enableImageTypes=Backdrop&enableImageTypes=Thumb&includeItemTypes=Movie&includeItemTypes=Series&includeItemTypes=Episode
@@ -509,16 +480,16 @@ func (j *Jellyfin) usersItemsResumeHandler(w http.ResponseWriter, r *http.Reques
 	items := make([]JFItem, 0)
 	for _, id := range resumeItemIDs {
 		if c, i := j.collections.GetItemByID(id); c != nil && i != nil {
-			if j.applyItemFilter(i, queryparams) {
-				items = append(items, j.makeJFItem(r.Context(), accessToken.UserID, i, idhash.IdHash(c.Name), c.Type, true))
+			jfitem := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID, c.Type, true)
+			if j.applyItemFilter(&jfitem, queryparams) {
+				items = append(items, jfitem)
 			}
 			continue
 		}
 		if _, i, _, e := j.collections.GetEpisodeByID(id); i != nil {
-			if j.applyItemFilter(i, queryparams) {
-				if episode, err := j.makeJFItemEpisode(r.Context(), accessToken.UserID, e.ID); err == nil {
-					items = append(items, episode)
-				}
+			jfitem, err := j.makeJFItemEpisode(r.Context(), accessToken.UserID, e.ID)
+			if err == nil && j.applyItemFilter(&jfitem, queryparams) {
+				items = append(items, jfitem)
 			}
 			continue
 		}
@@ -562,18 +533,146 @@ func (j *Jellyfin) usersItemsSuggestionsHandler(w http.ResponseWriter, r *http.R
 	serveJSON(response, w)
 }
 
-// applyItemFilter checks if the item should be included in a result set or not
-func (j *Jellyfin) applyItemFilter(i *collection.Item, queryparams url.Values) bool {
+// curl -v http://127.0.0.1:9090/Library/VirtualFolders
+func (j *Jellyfin) libraryVirtualFoldersHandler(w http.ResponseWriter, r *http.Request) {
+	libraries := []JFMediaLibrary{}
+	for _, c := range j.collections.GetCollections() {
+		collectionItem, err := j.makeJFItemCollection(c.ID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		l := JFMediaLibrary{
+			Name:               collectionItem.Name,
+			ItemId:             collectionItem.ID,
+			PrimaryImageItemId: collectionItem.ID,
+			CollectionType:     collectionItem.Type,
+			Locations:          []string{"/"},
+		}
+		libraries = append(libraries, l)
+	}
+	serveJSON(libraries, w)
+}
+
+// curl -v 'http://127.0.0.1:9090/Shows/4QBdg3S803G190AgFrBf/Seasons?UserId=2b1ec0a52b09456c9823a367d84ac9e5&ExcludeLocationTypes=Virtual&Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount'
+// generate season overview
+func (j *Jellyfin) showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
+		return
+	}
+
+	vars := mux.Vars(r)
+	queryparams := r.URL.Query()
+
+	showID := vars["show"]
+	_, i := j.collections.GetItemByID(showID)
+	if i == nil {
+		http.Error(w, "Show not found", http.StatusNotFound)
+		return
+	}
+	// Create API response
+	seasons := make([]JFItem, 0)
+	for _, s := range i.Seasons {
+		jfitem, err := j.makeJFItemSeason(r.Context(), accessToken.UserID, s.ID)
+		if err != nil {
+			log.Printf("makeJFItemSeason returned error %s", err)
+			continue
+		}
+		if j.applyItemFilter(&jfitem, queryparams) {
+			seasons = append(seasons, jfitem)
+		}
+	}
+
+	// Always sort seasons by number, no user provided sortBy option.
+	// This way season 99, Specials ends up last.
+	sort.SliceStable(seasons, func(i, j int) bool {
+		return seasons[i].IndexNumber < seasons[j].IndexNumber
+	})
+
+	response := UserItemsResponse{
+		Items:            seasons,
+		TotalRecordCount: len(seasons),
+		StartIndex:       0,
+	}
+	serveJSON(response, w)
+}
+
+// curl -v 'http://127.0.0.1:9090/Shows/rXlq4EHNxq4HIVQzw3o2/Episodes?UserId=2b1ec0a52b09456c9823a367d84ac9e5&ExcludeLocationTypes=Virtual&Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount&SeasonId=rXlq4EHNxq4HIVQzw3o2/1'
+// generate episode overview for one season of a show
+func (j *Jellyfin) showsEpisodesHandler(w http.ResponseWriter, r *http.Request) {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
+		return
+	}
+
+	vars := mux.Vars(r)
+	queryparams := r.URL.Query()
+
+	c, i := j.collections.GetItemByID(vars["show"])
+	if i == nil {
+		http.Error(w, "Show not found", http.StatusNotFound)
+		return
+	}
+
+	// Do we need to filter down overview by a particular season?
+	requestedSeasonID := r.URL.Query().Get("seasonId")
+	// FIXME/HACK: vidhub provides wrong season ids, so we cannot use them
+	if strings.Contains(r.Header.Get("User-Agent"), "VidHub") {
+		requestedSeasonID = ""
+	}
+
+	// Create API response for requested season
+	episodes := make([]JFItem, 0)
+	for _, s := range i.Seasons {
+		// Limit results to one season if seasionid was provided.
+		if requestedSeasonID != "" && requestedSeasonID != itemprefix_season+s.ID {
+			continue
+		}
+		for _, e := range s.Episodes {
+			if episode, err := j.makeJFItemEpisode(r.Context(), accessToken.UserID, e.ID); err == nil {
+				jfitem := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID, c.Type, true)
+				if j.applyItemFilter(&jfitem, queryparams) {
+					episodes = append(episodes, episode)
+				}
+			}
+		}
+	}
+
+	// Apply user provided sorting
+	episodes = j.applyItemSorting(episodes, queryparams)
+
+	response := UserItemsResponse{
+		Items:            episodes,
+		TotalRecordCount: len(episodes),
+		StartIndex:       0,
+	}
+	serveJSON(response, w)
+}
+
+// applyItemFilter checks if the item should be included in a result set or not.
+// returns true if the item should be included, false if it should be skipped.
+func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
+	// log.Printf("applyItemFilter: item %s, name: %s, type %s, parentID %s\n", i.ID, i.Name, i.Type, i.ParentID)
+
+	// media type filtering
+
 	// includeItemTypes can be provided multiple times and contains a comma separated list of types
 	// e.g. includeItemTypes=BoxSet&includeItemTypes=Movie,Series
 	if includeItemTypes := queryparams["includeItemTypes"]; len(includeItemTypes) > 0 {
 		keepItem := false
 		for _, includeTypeEntry := range includeItemTypes {
 			for includeType := range strings.SplitSeq(includeTypeEntry, ",") {
-				if includeType == "Movie" && i.Type == collection.ItemTypeMovie {
+				if includeType == "Movie" && i.Type == itemTypeMovie {
 					keepItem = true
 				}
-				if includeType == "Series" && i.Type == collection.ItemTypeShow {
+				if includeType == "Series" && i.Type == itemTypeShow {
+					keepItem = true
+				}
+				if includeType == "Season" && i.Type == itemTypeSeason {
+					keepItem = true
+				}
+				if includeType == "Episode" && i.Type == itemTypeEpisode {
 					keepItem = true
 				}
 			}
@@ -589,15 +688,110 @@ func (j *Jellyfin) applyItemFilter(i *collection.Item, queryparams url.Values) b
 		keepItem := true
 		for _, excludeTypeEntry := range excludeItemTypes {
 			for excludeType := range strings.SplitSeq(excludeTypeEntry, ",") {
-				if excludeType == "Movie" && i.Type == collection.ItemTypeMovie {
-					keepItem = true
+				if excludeType == "Movie" && i.Type == itemTypeMovie {
+					keepItem = false
 				}
-				if excludeType == "Series" && i.Type == collection.ItemTypeShow {
+				if excludeType == "Series" && i.Type == itemTypeShow {
+					keepItem = false
+				}
+				if excludeType == "Season" && i.Type == itemTypeSeason {
+					keepItem = false
+				}
+				if excludeType == "Episode" && i.Type == itemTypeEpisode {
+					keepItem = false
+				}
+			}
+		}
+		if !keepItem {
+			return false
+		}
+	}
+
+	// ID filtering
+
+	// filter on item IDs
+	if IDs := queryparams.Get("ids"); IDs != "" {
+		keepItem := false
+		for id := range strings.SplitSeq(IDs, ",") {
+			if i.ID == id {
+				keepItem = true
+			}
+		}
+		if !keepItem {
+			return false
+		}
+	}
+
+	// filter on item IDs to exclude
+	if IDs := queryparams.Get("excludeItemIds"); IDs != "" {
+		keepItem := true
+		for id := range strings.SplitSeq(IDs, ",") {
+			if i.ID == id {
+				keepItem = false
+			}
+		}
+		if !keepItem {
+			return false
+		}
+	}
+
+	// filter on genre IDs
+	if includeGenresID := queryparams.Get("genreIds"); includeGenresID != "" {
+		keepItem := false
+		for genreID := range strings.SplitSeq(includeGenresID, "|") {
+			for _, genre := range i.Genres {
+				if makeJFGenreID(genre) == genreID {
 					keepItem = true
 				}
 			}
 		}
 		if !keepItem {
+			return false
+		}
+	}
+
+	// filter on parentId
+	if parentID := queryparams.Get("parentId"); parentID != "" {
+		if i.ParentID != parentID {
+			return false
+		}
+	}
+
+	// filter on parentIndexNumber
+	if parentIndexNumberStr := queryparams.Get("parentIndexNumber"); parentIndexNumberStr != "" {
+		if parentIndexNumber, err := strconv.ParseInt(parentIndexNumberStr, 10, 64); err == nil {
+			if i.ParentIndexNumber != int(parentIndexNumber) {
+				return false
+			}
+		}
+	}
+
+	// filter on indexNumber
+	if indexNumberStr := queryparams.Get("indexNumber"); indexNumberStr != "" {
+		if indexNumber, err := strconv.ParseInt(indexNumberStr, 10, 64); err == nil {
+			if i.IndexNumber != int(indexNumber) {
+				return false
+			}
+		}
+	}
+
+	// filter on name prefix, case-insensitive.
+	if nameStartsWith := queryparams.Get("nameStartsWith"); nameStartsWith != "" {
+		if !strings.HasPrefix(strings.ToLower(i.SortName), strings.ToLower(nameStartsWith)) {
+			return false
+		}
+	}
+
+	// filter on name starting with or lexicographically greater than, case-insensitive.
+	if nameStartsWithOrGreater := queryparams.Get("nameStartsWithOrGreater"); nameStartsWithOrGreater != "" {
+		if strings.Compare(strings.ToLower(i.SortName), strings.ToLower(nameStartsWithOrGreater)) < 0 {
+			return false
+		}
+	}
+
+	// filter on name starting with or lexicographically less than, case-insensitive.
+	if nameStartsWithOrLess := queryparams.Get("nameLessThan"); nameStartsWithOrLess != "" {
+		if strings.Compare(strings.ToLower(i.SortName), strings.ToLower(nameStartsWithOrLess)) > 0 {
 			return false
 		}
 	}
@@ -615,26 +809,11 @@ func (j *Jellyfin) applyItemFilter(i *collection.Item, queryparams url.Values) b
 		}
 	}
 
-	// filter on genre name
-	if includeGenresID := queryparams.Get("genreIds"); includeGenresID != "" {
-		keepItem := false
-		for includeType := range strings.SplitSeq(includeGenresID, "|") {
-			for _, genre := range i.Genres {
-				if idhash.IdHash(genre) == includeType {
-					keepItem = true
-				}
-			}
-		}
-		if !keepItem {
-			return false
-		}
-	}
-
 	// filter on offical rating
-	if includeOfficialRating := queryparams.Get("officialRatings"); includeOfficialRating != "" {
+	if includeOfficialRatings := queryparams.Get("officialRatings"); includeOfficialRatings != "" {
 		keepItem := false
-		for includeType := range strings.SplitSeq(includeOfficialRating, "|") {
-			if i.OfficialRating == includeType {
+		for rating := range strings.SplitSeq(includeOfficialRatings, "|") {
+			if i.OfficialRating == rating {
 				keepItem = true
 			}
 		}
@@ -643,12 +822,32 @@ func (j *Jellyfin) applyItemFilter(i *collection.Item, queryparams url.Values) b
 		}
 	}
 
-	// Do we have to skip item in case year filter is set?
+	// filter on minCommunityRating
+	if minCommunityRatingStr := queryparams.Get("minCommunityRating"); minCommunityRatingStr != "" {
+		if minCommunityRating, err := strconv.ParseFloat(minCommunityRatingStr, 64); err == nil {
+			if i.CommunityRating < minCommunityRating {
+				return false
+			}
+		}
+	}
+
+	// filter on minCriticRating
+	if minCriticRatingStr := queryparams.Get("minCriticRating"); minCriticRatingStr != "" {
+		if minCriticRating, err := strconv.ParseFloat(minCriticRatingStr, 64); err == nil {
+			if float64(i.CriticRating) < minCriticRating {
+				return false
+			}
+		}
+	}
+
+	// todo: filter on minPremiereDate, maxPremiereDate
+
+	// Filter on year(s)
 	if filterYears := queryparams.Get("years"); filterYears != "" {
 		keepItem := false
 		for year := range strings.SplitSeq(filterYears, ",") {
 			if intYear, err := strconv.ParseInt(year, 10, 64); err == nil {
-				if i.Year == int(intYear) {
+				if i.ProductionYear == int(intYear) {
 					keepItem = true
 				}
 			}
@@ -658,6 +857,46 @@ func (j *Jellyfin) applyItemFilter(i *collection.Item, queryparams url.Values) b
 		}
 	}
 
+	// Filter based upon isPlayed status
+	if filterPlayed := strings.ToLower(queryparams.Get("isPlayed")); filterPlayed != "" {
+		// Allow item if it was played
+		if filterPlayed == "true" && i.UserData != nil && i.UserData.Played {
+			return true
+		}
+		// Allow item if it was not played
+		if filterPlayed == "false" && i.UserData != nil && i.UserData.Played {
+			return true
+		}
+	}
+
+	// Filter based upon isFavorite status
+	if filterFavorite := strings.ToLower(queryparams.Get("isFavorite")); filterFavorite != "" {
+		// Allow item if it should be favorite
+		if filterFavorite == "true" && i.UserData.IsFavorite {
+			return true
+		}
+		// Allow item if it not should be a favorite
+		if filterFavorite == "false" && !i.UserData.IsFavorite {
+			return true
+		}
+	}
+
+	// Any other filters that we have to apply?
+	if filters := queryparams.Get("filters"); filters != "" {
+		for itemFilter := range strings.SplitSeq(filters, ",") {
+			// Do we have to skip item in case favorites are requested?
+			if itemFilter == "IsFavorite" || itemFilter == "IsFavoriteOrLikes" {
+				// Allow item if it is a favorite
+				if i.UserData != nil && i.UserData.IsFavorite {
+					return true
+				}
+				// Not a favorite, so skip item
+				return false
+			}
+		}
+	}
+
+	// No filters matched, so we keep the item
 	return true
 }
 
@@ -713,6 +952,27 @@ func (j *Jellyfin) applyItemSorting(items []JFItem, queryparams url.Values) (sor
 					}
 					return items[i].DateCreated.Before(items[j].DateCreated)
 				}
+			case "indexnumber":
+				if items[i].IndexNumber != items[j].IndexNumber {
+					if sortDescending {
+						return items[i].IndexNumber > items[j].IndexNumber
+					}
+					return items[i].IndexNumber < items[j].IndexNumber
+				}
+			case "isfolder":
+				if items[i].IsFolder != items[j].IsFolder {
+					if sortDescending {
+						return items[i].IsFolder
+					}
+					return items[j].IsFolder
+				}
+			case "parentindexnumber":
+				if items[i].ParentIndexNumber != items[j].ParentIndexNumber {
+					if sortDescending {
+						return items[i].ParentIndexNumber > items[j].ParentIndexNumber
+					}
+					return items[i].ParentIndexNumber < items[j].ParentIndexNumber
+				}
 			case "productionyear":
 				if items[i].ProductionYear != items[j].ProductionYear {
 					if sortDescending {
@@ -760,109 +1020,6 @@ func (j *Jellyfin) applyItemPaginating(items []JFItem, queryparams url.Values) (
 	return items, startIndex
 }
 
-// curl -v http://127.0.0.1:9090/Library/VirtualFolders
-func (j *Jellyfin) libraryVirtualFoldersHandler(w http.ResponseWriter, r *http.Request) {
-	libraries := []JFMediaLibrary{}
-	for _, c := range j.collections.GetCollections() {
-		collectionItem, err := j.makeJItemCollection(c.ID)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		l := JFMediaLibrary{
-			Name:               collectionItem.Name,
-			ItemId:             collectionItem.ID,
-			PrimaryImageItemId: collectionItem.ID,
-			CollectionType:     collectionItem.Type,
-			Locations:          []string{"/"},
-		}
-		libraries = append(libraries, l)
-	}
-	serveJSON(libraries, w)
-}
-
-// curl -v 'http://127.0.0.1:9090/Shows/4QBdg3S803G190AgFrBf/Seasons?UserId=2b1ec0a52b09456c9823a367d84ac9e5&ExcludeLocationTypes=Virtual&Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount'
-// generate season overview
-func (j *Jellyfin) showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
-		return
-	}
-
-	vars := mux.Vars(r)
-	showID := vars["show"]
-	_, i := j.collections.GetItemByID(showID)
-	if i == nil {
-		http.Error(w, "Show not found", http.StatusNotFound)
-		return
-	}
-	// Create API response
-	seasons := make([]JFItem, 0)
-	for _, s := range i.Seasons {
-		season, err := j.makeJFItemSeason(r.Context(), accessToken.UserID, s.ID)
-		if err != nil {
-			log.Printf("makeJFItemSeason returned error %s", err)
-			continue
-		}
-		seasons = append(seasons, season)
-	}
-
-	// Sort seasons, this way season 99, Specials ends up last
-	sort.SliceStable(seasons, func(i, j int) bool {
-		return seasons[i].IndexNumber < seasons[j].IndexNumber
-	})
-
-	response := UserItemsResponse{
-		Items:            seasons,
-		TotalRecordCount: len(seasons),
-		StartIndex:       0,
-	}
-	serveJSON(response, w)
-}
-
-// curl -v 'http://127.0.0.1:9090/Shows/rXlq4EHNxq4HIVQzw3o2/Episodes?UserId=2b1ec0a52b09456c9823a367d84ac9e5&ExcludeLocationTypes=Virtual&Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount&SeasonId=rXlq4EHNxq4HIVQzw3o2/1'
-// generate episode overview for one season of a show
-func (j *Jellyfin) showsEpisodesHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
-		return
-	}
-
-	vars := mux.Vars(r)
-	_, i := j.collections.GetItemByID(vars["show"])
-	if i == nil {
-		http.Error(w, "Show not found", http.StatusNotFound)
-		return
-	}
-
-	// Do we need to filter down overview by a particular season?
-	RequestedSeasonID := r.URL.Query().Get("seasonId")
-	// FIXME/HACK: vidhub provides wrong season ids, so we cannot use them
-	if strings.Contains(r.Header.Get("User-Agent"), "VidHub") {
-		RequestedSeasonID = ""
-	}
-
-	// Create API response for requested season
-	episodes := make([]JFItem, 0)
-	for _, s := range i.Seasons {
-		// Limit results to a season if id provided
-		if RequestedSeasonID != "" && itemprefix_season+s.ID != RequestedSeasonID {
-			continue
-		}
-		for _, e := range s.Episodes {
-			if episode, err := j.makeJFItemEpisode(r.Context(), accessToken.UserID, e.ID); err == nil {
-				episodes = append(episodes, episode)
-			}
-		}
-	}
-	response := UserItemsResponse{
-		Items:            episodes,
-		TotalRecordCount: len(episodes),
-		StartIndex:       0,
-	}
-	serveJSON(response, w)
-}
-
 func (j *Jellyfin) itemsDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Not implemented", http.StatusForbidden)
 }
@@ -893,56 +1050,59 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 	itemID := vars["item"]
 	imageType := vars["type"]
 
-	splitted := strings.Split(itemID, itemprefix_separator)
-	splitted[0] += itemprefix_separator
-	if len(splitted) == 2 {
-		switch splitted[0] {
-		// case "collection":
-		// 	collectionItem, err := makeJFItemCollection(itemId)
-		// 	if err != nil {
-		// 		http.Error(w, "Could not find collection", http.StatusNotFound)
-		// 		return
-
-		// 	}
-		// 	serveJSON(collectionItem, w)
-		// 	return
-		case itemprefix_season:
-			c, item, season := j.collections.GetSeasonByID(trimPrefix(itemID))
-			if season == nil {
-				http.Error(w, "Could not find season", http.StatusNotFound)
-				return
-			}
-			switch imageType {
-			case "Primary":
-				w.Header().Set("cache-control", "max-age=2592000")
-				j.serveImage(w, r, c.Directory+"/"+item.Name+"/"+season.Poster,
-					j.imageQualityPoster)
-				return
-			default:
-				log.Printf("Image request %s, unknown type %s", itemID, imageType)
-				return
-			}
-		case itemprefix_episode:
-			c, item, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemID))
-			if episode == nil {
-				http.Error(w, "Item not found (could not find episode)", http.StatusNotFound)
-				return
-			}
-			j.serveFile(w, r, c.Directory+"/"+item.Name+"/"+episode.Thumb)
-			return
-		case itemprefix_collection:
-			fallthrough
-		case itemprefix_collection_favorites:
-			fallthrough
-		case itemprefix_collection_playlist:
-			log.Printf("Image request for collection %s!", itemID)
-			http.Error(w, "Image request for collection not yet supported", http.StatusNotFound)
-			return
-		default:
-			log.Printf("Image request for unknown prefix %s!", itemID)
-			http.Error(w, "Unknown image item prefix", http.StatusInternalServerError)
+	switch {
+	case isJFSeasonID(itemID):
+		c, item, season := j.collections.GetSeasonByID(trimPrefix(itemID))
+		if season == nil {
+			http.Error(w, "Could not find season", http.StatusNotFound)
 			return
 		}
+		switch strings.ToLower(imageType) {
+		case "primary":
+			// Serve season specific poster
+			dir := c.Directory + "/" + item.Name + "/"
+			if season.Poster != "" {
+				j.serveImage(w, r, dir+season.Poster, j.imageQualityPoster)
+				return
+			}
+			// Serve item season all poster
+			if item.SeasonAllPoster != "" {
+				j.serveImage(w, r, dir+item.SeasonAllPoster, j.imageQualityPoster)
+				return
+			}
+			// Serve show poster as fallback
+			if item.Poster != "" {
+				j.serveImage(w, r, dir+item.Poster, j.imageQualityPoster)
+				return
+			}
+			log.Printf("Image request %s, no poster found for season %s", itemID, season.ID)
+			http.Error(w, "Poster not found for season", http.StatusNotFound)
+			return
+		default:
+			log.Printf("Image request %s, unknown type %s", itemID, imageType)
+			return
+		}
+	case isJFEpisodeID(itemID):
+		c, item, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemID))
+		if episode == nil {
+			http.Error(w, "Item not found (could not find episode)", http.StatusNotFound)
+			return
+		}
+		if episode.Thumb != "" {
+			j.serveFile(w, r, c.Directory+"/"+item.Name+"/"+episode.Thumb)
+			return
+		}
+		log.Printf("Image request %s, no thumbnail for episode %s", itemID, episode.ID)
+		http.Error(w, "Thumbnail not found for episode", http.StatusNotFound)
+		return
+	case isJFCollectionID(itemID):
+		fallthrough
+	case isJFCollectionFavoritesID(itemID):
+		fallthrough
+	case isJFCollectionPlaylistID(itemID):
+		log.Printf("Image request for collection %s!", itemID)
+		http.Error(w, "Image request for collection not yet supported", http.StatusNotFound)
+		return
 	}
 
 	c, i := j.collections.GetItemByID(itemID)
@@ -951,30 +1111,26 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	switch strings.ToLower(vars["type"]) {
+	switch strings.ToLower(imageType) {
 	case "primary":
 		if i.Poster != "" {
-			w.Header().Set("cache-control", "max-age=2592000")
 			j.serveImage(w, r, c.Directory+"/"+i.Name+"/"+i.Poster, j.imageQualityPoster)
-		} else {
-			http.Error(w, "Poster not found", http.StatusNotFound)
+			return
 		}
+		http.Error(w, "Poster not found", http.StatusNotFound)
 		return
 	case "backdrop":
 		if i.Fanart != "" {
-			w.Header().Set("cache-control", "max-age=2592000")
 			j.serveFile(w, r, c.Directory+"/"+i.Name+"/"+i.Fanart)
-		} else {
-			http.Error(w, "Backdrop not found", http.StatusNotFound)
+			return
 		}
+		http.Error(w, "Backdrop not found", http.StatusNotFound)
 		return
 	case "logo":
 		if i.Logo != "" {
-			w.Header().Set("cache-control", "max-age=2592000")
 			j.serveImage(w, r, c.Directory+"/"+i.Name+"/"+i.Logo, j.imageQualityPoster)
-		} else {
-			http.Error(w, "Logo not found", http.StatusNotFound)
 		}
+		http.Error(w, "Logo not found", http.StatusNotFound)
 		return
 	}
 	log.Printf("Unknown image type requested: %s\n", vars["type"])
@@ -1086,15 +1242,8 @@ func (j *Jellyfin) serveImage(w http.ResponseWriter, r *http.Request, filename s
 		http.Error(w, "Could not retrieve file info", http.StatusInternalServerError)
 		return
 	}
+	w.Header().Set("cache-control", "max-age=2592000")
 	http.ServeContent(w, r, fileStat.Name(), fileStat.ModTime(), file)
-}
-
-// trimPrefix removes the type prefix from an item id.
-func trimPrefix(s string) string {
-	if i := strings.Index(s, itemprefix_separator); i != -1 {
-		return s[i+1:]
-	}
-	return s
 }
 
 func parseTime(input string) (parsedTime time.Time, err error) {

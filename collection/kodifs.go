@@ -2,8 +2,8 @@
 package collection
 
 import (
-	//	"fmt"
 	"fmt"
+	"log"
 	"net/url"
 	"os"
 	"path"
@@ -117,9 +117,10 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Item)
 	}
 
 	movie = &Item{
-		ID:   idhash.IdHash(mname),
-		Name: mname,
-		Year: year,
+		ID:       idhash.IdHash(mname),
+		Name:     mname,
+		SortName: makeSortName(mname),
+		Year:     year,
 		// BaseUrl:    coll.BaseUrl,
 		Path:       escapePath(dir),
 		Video:      escapePath(video),
@@ -471,9 +472,11 @@ func (cr *CollectionRepo) showScanDir(baseDir string, dir string, seasonHint int
 // buildShow builds a show item from a show directory.
 // It scans the directory for episodes and images, and returns an Item
 func (cr *CollectionRepo) buildShow(coll *Collection, dir string) (show *Item) {
+	name := path.Base(dir)
 	item := &Item{
-		ID:   idhash.IdHash(path.Base(dir)),
-		Name: path.Base(dir),
+		ID:       idhash.IdHash(name),
+		Name:     name,
+		SortName: makeSortName(name),
 		// BaseUrl: coll.BaseUrl,
 		Path: escapePath(dir),
 		Type: ItemTypeShow,
@@ -572,7 +575,7 @@ func loadNFO(n **Nfo, filename string) {
 		defer file.Close()
 		*n, err = NfoDecode(file)
 		if err != nil {
-			fmt.Printf("Error parsing NFO file %s: %v\n", filename, err)
+			log.Printf("Error parsing NFO file %s: %v\n", filename, err)
 		}
 	}
 }

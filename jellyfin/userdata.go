@@ -209,7 +209,7 @@ func (j *Jellyfin) userFavoriteItemsPostHandler(w http.ResponseWriter, r *http.R
 		http.Error(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
 		return
 	}
-	userData := j.makeJFUserData(accessToken.UserID, itemID, playstate)
+	userData := j.makeJFUserData(accessToken.UserID, itemID, &playstate)
 	serveJSON(userData, w)
 }
 
@@ -236,6 +236,6 @@ func (j *Jellyfin) userFavoriteItemsDeleteHandler(w http.ResponseWriter, r *http
 		http.Error(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
 		return
 	}
-	userData := j.makeJFUserData(accessToken.UserID, itemID, playstate)
+	userData := j.makeJFUserData(accessToken.UserID, itemID, &playstate)
 	serveJSON(userData, w)
 }
