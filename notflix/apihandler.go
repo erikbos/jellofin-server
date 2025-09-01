@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 	"time"
@@ -275,17 +276,22 @@ func copyItem(item collection.Item) Item {
 	ci := Item{
 		ID:         item.ID,
 		Name:       item.Name,
-		Path:       item.Path,
+		SortName:   item.SortName,
+		Path:       escapePath(item.Path),
 		BaseUrl:    item.BaseUrl,
 		Type:       item.Type,
 		FirstVideo: item.FirstVideo,
 		LastVideo:  item.LastVideo,
 		Fanart:     item.Fanart,
-		Poster:     item.Poster,
+		Poster:     escapePath(item.Poster),
 		Rating:     item.Rating,
 		Genre:      item.Genres,
 		Year:       item.Year,
-		Video:      item.Video,
+		Video:      escapePath(item.Video),
+
+		SeasonAllBanner: escapePath(item.SeasonAllBanner),
+		SeasonAllPoster: escapePath(item.SeasonAllPoster),
+		SeasonAllFanart: escapePath(item.SeasonAllFanart),
 	}
 	if item.Nfo != nil {
 		ci.Nfo = ItemNfo{
@@ -305,9 +311,9 @@ func copyItem(item collection.Item) Item {
 func copySeason(season collection.Season, doNfo bool) Season {
 	cs := Season{
 		SeasonNo: season.SeasonNo,
-		Banner:   season.Banner,
-		Fanart:   season.Fanart,
-		Poster:   season.Poster,
+		Banner:   escapePath(season.Banner),
+		Fanart:   escapePath(season.Fanart),
+		Poster:   escapePath(season.Poster),
 	}
 
 	cs.Episodes = make([]Episode, len(season.Episodes))
@@ -323,9 +329,9 @@ func copyEpisode(episode collection.Episode, doNfo bool) Episode {
 		SeasonNo:  episode.SeasonNo,
 		EpisodeNo: episode.EpisodeNo,
 		Double:    episode.Double,
-		// SortName:  episode.SortName,
-		Video: episode.Video,
-		Thumb: episode.Thumb,
+		SortName:  episode.SortName,
+		Video:     escapePath(episode.Video),
+		Thumb:     episode.Thumb,
 		// SrtSubs:   c.SrtSubs,
 		// VttSubs:   c.VttSubs,
 	}
@@ -344,4 +350,9 @@ func copyEpisode(episode collection.Episode, doNfo bool) Episode {
 		}
 	}
 	return ce
+}
+
+func escapePath(p string) string {
+	u := url.URL{Path: p}
+	return u.EscapedPath()
 }

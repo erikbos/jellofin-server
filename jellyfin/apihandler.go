@@ -1186,6 +1186,8 @@ func (j *Jellyfin) videoStreamHandler(w http.ResponseWriter, r *http.Request) {
 	// Is episode?
 	if strings.HasPrefix(itemID, itemprefix_episode) {
 		c, item, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemID))
+		log.Printf("videoStreamHandler: item %+v\n", item)
+
 		if episode == nil {
 			http.Error(w, "Could not find episode", http.StatusNotFound)
 			return
@@ -1195,6 +1197,9 @@ func (j *Jellyfin) videoStreamHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	c, i := j.collections.GetItemByID(vars["item"])
+
+	log.Printf("videoStreamHandler: item %+v\n", i)
+
 	if i == nil || i.Video == "" {
 		http.Error(w, "Item not found", http.StatusNotFound)
 		return

@@ -4,7 +4,6 @@ package collection
 import (
 	"fmt"
 	"log"
-	"net/url"
 	"os"
 	"path"
 	"regexp"
@@ -33,11 +32,6 @@ const (
 type epMapType struct {
 	eps *Episodes
 	idx int
-}
-
-func escapePath(p string) string {
-	u := url.URL{Path: p}
-	return u.EscapedPath()
 }
 
 // buildMovies builds the movies in a collection. pace is the time to wait
@@ -122,8 +116,8 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Item)
 		SortName: makeSortName(mname),
 		Year:     year,
 		// BaseUrl:    coll.BaseUrl,
-		Path:       escapePath(dir),
-		Video:      escapePath(video),
+		Path:       dir,
+		Video:      video,
 		FirstVideo: created,
 		LastVideo:  created,
 		Type:       ItemTypeMovie,
@@ -151,7 +145,6 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Item)
 		if ext == "" {
 			continue
 		}
-		p := escapePath(name)
 
 		if isImage.MatchString(name) {
 			if ext == "tbn" && aux == "" {
@@ -159,13 +152,13 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Item)
 			}
 			switch aux {
 			case `banner`:
-				movie.Banner = p
+				movie.Banner = name
 			case `fanart`:
-				movie.Fanart = p
+				movie.Fanart = name
 			case `folder`:
-				movie.Folder = p
+				movie.Folder = name
 			case `poster`:
-				movie.Poster = p
+				movie.Poster = name
 			}
 			continue
 		}
@@ -176,7 +169,7 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Item)
 			}
 			movie.SrtSubs = append(movie.SrtSubs, Subs{
 				Lang: aux,
-				Path: p,
+				Path: name,
 			})
 			continue
 		}
@@ -187,7 +180,7 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Item)
 			}
 			movie.VttSubs = append(movie.VttSubs, Subs{
 				Lang: aux,
-				Path: p,
+				Path: name,
 			})
 			continue
 		}
@@ -326,27 +319,26 @@ func (cr *CollectionRepo) showScanDir(baseDir string, dir string, seasonHint int
 			// other images.
 			s = isImage.FindStringSubmatch(fn)
 			if len(s) > 0 {
-				p := escapePath(fn)
 				switch s[1] {
 				case "season-all-banner":
-					show.SeasonAllBanner = p
+					show.SeasonAllBanner = fn
 				case "season-all-poster":
-					show.SeasonAllPoster = p
+					show.SeasonAllPoster = fn
 				case "season-specials-poster":
 					// Assign specials poster to season 0.
 					if season := cr.getSeason(show, 0); season != nil {
-						season.Poster = escapePath(path.Join(dir, fn))
+						season.Poster = path.Join(dir, fn)
 					}
 				case "banner":
-					show.Banner = p
+					show.Banner = fn
 				case "clearlogo":
-					show.Logo = p
+					show.Logo = fn
 				case "fanart":
-					show.Fanart = p
+					show.Fanart = fn
 				case "folder":
-					show.Folder = p
+					show.Folder = fn
 				case "poster":
-					show.Poster = p
+					show.Poster = fn
 				}
 			}
 		}
@@ -357,7 +349,7 @@ func (cr *CollectionRepo) showScanDir(baseDir string, dir string, seasonHint int
 			s := isImage.FindStringSubmatch(fn)
 			c := false
 			if len(s) > 0 {
-				p := escapePath(path.Join(dir, fn))
+				p := path.Join(dir, fn)
 				switch s[1] {
 				case "banner":
 					season := cr.getSeason(show, seasonHint)
@@ -379,7 +371,7 @@ func (cr *CollectionRepo) showScanDir(baseDir string, dir string, seasonHint int
 		if len(s) > 0 {
 			sn := parseInt(s[1])
 			season := cr.getSeason(show, sn)
-			p := escapePath(path.Join(dir, fn))
+			p := path.Join(dir, fn)
 			switch s[2] {
 			case "poster":
 				season.Poster = p
@@ -397,7 +389,7 @@ func (cr *CollectionRepo) showScanDir(baseDir string, dir string, seasonHint int
 		if len(s) > 0 {
 			ep := Episode{
 				ID:       idhash.IdHash(s[0]),
-				Video:    escapePath(path.Join(dir, fn)),
+				Video:    path.Join(dir, fn),
 				BaseName: s[1],
 			}
 			ep.VideoTS = f.CreatetimeMS()
@@ -427,7 +419,7 @@ func (cr *CollectionRepo) showScanDir(baseDir string, dir string, seasonHint int
 		if ep == nil {
 			continue
 		}
-		p := escapePath(path.Join(dir, name))
+		p := path.Join(dir, name)
 
 		if isImageExt.MatchString(ext) {
 			if ext == "tbn" && aux == "" {
@@ -478,7 +470,7 @@ func (cr *CollectionRepo) buildShow(coll *Collection, dir string) (show *Item) {
 		Name:     name,
 		SortName: makeSortName(name),
 		// BaseUrl: coll.BaseUrl,
-		Path: escapePath(dir),
+		Path: dir,
 		Type: ItemTypeShow,
 	}
 	d := path.Join(coll.Directory, dir)
