@@ -20,10 +20,15 @@ func NewPlaylistStorage(d *sqlx.DB) *PlaylistStorage {
 	}
 }
 
+// Playlist represents a user playlist with item IDs.
 type Playlist struct {
-	ID      string
-	UserID  string
-	Name    string
+	// ID is the unique identifier for the playlist.
+	ID string
+	// UserID is the identifier of the user who owns the playlist.
+	UserID string
+	// Name of the playlist.
+	Name string
+	// ItemIDs is a list of item IDs contained in the playlist.
 	ItemIDs []string
 }
 

@@ -104,6 +104,24 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		serveJSON(collectionItem, w)
 		return
+	// Try special collection items first, as they have the same prefix as regular collections
+	case isJFCollectionFavoritesID(itemID):
+		favoritesCollectionItem, err := j.makeJFItemCollectionFavorites(r.Context(), accessToken.UserID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+
+		}
+		serveJSON(favoritesCollectionItem, w)
+		return
+	case isJFCollectionPlaylistID(itemID):
+		PlayListCollectionItem, err := j.makeJFItemCollectionPlaylist(r.Context(), accessToken.UserID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		serveJSON(PlayListCollectionItem, w)
+		return
 	case isJFCollectionID(itemID):
 		collectionItem, err := j.makeJFItemCollection(trimPrefix(itemID))
 		if err != nil {
@@ -113,23 +131,13 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		serveJSON(collectionItem, w)
 		return
-	case isJFCollectionFavoritesID(itemID):
-		collectionItem, err := j.makeJFItemCollectionFavorites(r.Context(), accessToken.UserID)
+	case isJFPlaylistID(itemID):
+		playlistItem, err := j.makeJFItemPlaylist(r.Context(), accessToken.UserID, trimPrefix(itemID))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
-
 		}
-		serveJSON(collectionItem, w)
-		return
-	case isJFCollectionPlaylistID(itemID):
-		collectionItem, err := j.makeJFItemCollectionPlaylist(r.Context(), accessToken.UserID)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
-			return
-
-		}
-		serveJSON(collectionItem, w)
+		serveJSON(playlistItem, w)
 		return
 	case isJFSeasonID(itemID):
 		seasonItem, err := j.makeJFItemSeason(r.Context(), accessToken.UserID, trimPrefix(itemID))
@@ -146,14 +154,6 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		serveJSON(episodeItem, w)
-		return
-	case isJFPlaylistID(itemID):
-		playlistItem, err := j.makeJFItemPlaylist(r.Context(), accessToken.UserID, trimPrefix(itemID))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
-			return
-		}
-		serveJSON(playlistItem, w)
 		return
 	}
 
@@ -206,54 +206,61 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	queryparams := r.URL.Query()
-	searchCollection := queryparams.Get("parentId")
+	parentID := queryparams.Get("parentId")
 
 	items := make([]JFItem, 0)
 	var err error
-	var collectionPopulated bool
+	var parentFound bool
 
-	// Return favorites collection if requested
-	if strings.HasPrefix(searchCollection, itemprefix_collection_favorites) {
-		items, err = j.makeJFItemFavoritesOverview(r.Context(), accessToken.UserID)
-		if err != nil {
-			http.Error(w, "Could not find favorites collection", http.StatusNotFound)
-			return
+	if parentID != "" {
+		switch {
+		// Return favorites collection items if requested
+		case isJFCollectionFavoritesID(parentID):
+			items, err = j.makeJFItemFavoritesOverview(r.Context(), accessToken.UserID)
+			if err != nil {
+				http.Error(w, "Could not find favorites collection", http.StatusNotFound)
+				return
+			}
+			parentFound = true
+		// Return list of playlists if requested
+		case isJFCollectionPlaylistID(parentID):
+			log.Printf("1")
+			items, err = j.makeJFItemPlaylistOverview(r.Context(), accessToken.UserID)
+			if err != nil {
+				http.Error(w, "Could not find playlist collection", http.StatusNotFound)
+				return
+			}
+			parentFound = true
+		// Return specific playlist if requested
+		case isJFPlaylistID(parentID):
+			log.Printf("2")
+			playlistID := trimPrefix(parentID)
+			items, err = j.makeJFItemPlaylistItemList(r.Context(), accessToken.UserID, playlistID)
+			if err != nil {
+				http.Error(w, "Could not find playlist", http.StatusNotFound)
+				return
+			}
+			parentFound = true
 		}
-		collectionPopulated = true
 	}
 
-	// Return playlist collection list if requested
-	if strings.HasPrefix(searchCollection, itemprefix_collection_playlist) {
-		items, err = j.makeJFItemPlaylistOverview(r.Context(), accessToken.UserID)
-		if err != nil {
-			http.Error(w, "Could not find playlist collection", http.StatusNotFound)
-			return
-		}
-		collectionPopulated = true
-	}
-
-	// Search for items in case favorites or playlist collection not requested
-	if !collectionPopulated {
+	// Search for items in case items was not yet populated earlier
+	if !parentFound {
 		var searchC *collection.Collection
-		if searchCollection != "" {
-			collectionid := strings.TrimPrefix(searchCollection, itemprefix_collection)
+		if parentID != "" {
+			collectionid := strings.TrimPrefix(parentID, itemprefix_collection)
 			searchC = j.collections.GetCollection(collectionid)
 		}
-
-		searchTerm := queryparams.Get("searchTerm")
 
 		for _, c := range j.collections.GetCollections() {
 			// Skip if we are searching in one particular collection?
 			if searchC != nil && searchC.ID != c.ID {
 				continue
 			}
-
 			for _, i := range c.Items {
-				if searchTerm == "" || strings.Contains(strings.ToLower(i.Name), strings.ToLower(searchTerm)) {
-					jfitem := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID, c.Type, true)
-					if j.applyItemFilter(&jfitem, queryparams) {
-						items = append(items, jfitem)
-					}
+				jfitem := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID, c.Type, true)
+				if j.applyItemFilter(&jfitem, queryparams) {
+					items = append(items, jfitem)
 				}
 			}
 		}
@@ -317,10 +324,10 @@ func (j *Jellyfin) usersItemsLatestHandler(w http.ResponseWriter, r *http.Reques
 
 	queryparams := r.URL.Query()
 
-	searchCollection := queryparams.Get("parentId")
+	parentID := queryparams.Get("parentId")
 	var searchC *collection.Collection
-	if searchCollection != "" {
-		collectionid := strings.TrimPrefix(searchCollection, itemprefix_collection)
+	if parentID != "" {
+		collectionid := strings.TrimPrefix(parentID, itemprefix_collection)
 		searchC = j.collections.GetCollection(collectionid)
 	}
 
@@ -359,21 +366,20 @@ func (j *Jellyfin) searchHintsHandler(w http.ResponseWriter, r *http.Request) {
 
 	queryparams := r.URL.Query()
 
-	// Return playlist collection if requested
-	searchCollection := queryparams.Get("parentId")
-	if strings.HasPrefix(searchCollection, itemprefix_collection_playlist) {
+	// Return playlist collection items if requested
+	parentID := queryparams.Get("parentId")
+	if isJFCollectionPlaylistID(parentID) {
 		response, _ := j.makeJFItemPlaylistOverview(r.Context(), accessToken.UserID)
 		serveJSON(response, w)
 		return
 	}
 
 	var searchC *collection.Collection
-	if searchCollection != "" {
-		collectionid := strings.TrimPrefix(searchCollection, itemprefix_collection)
+	if parentID != "" {
+		collectionid := strings.TrimPrefix(parentID, itemprefix_collection)
 		searchC = j.collections.GetCollection(collectionid)
 	}
 
-	searchTerm := queryparams.Get("searchTerm")
 	items := make([]JFItem, 0)
 	for _, c := range j.collections.GetCollections() {
 		// Skip if we are searching in one particular collection?
@@ -382,11 +388,9 @@ func (j *Jellyfin) searchHintsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for _, i := range c.Items {
-			if searchTerm == "" || strings.Contains(strings.ToLower(i.Name), strings.ToLower(searchTerm)) {
-				jfitem := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID, c.Type, true)
-				if j.applyItemFilter(&jfitem, queryparams) {
-					items = append(items, jfitem)
-				}
+			jfitem := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID, c.Type, true)
+			if j.applyItemFilter(&jfitem, queryparams) {
+				items = append(items, jfitem)
 			}
 		}
 	}
@@ -654,6 +658,15 @@ func (j *Jellyfin) showsEpisodesHandler(w http.ResponseWriter, r *http.Request) 
 // returns true if the item should be included, false if it should be skipped.
 func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
 	// log.Printf("applyItemFilter: item %s, name: %s, type %s, parentID %s\n", i.ID, i.Name, i.Type, i.ParentID)
+
+	// filter on search term
+	if searchTerm := queryparams["searchTerm"]; searchTerm != nil && searchTerm[0] != "" {
+		term := strings.ToLower(searchTerm[0])
+		if !strings.Contains(strings.ToLower(i.Name), term) {
+			// TODO: we should also search in other fields like overview and actors
+			return false
+		}
+	}
 
 	// media type filtering
 
@@ -1148,7 +1161,7 @@ func (j *Jellyfin) itemsPlaybackInfoHandler(w http.ResponseWriter, r *http.Reque
 		mediaSource = j.makeMediaSource(i.Video, i.Nfo)
 	}
 
-	if strings.HasPrefix(itemID, itemprefix_episode) {
+	if isJFEpisodeID(itemID) {
 		if _, _, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemID)); episode != nil {
 			mediaSource = j.makeMediaSource(episode.Video, episode.Nfo)
 		}
@@ -1184,10 +1197,8 @@ func (j *Jellyfin) videoStreamHandler(w http.ResponseWriter, r *http.Request) {
 	itemID := vars["item"]
 
 	// Is episode?
-	if strings.HasPrefix(itemID, itemprefix_episode) {
+	if isJFEpisodeID(itemID) {
 		c, item, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemID))
-		log.Printf("videoStreamHandler: item %+v\n", item)
-
 		if episode == nil {
 			http.Error(w, "Could not find episode", http.StatusNotFound)
 			return
@@ -1197,9 +1208,6 @@ func (j *Jellyfin) videoStreamHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	c, i := j.collections.GetItemByID(vars["item"])
-
-	log.Printf("videoStreamHandler: item %+v\n", i)
-
 	if i == nil || i.Video == "" {
 		http.Error(w, "Item not found", http.StatusNotFound)
 		return

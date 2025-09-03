@@ -275,8 +275,8 @@ type JFItem struct {
 	Chapters                 []string           `json:"Chapters,omitempty"`
 	LocationType             string             `json:"LocationType,omitempty"`
 	MediaType                string             `json:"MediaType,omitempty"`
-	LockedFields             []string           `json:"LockedFields,omitempty"`
-	LockData                 bool               `json:"LockData,omitempty"`
+	LockedFields             []string           `json:"LockedFields"`
+	LockData                 bool               `json:"LockData"`
 	Width                    int                `json:"Width,omitempty"`
 	Height                   int                `json:"Height,omitempty"`
 	SeriesID                 string             `json:"SeriesId,omitempty"`

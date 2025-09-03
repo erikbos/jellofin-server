@@ -29,12 +29,14 @@ const (
 	collectionTypeMovies     = "movies"
 	collectionTypeTVShows    = "tvshows"
 	CollectionTypePlaylists  = "playlists"
+	itemTypeUserRootFolder   = "UserRootFolder"
 	itemTypeCollectionFolder = "CollectionFolder"
 	itemTypeUserView         = "UserView"
 	itemTypeMovie            = "Movie"
 	itemTypeShow             = "Series"
 	itemTypeSeason           = "Season"
 	itemTypeEpisode          = "Episode"
+	itemTypePlaylist         = "Playlist"
 
 	// imagetag prefix will get HTTP-redirected
 	tagprefix_redirect = "redirect_"
@@ -55,7 +57,7 @@ func (j *Jellyfin) makeJFItemRoot() (response JFItem, e error) {
 		ID:                       makeJFRootID(collectionRootID),
 		Etag:                     idhash.IdHash(collectionRootID),
 		DateCreated:              time.Now().UTC(),
-		Type:                     "UserRootFolder",
+		Type:                     itemTypeUserRootFolder,
 		IsFolder:                 true,
 		CanDelete:                false,
 		CanDownload:              false,
@@ -138,13 +140,14 @@ func (j *Jellyfin) makeJFItemCollection(collectionID string) (response JFItem, e
 	return
 }
 
-func (j *Jellyfin) makeJFItemCollectionFavorites(ctx context.Context, userID string) (response JFItem, e error) {
+// makeJFItemCollectionFavorites creates a collection item for favorites folder of the user.
+func (j *Jellyfin) makeJFItemCollectionFavorites(ctx context.Context, userID string) (JFItem, error) {
 	var itemCount int
 	if favoriteIDs, err := j.db.UserDataRepo.GetFavorites(ctx, userID); err == nil {
 		itemCount = len(favoriteIDs)
 	}
 
-	response = JFItem{
+	response := JFItem{
 		Name:                     "Favorites",
 		ServerID:                 j.serverID,
 		ID:                       makeJFCollectionFavoritesID(favoritesCollectionID),
@@ -176,19 +179,40 @@ func (j *Jellyfin) makeJFItemCollectionFavorites(ctx context.Context, userID str
 		// 	Primary: "collection",
 		// },
 	}
-	return
+	return response, nil
 }
 
-func (j *Jellyfin) makeJFItemCollectionPlaylist(ctx context.Context, userID string) (response JFItem, e error) {
-	playlistIDs, err := j.db.PlaylistRepo.GetPlaylists(ctx, userID)
-
-	// In case of no playlists, we still want to return a collection item
-	var itemCount int
-	if err == nil {
-		itemCount = len(playlistIDs)
+// makeJFItemFavoritesOverview creates a list of favorite items.
+func (j *Jellyfin) makeJFItemFavoritesOverview(ctx context.Context, userID string) ([]JFItem, error) {
+	favoriteIDs, err := j.db.UserDataRepo.GetFavorites(ctx, userID)
+	if err != nil {
+		return []JFItem{}, err
 	}
 
-	response = JFItem{
+	items := []JFItem{}
+	for _, itemID := range favoriteIDs {
+		if c, i := j.collections.GetItemByID(itemID); c != nil && i != nil {
+			items = append(items, j.makeJFItem(ctx, userID, i, c.ID, c.Type, false))
+		}
+	}
+	return items, nil
+}
+
+// makeJFItemCollectionPlaylist creates a top level collection item representing all playlists of the user
+func (j *Jellyfin) makeJFItemCollectionPlaylist(ctx context.Context, userID string) (JFItem, error) {
+	var itemCount int
+
+	// Get total item count across all playlists
+	if playlistIDs, err := j.db.PlaylistRepo.GetPlaylists(ctx, userID); err == nil {
+		for _, ID := range playlistIDs {
+			playlist, err := j.db.PlaylistRepo.GetPlaylist(ctx, userID, ID)
+			if err == nil && playlist != nil {
+				itemCount += len(playlist.ItemIDs)
+			}
+		}
+	}
+
+	response := JFItem{
 		Name:                     "Playlists",
 		ServerID:                 j.serverID,
 		ID:                       makeJFCollectionPlaylistID(playlistCollectionID),
@@ -220,7 +244,74 @@ func (j *Jellyfin) makeJFItemCollectionPlaylist(ctx context.Context, userID stri
 		// 	Primary: "collection",
 		// },
 	}
-	return
+	return response, nil
+}
+
+// makeJFItemPlaylist creates a playlist item from the provided playlistID
+func (j *Jellyfin) makeJFItemPlaylist(ctx context.Context, userID, playlistID string) (JFItem, error) {
+	playlist, err := j.db.PlaylistRepo.GetPlaylist(ctx, userID, playlistID)
+	if err != nil || playlist == nil {
+		return JFItem{}, errors.New("could not find playlist")
+	}
+
+	response := JFItem{
+		Type:                     itemTypePlaylist,
+		ID:                       makeJFPlaylistID(playlist.ID),
+		ServerID:                 j.serverID,
+		ParentID:                 makeJFCollectionPlaylistID(playlistCollectionID),
+		Name:                     playlist.Name,
+		SortName:                 playlist.Name,
+		Etag:                     idhash.IdHash(playlist.ID),
+		DateCreated:              time.Now().UTC(),
+		CanDelete:                true,
+		CanDownload:              true,
+		Path:                     "/playlist",
+		IsFolder:                 true,
+		PlayAccess:               "Full",
+		RecursiveItemCount:       len(playlist.ItemIDs),
+		ChildCount:               len(playlist.ItemIDs),
+		LocationType:             "FileSystem",
+		MediaType:                "Video",
+		DisplayPreferencesID:     displayPreferencesID,
+		EnableMediaSourceDisplay: true,
+	}
+	return response, nil
+}
+
+// makeJFItemPlaylistOverview creates a list of playlists of the user.
+func (j *Jellyfin) makeJFItemPlaylistOverview(ctx context.Context, userID string) ([]JFItem, error) {
+	playlistIDs, err := j.db.PlaylistRepo.GetPlaylists(ctx, userID)
+	if err != nil {
+		return []JFItem{}, err
+	}
+
+	items := []JFItem{}
+	for _, ID := range playlistIDs {
+		if playlistItem, err := j.makeJFItemPlaylist(ctx, userID, ID); err == nil {
+			items = append(items, playlistItem)
+		}
+	}
+	return items, nil
+}
+
+// makeJFItemPlaylistItemList creates an item list of one playlist of the user.
+func (j *Jellyfin) makeJFItemPlaylistItemList(ctx context.Context, userID, playlistID string) ([]JFItem, error) {
+
+	playlist, err := j.db.PlaylistRepo.GetPlaylist(ctx, userID, playlistID)
+	log.Printf("makeJFItemPlaylistItemList: %+v, %+v", playlistID, err)
+	if err != nil {
+		return []JFItem{}, err
+	}
+
+	items := []JFItem{}
+	for _, itemID := range playlist.ItemIDs {
+		c, i := j.collections.GetItemByID(itemID)
+		if i != nil {
+			item := j.makeJFItem(ctx, userID, i, c.ID, c.Type, false)
+			items = append(items, item)
+		}
+	}
+	return items, nil
 }
 
 // makeJFItem make movie or show from provided item
@@ -553,75 +644,6 @@ func (j *Jellyfin) makeJFItemEpisode(ctx context.Context, userID, episodeID stri
 	return response, nil
 }
 
-// makeJFItemFavoritesOverview creates a list of favorite items
-func (j *Jellyfin) makeJFItemFavoritesOverview(ctx context.Context, userID string) (items []JFItem, err error) {
-	favoriteIDs, err := j.db.UserDataRepo.GetFavorites(ctx, userID)
-
-	// log.Printf("makeJFItemFavoritesOverview: %+v, %+v", favoriteIDs, err)
-	if err != nil {
-		return
-	}
-
-	items = []JFItem{}
-	for _, itemID := range favoriteIDs {
-		c, i := j.collections.GetItemByID(itemID)
-		if i != nil {
-			item := j.makeJFItem(ctx, userID, i, c.ID, c.Type, false)
-			items = append(items, item)
-		}
-	}
-	return
-}
-
-// makeJFItemPlaylistOverview creates a list of playlists of the user.
-func (j *Jellyfin) makeJFItemPlaylistOverview(ctx context.Context, userID string) (items []JFItem, err error) {
-	playlistIDs, err := j.db.PlaylistRepo.GetPlaylists(ctx, userID)
-
-	log.Printf("makeJFItemPlaylistOverview: %+v, %+v", playlistIDs, err)
-	if err != nil {
-		return
-	}
-	// In case we have playlists populate, otherwise leave empty list
-	for _, playlistID := range playlistIDs {
-		item, err := j.makeJFItemPlaylist(ctx, userID, playlistID)
-		if err == nil {
-			items = append(items, item)
-		}
-	}
-	return
-}
-
-func (j *Jellyfin) makeJFItemPlaylist(ctx context.Context, userID, playlistID string) (response JFItem, err error) {
-	playlist, err := j.db.PlaylistRepo.GetPlaylist(ctx, userID, playlistID)
-	if playlist == nil {
-		err = errors.New("could not find playlist")
-		return
-	}
-
-	response = JFItem{
-		Type:                     "Playlist",
-		ID:                       makeJFCollectionPlaylistID(playlist.ID),
-		ServerID:                 j.serverID,
-		ParentID:                 makeJFCollectionPlaylistID(playlistCollectionID),
-		Name:                     playlist.Name,
-		SortName:                 playlist.Name,
-		Etag:                     idhash.IdHash(playlist.ID),
-		DateCreated:              time.Now().UTC(),
-		CanDelete:                true,
-		CanDownload:              true,
-		Path:                     "/playlist",
-		IsFolder:                 true,
-		PlayAccess:               "Full",
-		RecursiveItemCount:       len(playlist.ItemIDs),
-		ChildCount:               len(playlist.ItemIDs),
-		LocationType:             "FileSystem",
-		MediaType:                "Video",
-		DisplayPreferencesID:     displayPreferencesID,
-		EnableMediaSourceDisplay: true,
-	}
-	return
-}
-
 func (j *Jellyfin) makeJFItemGenre(_ context.Context, genre string) (response JFItem) {
 
 	response = JFItem{
@@ -914,7 +936,7 @@ func (j *Jellyfin) makeMediaSource(filename string, n *collection.Nfo) (mediasou
 	return []JFMediaSources{mediasource}
 }
 
-// Most internal IDs get a prefixed when used in an API response.This helps
+// Most internal IDs get a prefixed when used in an API response. This helps
 // to determine the type of response when receiving an ID from
 // a client on an endpoints like /Items/{id}.
 //
@@ -948,8 +970,13 @@ func makeJFCollectionFavoritesID(favoritesID string) string {
 }
 
 // makeJFCollectionPlaylistID returns an external id for a playlist collection.
-func makeJFCollectionPlaylistID(playlistID string) string {
-	return itemprefix_collection_playlist + playlistID
+func makeJFCollectionPlaylistID(playlistCollectionID string) string {
+	return itemprefix_collection_playlist + playlistCollectionID
+}
+
+// makeJFPlaylistID returns an external id for a playlist.
+func makeJFPlaylistID(playlistID string) string {
+	return itemprefix_playlist + playlistID
 }
 
 // makeJFSeasonID returns an external id for a season ID.
@@ -990,9 +1017,10 @@ func isJFCollectionFavoritesID(id string) bool {
 	return strings.HasPrefix(id, itemprefix_collection_favorites)
 }
 
-// isJFCollectionPlaylistID checks if the provided ID is a playlist collection ID.
+// isJFCollectionPlaylistID checks if the provided ID is the playlist collection ID.
 func isJFCollectionPlaylistID(id string) bool {
-	return strings.HasPrefix(id, itemprefix_collection_playlist)
+	// There is only one playlist collection id, so we can do a direct comparison
+	return id == makeJFCollectionPlaylistID(playlistCollectionID)
 }
 
 // isJFPlaylistID checks if the provided ID is a playlist ID.
