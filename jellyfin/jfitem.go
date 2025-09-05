@@ -28,7 +28,7 @@ const (
 	displayPreferencesID     = "f137a2dd21bbc1b99aa5c0f6bf02a805"
 	collectionTypeMovies     = "movies"
 	collectionTypeTVShows    = "tvshows"
-	CollectionTypePlaylists  = "playlists"
+	collectionTypePlaylists  = "playlists"
 	itemTypeUserRootFolder   = "UserRootFolder"
 	itemTypeCollectionFolder = "CollectionFolder"
 	itemTypeUserView         = "UserView"
@@ -37,6 +37,7 @@ const (
 	itemTypeSeason           = "Season"
 	itemTypeEpisode          = "Episode"
 	itemTypePlaylist         = "Playlist"
+	itemTypeGenre            = "Genre"
 
 	// imagetag prefix will get HTTP-redirected
 	tagprefix_redirect = "redirect_"
@@ -107,22 +108,22 @@ func (j *Jellyfin) makeJFItemCollection(collectionID string) (response JFItem, e
 		PremiereDate:             time.Now().UTC(),
 		Type:                     itemTypeCollectionFolder,
 		IsFolder:                 true,
-		EnableMediaSourceDisplay: true,
-		ChildCount:               len(c.Items),
-		DisplayPreferencesID:     displayPreferencesID,
-		ExternalUrls:             []JFExternalUrls{},
-		PlayAccess:               "Full",
-		PrimaryImageAspectRatio:  1.7777777777777777,
-		RemoteTrailers:           []JFRemoteTrailers{},
 		LocationType:             "FileSystem",
 		Path:                     "/collection",
 		LockData:                 false,
 		MediaType:                "Unknown",
 		CanDelete:                false,
 		CanDownload:              true,
+		DisplayPreferencesID:     displayPreferencesID,
+		PlayAccess:               "Full",
+		EnableMediaSourceDisplay: true,
+		PrimaryImageAspectRatio:  1.7777777777777777,
+		ChildCount:               len(c.Items),
 		SpecialFeatureCount:      0,
 		Genres:                   collectionGenres,
 		GenreItems:               makeJFGenreItems(collectionGenres),
+		ExternalUrls:             []JFExternalUrls{},
+		RemoteTrailers:           []JFRemoteTrailers{},
 		// TODO: we do not support images for a collection
 		// ImageTags: &JFImageTags{
 		// 	Primary: "collection",
@@ -155,8 +156,8 @@ func (j *Jellyfin) makeJFItemCollectionFavorites(ctx context.Context, userID str
 		Etag:                     idhash.IdHash(favoritesCollectionID),
 		DateCreated:              time.Now().UTC(),
 		PremiereDate:             time.Now().UTC(),
-		CollectionType:           CollectionTypePlaylists,
-		SortName:                 CollectionTypePlaylists,
+		CollectionType:           collectionTypePlaylists,
+		SortName:                 collectionTypePlaylists,
 		Type:                     itemTypeUserView,
 		IsFolder:                 true,
 		EnableMediaSourceDisplay: true,
@@ -220,8 +221,8 @@ func (j *Jellyfin) makeJFItemCollectionPlaylist(ctx context.Context, userID stri
 		Etag:                     idhash.IdHash(playlistCollectionID),
 		DateCreated:              time.Now().UTC(),
 		PremiereDate:             time.Now().UTC(),
-		CollectionType:           CollectionTypePlaylists,
-		SortName:                 CollectionTypePlaylists,
+		CollectionType:           collectionTypePlaylists,
+		SortName:                 collectionTypePlaylists,
 		Type:                     itemTypeUserView,
 		IsFolder:                 true,
 		EnableMediaSourceDisplay: true,
@@ -257,16 +258,16 @@ func (j *Jellyfin) makeJFItemPlaylist(ctx context.Context, userID, playlistID st
 	response := JFItem{
 		Type:                     itemTypePlaylist,
 		ID:                       makeJFPlaylistID(playlist.ID),
-		ServerID:                 j.serverID,
 		ParentID:                 makeJFCollectionPlaylistID(playlistCollectionID),
+		ServerID:                 j.serverID,
 		Name:                     playlist.Name,
 		SortName:                 playlist.Name,
+		IsFolder:                 true,
+		Path:                     "/playlist",
 		Etag:                     idhash.IdHash(playlist.ID),
 		DateCreated:              time.Now().UTC(),
 		CanDelete:                true,
 		CanDownload:              true,
-		Path:                     "/playlist",
-		IsFolder:                 true,
 		PlayAccess:               "Full",
 		RecursiveItemCount:       len(playlist.ItemIDs),
 		ChildCount:               len(playlist.ItemIDs),
@@ -340,15 +341,16 @@ func (j *Jellyfin) makeJFItemMovie(ctx context.Context, userID string, i *collec
 		IsFolder:                false,
 		LocationType:            "FileSystem",
 		Path:                    "file.mp4",
+		Etag:                    idhash.IdHash(i.ID),
 		MediaType:               "Video",
 		VideoType:               "VideoFile",
 		Container:               "mov,mp4,m4a",
-		Etag:                    idhash.IdHash(i.ID),
 		DateCreated:             time.Unix(i.FirstVideo/1000, 0).UTC(),
 		PremiereDate:            time.Unix(i.FirstVideo/1000, 0).UTC(),
 		PrimaryImageAspectRatio: 0.6666666666666666,
 		CanDelete:               false,
 		CanDownload:             true,
+		DisplayPreferencesID:    displayPreferencesID,
 		PlayAccess:              "Full",
 		ImageTags: &JFImageTags{
 			Primary:  "primary_" + i.ID,
@@ -358,6 +360,9 @@ func (j *Jellyfin) makeJFItemMovie(ctx context.Context, userID string, i *collec
 		BackdropImageTags: []string{
 			"backdrop_" + i.ID,
 		},
+		Tags:      []string{},
+		Taglines:  []string{},
+		Trickplay: []string{},
 	}
 
 	i.LoadNfo()
@@ -406,6 +411,7 @@ func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, i *collect
 		PrimaryImageAspectRatio: 0.6666666666666666,
 		CanDelete:               false,
 		CanDownload:             true,
+		DisplayPreferencesID:    displayPreferencesID,
 		PlayAccess:              "Full",
 		ImageTags: &JFImageTags{
 			Primary:  "primary_" + i.ID,
@@ -415,6 +421,9 @@ func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, i *collect
 		BackdropImageTags: []string{
 			"backdrop_" + i.ID,
 		},
+		Tags:      []string{},
+		Taglines:  []string{},
+		Trickplay: []string{},
 	}
 	if i.Logo != "" {
 		response.ImageTags.Logo = "logo_" + i.ID
@@ -461,16 +470,6 @@ func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, i *collect
 		if playedEpisodes == response.ChildCount {
 			response.UserData.Played = true
 		}
-
-		// response.UserData = &JFUserData{
-		// 	UnplayedItemCount: totalEpisodes - playedEpisodes,
-		// 	PlayedPercentage:  100 * playedEpisodes / totalEpisodes,
-		// 	LastPlayedDate:    lastestPlayed,
-		// 	Key:               response.ID,
-		// }
-		// if playedEpisodes == response.ChildCount {
-		// 	response.UserData.Played = true
-		// }
 	}
 	return response
 }
@@ -484,27 +483,31 @@ func (j *Jellyfin) makeJFItemSeason(ctx context.Context, userID, seasonID string
 	}
 
 	response = JFItem{
-		Type:               itemTypeSeason,
-		ServerID:           j.serverID,
-		ParentID:           show.ID,
-		SeriesID:           show.ID,
-		ID:                 makeJFSeasonID(seasonID),
-		Etag:               idhash.IdHash(seasonID),
-		SeriesName:         show.Name,
-		IsFolder:           true,
-		LocationType:       "FileSystem",
-		MediaType:          "Unknown",
-		ChildCount:         len(season.Episodes),
-		RecursiveItemCount: len(season.Episodes),
-		DateCreated:        time.Now().UTC(),
-		PremiereDate:       time.Now().UTC(),
-		CanDelete:          false,
-		CanDownload:        true,
-		PlayAccess:         "Full",
+		Type:                 itemTypeSeason,
+		ID:                   makeJFSeasonID(seasonID),
+		SeriesID:             show.ID,
+		SeriesName:           show.Name,
+		ParentID:             show.ID,
+		ParentLogoItemId:     show.ID,
+		ServerID:             j.serverID,
+		IsFolder:             true,
+		LocationType:         "FileSystem",
+		Etag:                 idhash.IdHash(seasonID),
+		MediaType:            "Unknown",
+		ChildCount:           len(season.Episodes),
+		RecursiveItemCount:   len(season.Episodes),
+		DateCreated:          time.Now().UTC(),
+		PremiereDate:         time.Now().UTC(),
+		CanDelete:            false,
+		CanDownload:          true,
+		DisplayPreferencesID: displayPreferencesID,
+		PlayAccess:           "Full",
 		ImageTags: &JFImageTags{
 			Primary: makeJFSeasonID(seasonID),
 		},
-		ParentLogoItemId: show.ID,
+		Tags:      []string{},
+		Taglines:  []string{},
+		Trickplay: []string{},
 	}
 	// Regular season? (>0)
 	if season.SeasonNo != 0 {
@@ -548,16 +551,6 @@ func (j *Jellyfin) makeJFItemSeason(ctx context.Context, userID, seasonID string
 		response.UserData.Played = true
 	}
 
-	// response.UserData = &JFUserData{
-	// 	UnplayedItemCount: response.ChildCount - playedEpisodes,
-	// 	PlayedPercentage:  100 * playedEpisodes / response.ChildCount,
-	// 	LastPlayedDate:    lastestPlayed,
-	// 	Key:               response.ID,
-	// }
-	// if playedEpisodes == response.ChildCount {
-	// 	response.UserData.Played = true
-	// }
-
 	return response, nil
 }
 
@@ -579,30 +572,31 @@ func (j *Jellyfin) makeJFItemEpisode(ctx context.Context, userID, episodeID stri
 	}
 
 	response = JFItem{
-		Type:         itemTypeEpisode,
-		ID:           makeJFEpisodeID(episodeID),
-		Etag:         idhash.IdHash(episodeID),
-		ServerID:     j.serverID,
-		SeriesName:   show.Name,
-		SeriesID:     show.ID,
-		SeasonID:     makeJFSeasonID(season.ID),
-		SeasonName:   makeSeasonName(season.SeasonNo),
-		LocationType: "FileSystem",
-		Path:         "episode.mp4",
-		IsFolder:     false,
-		MediaType:    "Video",
-		VideoType:    "VideoFile",
-		Container:    "mov,mp4,m4a",
-		HasSubtitles: true,
-		DateCreated:  time.Unix(episode.VideoTS/1000, 0).UTC(),
-		PremiereDate: time.Unix(episode.VideoTS/1000, 0).UTC(),
-		CanDelete:    false,
-		CanDownload:  true,
-		PlayAccess:   "Full",
-		// ImageTags: &JFImageTags{
-		// 	Primary: "episode",
-		// },
-		ParentLogoItemId: show.ID,
+		Type:                 itemTypeEpisode,
+		ID:                   makeJFEpisodeID(episodeID),
+		SeasonID:             makeJFSeasonID(season.ID),
+		SeasonName:           makeSeasonName(season.SeasonNo),
+		SeriesID:             show.ID,
+		SeriesName:           show.Name,
+		ParentLogoItemId:     show.ID,
+		ServerID:             j.serverID,
+		IsFolder:             false,
+		LocationType:         "FileSystem",
+		Path:                 "episode.mp4",
+		Etag:                 idhash.IdHash(episodeID),
+		MediaType:            "Video",
+		VideoType:            "VideoFile",
+		Container:            "mov,mp4,m4a",
+		DateCreated:          time.Unix(episode.VideoTS/1000, 0).UTC(),
+		PremiereDate:         time.Unix(episode.VideoTS/1000, 0).UTC(),
+		HasSubtitles:         true,
+		CanDelete:            false,
+		CanDownload:          true,
+		DisplayPreferencesID: displayPreferencesID,
+		PlayAccess:           "Full",
+		Tags:                 []string{},
+		Taglines:             []string{},
+		Trickplay:            []string{},
 	}
 	if episode.Thumb != "" {
 		response.ImageTags = &JFImageTags{
@@ -649,7 +643,7 @@ func (j *Jellyfin) makeJFItemGenre(_ context.Context, genre string) (response JF
 	response = JFItem{
 		ID:           makeJFGenreID(genre),
 		ServerID:     j.serverID,
-		Type:         "Genre",
+		Type:         itemTypeGenre,
 		Name:         genre,
 		SortName:     genre,
 		Etag:         makeJFGenreID(genre),
@@ -914,6 +908,8 @@ func (j *Jellyfin) makeMediaSource(filename string, n *collection.Nfo) (mediasou
 		audiostream.ChannelLayout = "7.1"
 	default:
 		log.Printf("Nfo of %s has unknown audio channel configuration %d", filename, NfoAudio.Channels)
+		audiostream.Title = "Unknown"
+		audiostream.ChannelLayout = "unknown"
 	}
 
 	switch strings.ToLower(NfoAudio.Codec) {

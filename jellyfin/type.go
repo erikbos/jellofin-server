@@ -224,67 +224,69 @@ type UserData struct {
 }
 
 type JFItem struct {
-	Name                     string             `json:"Name"`
-	OriginalTitle            string             `json:"OriginalTitle,omitempty"`
-	ServerID                 string             `json:"ServerId"`
 	ID                       string             `json:"Id"`
+	ParentID                 string             `json:"ParentId,omitempty"`
+	SeriesID                 string             `json:"SeriesId,omitempty"`
+	SeasonID                 string             `json:"SeasonId,omitempty"`
+	ServerID                 string             `json:"ServerId"`
+	IndexNumber              int                `json:"IndexNumber,omitempty"`
+	ParentIndexNumber        int                `json:"ParentIndexNumber,omitempty"`
+	Type                     string             `json:"Type,omitempty"`
+	Name                     string             `json:"Name"`
+	SortName                 string             `json:"SortName,omitempty"`
+	ForcedSortName           string             `json:"ForcedSortName,omitempty"`
+	SeriesName               string             `json:"SeriesName,omitempty"`
+	SeasonName               string             `json:"SeasonName,omitempty"`
+	OriginalTitle            string             `json:"OriginalTitle,omitempty"`
 	Etag                     string             `json:"Etag"`
 	DateCreated              time.Time          `json:"DateCreated,omitempty"`
 	CanDelete                bool               `json:"CanDelete"`
 	CanDownload              bool               `json:"CanDownload"`
 	Container                string             `json:"Container,omitempty"`
-	SortName                 string             `json:"SortName,omitempty"`
-	ForcedSortName           string             `json:"ForcedSortName,omitempty"`
 	PremiereDate             time.Time          `json:"PremiereDate,omitempty"`
-	ExternalUrls             []JFExternalUrls   `json:"ExternalUrls,omitempty"`
 	MediaSources             []JFMediaSources   `json:"MediaSources,omitempty"`
 	CriticRating             int                `json:"CriticRating,omitempty"`
 	ProductionLocations      []string           `json:"ProductionLocations,omitempty"`
+	MediaType                string             `json:"MediaType,omitempty"`
 	Path                     string             `json:"Path,omitempty"`
 	EnableMediaSourceDisplay bool               `json:"EnableMediaSourceDisplay"`
 	OfficialRating           string             `json:"OfficialRating,omitempty"`
 	ChannelID                []string           `json:"ChannelId,omitempty"`
 	ChildCount               int                `json:"ChildCount,omitempty"`
 	CollectionType           string             `json:"CollectionType,omitempty"`
+	MediaStreams             []JFMediaStreams   `json:"MediaStreams,omitempty"`
 	Overview                 string             `json:"Overview,omitempty"`
 	Taglines                 []string           `json:"Taglines,omitempty"`
+	Trickplay                []string           `json:"Trickplay,omitempty"`
 	Genres                   []string           `json:"Genres,omitempty"`
 	CommunityRating          float64            `json:"CommunityRating,omitempty"`
 	RunTimeTicks             int64              `json:"RunTimeTicks,omitempty"`
 	PlayAccess               string             `json:"PlayAccess,omitempty"`
 	ProductionYear           int                `json:"ProductionYear,omitempty"`
-	RemoteTrailers           []JFRemoteTrailers `json:"RemoteTrailers,omitempty"`
-	ProviderIds              JFProviderIds      `json:"ProviderIds,omitempty"`
+	LocationType             string             `json:"LocationType,omitempty"`
+	UserData                 *JFUserData        `json:"UserData,omitempty"`
+	ImageTags                *JFImageTags       `json:"ImageTags,omitempty"`
+	BackdropImageTags        []string           `json:"BackdropImageTags,omitempty"`
+	Width                    int                `json:"Width,omitempty"`
+	Height                   int                `json:"Height,omitempty"`
 	IsFolder                 bool               `json:"IsFolder"`
-	ParentID                 string             `json:"ParentId,omitempty"`
-	Type                     string             `json:"Type,omitempty"`
+	IsHD                     bool               `json:"IsHD"`
 	People                   []JFPeople         `json:"People,omitempty"`
 	Studios                  []JFStudios        `json:"Studios,omitempty"`
 	GenreItems               []JFGenreItem      `json:"GenreItems,omitempty"`
-	LocalTrailerCount        int                `json:"LocalTrailerCount,omitempty"`
-	UserData                 *JFUserData        `json:"UserData,omitempty"`
-	SpecialFeatureCount      int                `json:"SpecialFeatureCount,omitempty"`
-	DisplayPreferencesID     string             `json:"DisplayPreferencesId,omitempty"`
-	Tags                     []string           `json:"Tags,omitempty"`
-	PrimaryImageAspectRatio  float64            `json:"PrimaryImageAspectRatio,omitempty"`
-	MediaStreams             []JFMediaStreams   `json:"MediaStreams,omitempty"`
-	VideoType                string             `json:"VideoType,omitempty"`
-	ImageTags                *JFImageTags       `json:"ImageTags,omitempty"`
-	BackdropImageTags        []string           `json:"BackdropImageTags,omitempty"`
+	RemoteTrailers           []JFRemoteTrailers `json:"RemoteTrailers,omitempty"`
 	ImageBlurHashes          *JFImageBlurHashes `json:"ImageBlurHashes,omitempty"`
-	Chapters                 []string           `json:"Chapters,omitempty"`
-	LocationType             string             `json:"LocationType,omitempty"`
-	MediaType                string             `json:"MediaType,omitempty"`
+	ProviderIds              JFProviderIds      `json:"ProviderIds,omitempty"`
+	ExternalUrls             []JFExternalUrls   `json:"ExternalUrls,omitempty"`
+	Tags                     []string           `json:"Tags,omitempty"`
 	LockedFields             []string           `json:"LockedFields"`
 	LockData                 bool               `json:"LockData"`
-	Width                    int                `json:"Width,omitempty"`
-	Height                   int                `json:"Height,omitempty"`
-	SeriesID                 string             `json:"SeriesId,omitempty"`
-	SeriesName               string             `json:"SeriesName,omitempty"`
-	SeasonID                 string             `json:"SeasonId,omitempty"`
-	SeasonName               string             `json:"SeasonName,omitempty"`
-	IndexNumber              int                `json:"IndexNumber,omitempty"`
-	ParentIndexNumber        int                `json:"ParentIndexNumber,omitempty"`
+	LocalTrailerCount        int                `json:"LocalTrailerCount,omitempty"`
+	SpecialFeatureCount      int                `json:"SpecialFeatureCount,omitempty"`
+	DisplayPreferencesID     string             `json:"DisplayPreferencesId,omitempty"`
+	PrimaryImageAspectRatio  float64            `json:"PrimaryImageAspectRatio,omitempty"`
+	VideoType                string             `json:"VideoType,omitempty"`
+	Chapters                 []string           `json:"Chapters,omitempty"`
 	ParentLogoItemId         string             `json:"ParentLogoItemId,omitempty"`
 	RecursiveItemCount       int                `json:"RecursiveItemCount,omitempty"`
 	HasSubtitles             bool               `json:"HasSubtitles,omitempty"`

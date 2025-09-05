@@ -26,7 +26,7 @@ const (
 	contextAccessTokenDetails contextKey = "AccessTokenDetails"
 )
 
-// curl -v 'http://127.0.0.1:9090/Users/2b1ec0a52b09456c9823a367d84ac9e5/Views?IncludeExternalContent=false'
+// /Users/2b1ec0a52b09456c9823a367d84ac9e5/Views?IncludeExternalContent=false
 // and
 // /UserViews
 //
@@ -62,13 +62,15 @@ func (j *Jellyfin) usersViewsHandler(w http.ResponseWriter, r *http.Request) {
 	serveJSON(response, w)
 }
 
-// curl -v http://127.0.0.1:9090/Users/2b1ec0a52b09456c9823a367d84ac9e5/GroupingOptions
+// /Users/2b1ec0a52b09456c9823a367d84ac9e5/GroupingOptions
+//
+// usersGroupingOptionsHandler returns the available collections as grouping options
 func (j *Jellyfin) usersGroupingOptionsHandler(w http.ResponseWriter, r *http.Request) {
 	collections := []JFCollection{}
 	for _, c := range j.collections.GetCollections() {
 		collectionItem, err := j.makeJFItemCollection(c.ID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			apierror(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		collection := JFCollection{
@@ -80,9 +82,9 @@ func (j *Jellyfin) usersGroupingOptionsHandler(w http.ResponseWriter, r *http.Re
 	serveJSON(collections, w)
 }
 
-// /Users/2b1ec0a52b09456c9823a367d84ac9e5/Items/f137a2dd21bbc1b99aa5c0f6bf02a805?Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount'
+// /Users/2b1ec0a52b09456c9823a367d84ac9e5/Items/f137a2dd21bbc1b99aa5c0f6bf02a805
 //
-// /Items/f137a2dd21bbc1b99aa5c0f6bf02a805?Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount'
+// /Items/f137a2dd21bbc1b99aa5c0f6bf02a805?Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount
 //
 // usersItemHandler returns details for a specific item
 func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
@@ -98,7 +100,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 	case isJFRootID(itemID):
 		collectionItem, err := j.makeJFItemRoot()
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
+			apierror(w, err.Error(), http.StatusNotFound)
 			return
 
 		}
@@ -108,7 +110,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 	case isJFCollectionFavoritesID(itemID):
 		favoritesCollectionItem, err := j.makeJFItemCollectionFavorites(r.Context(), accessToken.UserID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
+			apierror(w, err.Error(), http.StatusNotFound)
 			return
 
 		}
@@ -117,7 +119,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 	case isJFCollectionPlaylistID(itemID):
 		PlayListCollectionItem, err := j.makeJFItemCollectionPlaylist(r.Context(), accessToken.UserID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
+			apierror(w, err.Error(), http.StatusNotFound)
 			return
 		}
 		serveJSON(PlayListCollectionItem, w)
@@ -125,7 +127,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 	case isJFCollectionID(itemID):
 		collectionItem, err := j.makeJFItemCollection(trimPrefix(itemID))
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
+			apierror(w, err.Error(), http.StatusNotFound)
 			return
 
 		}
@@ -134,7 +136,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 	case isJFPlaylistID(itemID):
 		playlistItem, err := j.makeJFItemPlaylist(r.Context(), accessToken.UserID, trimPrefix(itemID))
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
+			apierror(w, err.Error(), http.StatusNotFound)
 			return
 		}
 		serveJSON(playlistItem, w)
@@ -142,7 +144,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 	case isJFSeasonID(itemID):
 		seasonItem, err := j.makeJFItemSeason(r.Context(), accessToken.UserID, trimPrefix(itemID))
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
+			apierror(w, err.Error(), http.StatusNotFound)
 			return
 		}
 		serveJSON(seasonItem, w)
@@ -150,7 +152,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 	case isJFEpisodeID(itemID):
 		episodeItem, err := j.makeJFItemEpisode(r.Context(), accessToken.UserID, trimPrefix(itemID))
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
+			apierror(w, err.Error(), http.StatusNotFound)
 			return
 		}
 		serveJSON(episodeItem, w)
@@ -160,7 +162,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 	// Try to fetch individual item: movie or show
 	c, i := j.collections.GetItemByID(itemID)
 	if i == nil {
-		http.Error(w, "Item not found", http.StatusNotFound)
+		apierror(w, "Item not found", http.StatusNotFound)
 		return
 	}
 	serveJSON(j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID, c.Type, false), w)
@@ -192,7 +194,7 @@ func (j *Jellyfin) usersItemUserDataHandler(w http.ResponseWriter, r *http.Reque
 //
 // /Users/{user}/Items
 //
-// usersItemsHandler returns list of items based upon provided quary params
+// usersItemsHandler returns list of items based upon provided query params
 //
 // Supported query params:
 // - ParentId, if provided scope result set to this collection
@@ -218,7 +220,7 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 		case isJFCollectionFavoritesID(parentID):
 			items, err = j.makeJFItemFavoritesOverview(r.Context(), accessToken.UserID)
 			if err != nil {
-				http.Error(w, "Could not find favorites collection", http.StatusNotFound)
+				apierror(w, "Could not find favorites collection", http.StatusNotFound)
 				return
 			}
 			parentFound = true
@@ -227,7 +229,7 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 			log.Printf("1")
 			items, err = j.makeJFItemPlaylistOverview(r.Context(), accessToken.UserID)
 			if err != nil {
-				http.Error(w, "Could not find playlist collection", http.StatusNotFound)
+				apierror(w, "Could not find playlist collection", http.StatusNotFound)
 				return
 			}
 			parentFound = true
@@ -237,7 +239,7 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 			playlistID := trimPrefix(parentID)
 			items, err = j.makeJFItemPlaylistItemList(r.Context(), accessToken.UserID, playlistID)
 			if err != nil {
-				http.Error(w, "Could not find playlist", http.StatusNotFound)
+				apierror(w, "Could not find playlist", http.StatusNotFound)
 				return
 			}
 			parentFound = true
@@ -290,13 +292,13 @@ func (j *Jellyfin) usersItemsAncestorsHandler(w http.ResponseWriter, r *http.Req
 
 	c, i := j.collections.GetItemByID(itemID)
 	if i == nil {
-		http.Error(w, "Item not found", http.StatusNotFound)
+		apierror(w, "Item not found", http.StatusNotFound)
 		return
 	}
 
 	collectionItem, err := j.makeJFItemCollection(c.ID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		apierror(w, err.Error(), http.StatusNotFound)
 		return
 	}
 	root, _ := j.makeJFItemRoot()
@@ -308,9 +310,11 @@ func (j *Jellyfin) usersItemsAncestorsHandler(w http.ResponseWriter, r *http.Req
 	serveJSON(response, w)
 }
 
-// /Users/2b1ec0a52b09456c9823a367d84ac9e5/Items/Latest?Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount&ParentId=f137a2dd21bbc1b99aa5c0f6bf02a805&StartIndex=0&Limit=20'
+// /Users/2b1ec0a52b09456c9823a367d84ac9e5/Items/Latest?Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount&ParentId=f137a2dd21bbc1b99aa5c0f6bf02a805&StartIndex=0&Limit=20
 //
-// usersItemsLatestHandler returns list of new items based upon provided quary params
+// /Items/Latest
+//
+// usersItemsLatestHandler returns list of new items based upon provided query params
 //
 // Supported query params:
 // - ParentId, if provided scope result set to this collection
@@ -406,12 +410,14 @@ func (j *Jellyfin) searchHintsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // /Shows/NextUp?
-// 	enableImageTypes=Primary&
-// 	enableImageTypes=Backdrop&
-// 	enableImageTypes=Thumb&
-// 	enableResumable=false&
-// 	fields=MediaSourceCount&limit=20&
-
+//
+//	enableImageTypes=Primary&
+//	enableImageTypes=Backdrop&
+//	enableImageTypes=Thumb&
+//	enableResumable=false&
+//	fields=MediaSourceCount&limit=20&
+//
+// usersItemsNextUpHandler returns a list of next up items for the user
 func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 	accessToken := j.getAccessTokenDetails(w, r)
 	if accessToken == nil {
@@ -422,12 +428,12 @@ func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 
 	recentlyWatchedIDs, err := j.db.UserDataRepo.GetRecentlyWatched(r.Context(), accessToken.UserID, true)
 	if err != nil {
-		http.Error(w, "Could not get recently watched items list", http.StatusInternalServerError)
+		apierror(w, "Could not get recently watched items list", http.StatusInternalServerError)
 		return
 	}
 	nextUpItemIDs, err := j.collections.NextUp(recentlyWatchedIDs)
 	if err != nil {
-		http.Error(w, "Could not get next up items list", http.StatusInternalServerError)
+		apierror(w, "Could not get next up items list", http.StatusInternalServerError)
 		return
 	}
 
@@ -464,9 +470,10 @@ func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // /UserItems/Resume?userId=XAOVn7iqiBujnIQY8sd0&enableImageTypes=Primary&enableImageTypes=Backdrop&enableImageTypes=Thumb&includeItemTypes=Movie&includeItemTypes=Series&includeItemTypes=Episode
-// /Users/2b1ec0a52b09456c9823a367d84ac9e5/Items/Resume?Limit=12&MediaTypes=Video&Recursive=true&Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount'
 //
-// usersItemsResumeHandler returns a list of items that are resumable
+// /Users/2b1ec0a52b09456c9823a367d84ac9e5/Items/Resume?Limit=12&MediaTypes=Video&Recursive=true&Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount
+//
+// usersItemsResumeHandler returns a list of items that have not been fully watched and could be resumed
 func (j *Jellyfin) usersItemsResumeHandler(w http.ResponseWriter, r *http.Request) {
 	accessToken := j.getAccessTokenDetails(w, r)
 	if accessToken == nil {
@@ -477,7 +484,7 @@ func (j *Jellyfin) usersItemsResumeHandler(w http.ResponseWriter, r *http.Reques
 
 	resumeItemIDs, err := j.db.UserDataRepo.GetRecentlyWatched(r.Context(), accessToken.UserID, false)
 	if err != nil {
-		http.Error(w, "Could not get resume items list", http.StatusInternalServerError)
+		apierror(w, "Could not get resume items list", http.StatusInternalServerError)
 		return
 	}
 
@@ -537,13 +544,15 @@ func (j *Jellyfin) usersItemsSuggestionsHandler(w http.ResponseWriter, r *http.R
 	serveJSON(response, w)
 }
 
-// curl -v http://127.0.0.1:9090/Library/VirtualFolders
+// /Library/VirtualFolders
+//
+// libraryVirtualFoldersHandler returns the available collections as virtual folders
 func (j *Jellyfin) libraryVirtualFoldersHandler(w http.ResponseWriter, r *http.Request) {
 	libraries := []JFMediaLibrary{}
 	for _, c := range j.collections.GetCollections() {
 		collectionItem, err := j.makeJFItemCollection(c.ID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			apierror(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		l := JFMediaLibrary{
@@ -558,7 +567,8 @@ func (j *Jellyfin) libraryVirtualFoldersHandler(w http.ResponseWriter, r *http.R
 	serveJSON(libraries, w)
 }
 
-// curl -v 'http://127.0.0.1:9090/Shows/4QBdg3S803G190AgFrBf/Seasons?UserId=2b1ec0a52b09456c9823a367d84ac9e5&ExcludeLocationTypes=Virtual&Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount'
+// /Shows/4QBdg3S803G190AgFrBf/Seasons?UserId=2b1ec0a52b09456c9823a367d84ac9e5&ExcludeLocationTypes=Virtual&Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount
+//
 // generate season overview
 func (j *Jellyfin) showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
 	accessToken := j.getAccessTokenDetails(w, r)
@@ -572,7 +582,7 @@ func (j *Jellyfin) showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
 	showID := vars["show"]
 	_, i := j.collections.GetItemByID(showID)
 	if i == nil {
-		http.Error(w, "Show not found", http.StatusNotFound)
+		apierror(w, "Show not found", http.StatusNotFound)
 		return
 	}
 	// Create API response
@@ -602,7 +612,8 @@ func (j *Jellyfin) showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
 	serveJSON(response, w)
 }
 
-// curl -v 'http://127.0.0.1:9090/Shows/rXlq4EHNxq4HIVQzw3o2/Episodes?UserId=2b1ec0a52b09456c9823a367d84ac9e5&ExcludeLocationTypes=Virtual&Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount&SeasonId=rXlq4EHNxq4HIVQzw3o2/1'
+// /Shows/rXlq4EHNxq4HIVQzw3o2/Episodes?UserId=2b1ec0a52b09456c9823a367d84ac9e5&ExcludeLocationTypes=Virtual&Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount&SeasonId=rXlq4EHNxq4HIVQzw3o2/1
+//
 // generate episode overview for one season of a show
 func (j *Jellyfin) showsEpisodesHandler(w http.ResponseWriter, r *http.Request) {
 	accessToken := j.getAccessTokenDetails(w, r)
@@ -615,7 +626,7 @@ func (j *Jellyfin) showsEpisodesHandler(w http.ResponseWriter, r *http.Request) 
 
 	c, i := j.collections.GetItemByID(vars["show"])
 	if i == nil {
-		http.Error(w, "Show not found", http.StatusNotFound)
+		apierror(w, "Show not found", http.StatusNotFound)
 		return
 	}
 
@@ -1034,15 +1045,16 @@ func (j *Jellyfin) applyItemPaginating(items []JFItem, queryparams url.Values) (
 }
 
 func (j *Jellyfin) itemsDeleteHandler(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "Not implemented", http.StatusForbidden)
+	apierror(w, "Not implemented", http.StatusForbidden)
 }
 
-// curl -v 'http://127.0.0.1:9090/Items/rVFG3EzPthk2wowNkqUl/Images/Backdrop?tag=7cec54f0c8f362c75588e83d76fefa75'
-// curl -v 'http://127.0.0.1:9090/Items/rVFG3EzPthk2wowNkqUl/Images/Logo?tag=e28fbe648d2dbb76b65c14f14e6b1d72'
-// curl -v 'http://127.0.0.1:9090/Items/q2e2UzCOd9zkmJenIOph/Images/Primary?tag=70931a7d8c147c9e2c0aafbad99e03e5'
-// curl -v 'http://127.0.0.1:9090/Items/rVFG3EzPthk2wowNkqUl/Images/Primary?tag=268b80952354f01d5a184ed64b36dd52'
-// curl -v 'http://127.0.0.1:9090/Items/2vx0ZYKeHxbh5iWhloIB/Images/Primary?tag=redirect_https://image.tmdb.org/t/p/original/3E4x5doNuuu6i9Mef6HPrlZjNb1.jpg'
-
+// /Items/rVFG3EzPthk2wowNkqUl/Images/Backdrop?tag=7cec54f0c8f362c75588e83d76fefa75
+// /Items/rVFG3EzPthk2wowNkqUl/Images/Logo?tag=e28fbe648d2dbb76b65c14f14e6b1d72
+// /Items/q2e2UzCOd9zkmJenIOph/Images/Primary?tag=70931a7d8c147c9e2c0aafbad99e03e5
+// /Items/rVFG3EzPthk2wowNkqUl/Images/Primary?tag=268b80952354f01d5a184ed64b36dd52
+// /Items/2vx0ZYKeHxbh5iWhloIB/Images/Primary?tag=redirect_https://image.tmdb.org/t/p/original/3E4x5doNuuu6i9Mef6HPrlZjNb1.jpg
+//
+// itemsImagesHandler serves item images like posters, backdrops and logos
 func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 	// handle tag-based redirects for item imagery that is external (e.g. external images of actors)
 	// for these we do not care about the provided item id
@@ -1067,7 +1079,7 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 	case isJFSeasonID(itemID):
 		c, item, season := j.collections.GetSeasonByID(trimPrefix(itemID))
 		if season == nil {
-			http.Error(w, "Could not find season", http.StatusNotFound)
+			apierror(w, "Could not find season", http.StatusNotFound)
 			return
 		}
 		switch strings.ToLower(imageType) {
@@ -1089,7 +1101,7 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			log.Printf("Image request %s, no poster found for season %s", itemID, season.ID)
-			http.Error(w, "Poster not found for season", http.StatusNotFound)
+			apierror(w, "Poster not found for season", http.StatusNotFound)
 			return
 		default:
 			log.Printf("Image request %s, unknown type %s", itemID, imageType)
@@ -1098,7 +1110,7 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 	case isJFEpisodeID(itemID):
 		c, item, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemID))
 		if episode == nil {
-			http.Error(w, "Item not found (could not find episode)", http.StatusNotFound)
+			apierror(w, "Item not found (could not find episode)", http.StatusNotFound)
 			return
 		}
 		if episode.Thumb != "" {
@@ -1106,7 +1118,7 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		log.Printf("Image request %s, no thumbnail for episode %s", itemID, episode.ID)
-		http.Error(w, "Thumbnail not found for episode", http.StatusNotFound)
+		apierror(w, "Thumbnail not found for episode", http.StatusNotFound)
 		return
 	case isJFCollectionID(itemID):
 		fallthrough
@@ -1114,13 +1126,13 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 		fallthrough
 	case isJFCollectionPlaylistID(itemID):
 		log.Printf("Image request for collection %s!", itemID)
-		http.Error(w, "Image request for collection not yet supported", http.StatusNotFound)
+		apierror(w, "Image request for collection not yet supported", http.StatusNotFound)
 		return
 	}
 
 	c, i := j.collections.GetItemByID(itemID)
 	if i == nil {
-		http.Error(w, "Item not found", http.StatusNotFound)
+		apierror(w, "Item not found", http.StatusNotFound)
 		return
 	}
 
@@ -1130,24 +1142,24 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 			j.serveImage(w, r, c.Directory+"/"+i.Name+"/"+i.Poster, j.imageQualityPoster)
 			return
 		}
-		http.Error(w, "Poster not found", http.StatusNotFound)
+		apierror(w, "Poster not found", http.StatusNotFound)
 		return
 	case "backdrop":
 		if i.Fanart != "" {
 			j.serveFile(w, r, c.Directory+"/"+i.Name+"/"+i.Fanart)
 			return
 		}
-		http.Error(w, "Backdrop not found", http.StatusNotFound)
+		apierror(w, "Backdrop not found", http.StatusNotFound)
 		return
 	case "logo":
 		if i.Logo != "" {
 			j.serveImage(w, r, c.Directory+"/"+i.Name+"/"+i.Logo, j.imageQualityPoster)
 		}
-		http.Error(w, "Logo not found", http.StatusNotFound)
+		apierror(w, "Logo not found", http.StatusNotFound)
 		return
 	}
 	log.Printf("Unknown image type requested: %s\n", vars["type"])
-	http.Error(w, "Item image not found", http.StatusNotFound)
+	apierror(w, "Item image not found", http.StatusNotFound)
 }
 
 // curl -v 'http://127.0.0.1:9090/Items/68d73f6f48efedb7db697bf9fee580cb/PlaybackInfo?UserId=2b1ec0a52b09456c9823a367d84ac9e5'
@@ -1167,7 +1179,7 @@ func (j *Jellyfin) itemsPlaybackInfoHandler(w http.ResponseWriter, r *http.Reque
 		}
 	}
 	if mediaSource == nil {
-		http.Error(w, "Could not find item", http.StatusNotFound)
+		apierror(w, "Could not find item", http.StatusNotFound)
 		return
 	}
 
@@ -1191,7 +1203,9 @@ func (j *Jellyfin) mediaSegmentsHandler(w http.ResponseWriter, r *http.Request) 
 	serveJSON(response, w)
 }
 
-// curl -v -I 'http://127.0.0.1:9090/Videos/NrXTYiS6xAxFj4QAiJoT/stream'
+// /Videos/NrXTYiS6xAxFj4QAiJoT/stream
+//
+// videoStreamHandler streams the actual video file to the client
 func (j *Jellyfin) videoStreamHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	itemID := vars["item"]
@@ -1200,7 +1214,7 @@ func (j *Jellyfin) videoStreamHandler(w http.ResponseWriter, r *http.Request) {
 	if isJFEpisodeID(itemID) {
 		c, item, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemID))
 		if episode == nil {
-			http.Error(w, "Could not find episode", http.StatusNotFound)
+			apierror(w, "Could not find episode", http.StatusNotFound)
 			return
 		}
 		j.serveFile(w, r, c.Directory+"/"+item.Name+"/"+episode.Video)
@@ -1209,7 +1223,7 @@ func (j *Jellyfin) videoStreamHandler(w http.ResponseWriter, r *http.Request) {
 
 	c, i := j.collections.GetItemByID(vars["item"])
 	if i == nil || i.Video == "" {
-		http.Error(w, "Item not found", http.StatusNotFound)
+		apierror(w, "Item not found", http.StatusNotFound)
 		return
 	}
 	j.serveFile(w, r, c.Directory+"/"+i.Name+"/"+i.Video)
@@ -1229,14 +1243,14 @@ func (j *Jellyfin) personsHandler(w http.ResponseWriter, r *http.Request) {
 func (j *Jellyfin) serveFile(w http.ResponseWriter, r *http.Request, filename string) {
 	file, err := os.Open(filename)
 	if err != nil {
-		http.Error(w, "File not found", http.StatusNotFound)
+		apierror(w, "File not found", http.StatusNotFound)
 		return
 	}
 	defer file.Close()
 
 	fileStat, err := file.Stat()
 	if err != nil {
-		http.Error(w, "Could not retrieve file info", http.StatusInternalServerError)
+		apierror(w, "Could not retrieve file info", http.StatusInternalServerError)
 		return
 	}
 	http.ServeContent(w, r, fileStat.Name(), fileStat.ModTime(), file)
@@ -1245,14 +1259,14 @@ func (j *Jellyfin) serveFile(w http.ResponseWriter, r *http.Request, filename st
 func (j *Jellyfin) serveImage(w http.ResponseWriter, r *http.Request, filename string, imageQuality int) {
 	file, err := j.imageresizer.OpenFile(w, r, filename, imageQuality)
 	if err != nil {
-		http.Error(w, "File not found", http.StatusNotFound)
+		apierror(w, "File not found", http.StatusNotFound)
 		return
 	}
 	defer file.Close()
 
 	fileStat, err := file.Stat()
 	if err != nil {
-		http.Error(w, "Could not retrieve file info", http.StatusInternalServerError)
+		apierror(w, "Could not retrieve file info", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("cache-control", "max-age=2592000")
@@ -1282,7 +1296,9 @@ func parseTime(input string) (parsedTime time.Time, err error) {
 
 func serveJSON(obj any, w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
-	j := json.NewEncoder(w)
-	j.SetIndent("", "  ")
-	j.Encode(obj)
+	_ = json.NewEncoder(w).Encode(obj)
+
+	// j := json.NewEncoder(w)
+	// j.SetIndent("", "  ")
+	// j.Encode(obj)
 }
