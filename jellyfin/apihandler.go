@@ -1170,12 +1170,12 @@ func (j *Jellyfin) itemsPlaybackInfoHandler(w http.ResponseWriter, r *http.Reque
 	var mediaSource []JFMediaSources
 
 	if _, i := j.collections.GetItemByID(itemID); i != nil {
-		mediaSource = j.makeMediaSource(i.Video, i.Nfo)
+		mediaSource = j.makeMediaSource(i.FileName, i.FileSize, i.Nfo)
 	}
 
 	if isJFEpisodeID(itemID) {
 		if _, _, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemID)); episode != nil {
-			mediaSource = j.makeMediaSource(episode.Video, episode.Nfo)
+			mediaSource = j.makeMediaSource(episode.FileName, episode.FileSize, episode.Nfo)
 		}
 	}
 	if mediaSource == nil {
@@ -1217,16 +1217,16 @@ func (j *Jellyfin) videoStreamHandler(w http.ResponseWriter, r *http.Request) {
 			apierror(w, "Could not find episode", http.StatusNotFound)
 			return
 		}
-		j.serveFile(w, r, c.Directory+"/"+item.Name+"/"+episode.Video)
+		j.serveFile(w, r, c.Directory+"/"+item.Name+"/"+episode.FileName)
 		return
 	}
 
 	c, i := j.collections.GetItemByID(vars["item"])
-	if i == nil || i.Video == "" {
+	if i == nil || i.FileName == "" {
 		apierror(w, "Item not found", http.StatusNotFound)
 		return
 	}
-	j.serveFile(w, r, c.Directory+"/"+i.Name+"/"+i.Video)
+	j.serveFile(w, r, c.Directory+"/"+i.Name+"/"+i.FileName)
 }
 
 // return list of actors (hit by Infuse's search)

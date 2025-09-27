@@ -367,7 +367,7 @@ func (j *Jellyfin) makeJFItemMovie(ctx context.Context, userID string, i *collec
 
 	i.LoadNfo()
 	// fixme: this should come from collection package
-	response.MediaSources = j.makeMediaSource(i.Video, i.Nfo)
+	response.MediaSources = j.makeMediaSource(i.FileName, i.FileSize, i.Nfo)
 	response.RunTimeTicks = response.MediaSources[0].RunTimeTicks
 	response.MediaStreams = response.MediaSources[0].MediaStreams
 
@@ -626,7 +626,7 @@ func (j *Jellyfin) makeJFItemEpisode(ctx context.Context, userID, episodeID stri
 	}
 
 	// Add some generic mediasource to indicate "720p, stereo"
-	response.MediaSources = j.makeMediaSource(episode.Video, episode.Nfo)
+	response.MediaSources = j.makeMediaSource(episode.FileName, episode.FileSize, episode.Nfo)
 	response.RunTimeTicks = response.MediaSources[0].RunTimeTicks
 	response.MediaStreams = response.MediaSources[0].MediaStreams
 
@@ -772,7 +772,7 @@ func (j *Jellyfin) enrichResponseWithNFO(response *JFItem, n *collection.Nfo) {
 	}
 }
 
-func (j *Jellyfin) makeMediaSource(filename string, n *collection.Nfo) (mediasources []JFMediaSources) {
+func (j *Jellyfin) makeMediaSource(filename string, filesize int64, n *collection.Nfo) (mediasources []JFMediaSources) {
 	mediasource := JFMediaSources{
 		ID:                    idhash.IdHash(filename),
 		ETag:                  idhash.IdHash(filename),
@@ -782,7 +782,7 @@ func (j *Jellyfin) makeMediaSource(filename string, n *collection.Nfo) (mediasou
 		Container:             "mp4",
 		Protocol:              "File",
 		VideoType:             "VideoFile",
-		Size:                  4264940672,
+		Size:                  filesize,
 		IsRemote:              false,
 		ReadAtNativeFramerate: false,
 		HasSegments:           false,
@@ -835,7 +835,7 @@ func (j *Jellyfin) makeMediaSource(filename string, n *collection.Nfo) (mediasou
 		VideoRangeType:   "SDR",
 		IsAnamorphic:     false,
 		BitDepth:         8,
-		BitRate:          5193152,
+		BitRate:          NfoVideo.Bitrate,
 	}
 	switch strings.ToLower(NfoVideo.Codec) {
 	case "avc":

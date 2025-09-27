@@ -81,15 +81,18 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Item)
 	mname := path.Base(dir)
 
 	var base, video string
+	var filesize int64
 	var created int64
 	for _, f := range fi {
 		s := isVideo.FindStringSubmatch(f.Name())
 		if len(s) > 0 {
 			ts := f.CreatetimeMS()
 			if ts > 0 {
-				created = ts
 				video = s[0]
 				base = s[1]
+				filesize = f.Size()
+				created = ts
+
 			}
 		}
 	}
@@ -117,7 +120,8 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Item)
 		Year:     year,
 		// BaseUrl:    coll.BaseUrl,
 		Path:       dir,
-		Video:      video,
+		FileName:   video,
+		FileSize:   filesize,
 		FirstVideo: created,
 		LastVideo:  created,
 		Type:       ItemTypeMovie,
@@ -389,7 +393,8 @@ func (cr *CollectionRepo) showScanDir(baseDir string, dir string, seasonHint int
 		if len(s) > 0 {
 			ep := Episode{
 				ID:       idhash.IdHash(s[0]),
-				Video:    path.Join(dir, fn),
+				FileName: path.Join(dir, fn),
+				FileSize: f.Size(),
 				BaseName: s[1],
 			}
 			ep.VideoTS = f.CreatetimeMS()
@@ -481,7 +486,7 @@ func (cr *CollectionRepo) buildShow(coll *Collection, dir string) (show *Item) {
 		// remove episodes without video
 		eps := make(Episodes, 0, len(s.Episodes))
 		for i := range s.Episodes {
-			if s.Episodes[i].Video != "" {
+			if s.Episodes[i].FileName != "" {
 				eps = append(eps, s.Episodes[i])
 			}
 		}

@@ -34,7 +34,9 @@ type Item struct {
 	// Logo is this item's transparent logo, often "clearlogo.png", TV shows only.
 	Logo string
 	// Filename of the video file, e.g. "casablanca.mp4"
-	Video string
+	FileName string
+	// FileSize is the size of the video file in bytes.
+	FileSize int64
 	// TODO: Thumb is unused
 	Thumb   string
 	SrtSubs Subtitles
@@ -119,8 +121,10 @@ type Episode struct {
 	// VideoTS is the timestamp of the episode.
 	VideoTS int64
 	Nfo     *Nfo
-	// Video is the filename relative to show item directory, e.g. "S01/casablanca.s01e01.mp4"
-	Video string
+	// FileName is the filename relative to show item directory, e.g. "S01/casablanca.s01e01.mp4"
+	FileName string
+	// FileSize is the size of the video file in bytes.
+	FileSize int64
 	// Thumb is the thumbname image relative to show item directory, e.g. "S01/casablanca.s01e01-thumb.jpg"
 	Thumb   string
 	SrtSubs Subtitles

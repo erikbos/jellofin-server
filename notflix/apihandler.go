@@ -287,7 +287,7 @@ func copyItem(item collection.Item) Item {
 		Rating:     item.Rating,
 		Genre:      item.Genres,
 		Year:       item.Year,
-		Video:      escapePath(item.Video),
+		Video:      escapePath(item.FileName),
 
 		SeasonAllBanner: escapePath(item.SeasonAllBanner),
 		SeasonAllPoster: escapePath(item.SeasonAllPoster),
@@ -330,7 +330,7 @@ func copyEpisode(episode collection.Episode, doNfo bool) Episode {
 		EpisodeNo: episode.EpisodeNo,
 		Double:    episode.Double,
 		SortName:  episode.SortName,
-		Video:     escapePath(episode.Video),
+		Video:     escapePath(episode.FileName),
 		Thumb:     episode.Thumb,
 		// SrtSubs:   c.SrtSubs,
 		// VttSubs:   c.VttSubs,
