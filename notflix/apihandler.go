@@ -259,7 +259,7 @@ func copyCollection(c collection.Collection) Collection {
 	cc := Collection{
 		ID:   c.ID,
 		Name: c.Name,
-		Type: c.Type,
+		Type: string(c.Type),
 	}
 	return cc
 }

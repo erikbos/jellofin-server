@@ -8,7 +8,7 @@ type Collection struct {
 	// Name of the collection, .e.g., "My Favorite Movies"
 	Name string
 	// Type of the collection, e.g., "movies", "shows"
-	Type string
+	Type CollectionType
 	// Items in the collection, each of type Item
 	Items []*Item
 	// Directory where the collection is stored
@@ -18,9 +18,11 @@ type Collection struct {
 	HlsServer string
 }
 
+type CollectionType string
+
 const (
-	CollectionTypeMovies = "movies"
-	CollectionTypeShows  = "shows"
+	CollectionTypeMovies CollectionType = "movies"
+	CollectionTypeShows  CollectionType = "shows"
 )
 
 type Collections []Collection

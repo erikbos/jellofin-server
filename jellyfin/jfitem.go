@@ -316,7 +316,7 @@ func (j *Jellyfin) makeJFItemPlaylistItemList(ctx context.Context, userID, playl
 }
 
 // makeJFItem make movie or show from provided item
-func (j *Jellyfin) makeJFItem(ctx context.Context, userID string, item *collection.Item, parentID, collectionType string, listView bool) (response JFItem) {
+func (j *Jellyfin) makeJFItem(ctx context.Context, userID string, item *collection.Item, parentID string, collectionType collection.CollectionType, listView bool) (response JFItem) {
 	switch collectionType {
 	case collection.CollectionTypeMovies:
 		return j.makeJFItemMovie(ctx, userID, item, parentID, listView)

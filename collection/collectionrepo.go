@@ -34,12 +34,23 @@ func New(options *Options) *CollectionRepo {
 
 // AddCollection adds a new content collection to the repository.
 func (cr *CollectionRepo) AddCollection(name string, ID string,
-	collType string, directory string, baseUrl string, hlsServer string) {
+	collectiontype string, directory string, baseUrl string, hlsServer string) {
+
+	var ct CollectionType
+	switch collectiontype {
+	case "movies":
+		ct = CollectionTypeMovies
+	case "shows":
+		ct = CollectionTypeShows
+	default:
+		log.Fatalf("Unknown collection type %s, skipping", collectiontype)
+		return
+	}
 
 	c := Collection{
 		Name:      name,
 		ID:        ID,
-		Type:      collType,
+		Type:      ct,
 		Directory: directory,
 		// BaseUrl:   baseUrl,
 		HlsServer: hlsServer,

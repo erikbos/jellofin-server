@@ -13,11 +13,11 @@ This server supports a subset of the [Jellyfin API](https://api.jellyfin.org/). 
 
 The following clients can connect to Jellofin:
 
-| Client                                           | Status      | Notes                 |
-| :----------------------------------------------: | :---------: | :-------------------: |
-| [Infuse](https://firecore.com/infuse)            | ✅  | Full functionality    |
-| [Streamyfin](https://streamyfin.app/)            | ✅  | Full functionality    |
-| [VidHub](https://okaapps.com/product/1659622164) | ✅ & ❌ | Partial functionality: movie browsing and video works, tv show folders can yet not be opened due to vidhub bug |
+| Client                                           | Status | Notes                     |
+| :----------------------------------------------: | :----: | :-----------------------: |
+| [Infuse](https://firecore.com/infuse)            | ✅      | Full player functionality |
+| [Streamyfin](https://streamyfin.app/)            | ✅      | Full player functionality |
+| [VidHub](https://okaapps.com/product/1659622164) | ✅      | Full player functionality |
 
 ## Notflix API
 
