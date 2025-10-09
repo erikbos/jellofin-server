@@ -156,7 +156,7 @@ func (j *Jellyfin) getPlaylistItemsHandler(w http.ResponseWriter, r *http.Reques
 	for _, itemID := range playlist.ItemIDs {
 		c, i := j.collections.GetItemByID(itemID)
 		if c != nil || i != nil {
-			items = append(items, j.makeJFItem(r.Context(), accessToken.UserID, i, idhash.IdHash(c.Name), c.Type, true))
+			items = append(items, j.makeJFItem(r.Context(), accessToken.UserID, i, idhash.IdHash(c.Name)))
 		}
 	}
 	response := UserItemsResponse{

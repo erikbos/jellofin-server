@@ -141,31 +141,31 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		serveJSON(playlistItem, w)
 		return
-	case isJFSeasonID(itemID):
-		seasonItem, err := j.makeJFItemSeason(r.Context(), accessToken.UserID, trimPrefix(itemID))
-		if err != nil {
-			apierror(w, err.Error(), http.StatusNotFound)
-			return
-		}
-		serveJSON(seasonItem, w)
-		return
-	case isJFEpisodeID(itemID):
-		episodeItem, err := j.makeJFItemEpisode(r.Context(), accessToken.UserID, trimPrefix(itemID))
-		if err != nil {
-			apierror(w, err.Error(), http.StatusNotFound)
-			return
-		}
-		serveJSON(episodeItem, w)
-		return
+		// case isJFSeasonID(itemID):
+		// 	seasonItem, err := j.makeJFItemSeason(r.Context(), accessToken.UserID, trimPrefix(itemID))
+		// 	if err != nil {
+		// 		apierror(w, err.Error(), http.StatusNotFound)
+		// 		return
+		// 	}
+		// 	serveJSON(seasonItem, w)
+		// 	return
+		// case isJFEpisodeID(itemID):
+		// 	episodeItem, err := j.makeJFItemEpisode(r.Context(), accessToken.UserID, trimPrefix(itemID))
+		// 	if err != nil {
+		// 		apierror(w, err.Error(), http.StatusNotFound)
+		// 		return
+		// 	}
+		// 	serveJSON(episodeItem, w)
+		// 	return
 	}
 
 	// Try to fetch individual item: movie or show
-	c, i := j.collections.GetItemByID(itemID)
+	c, i := j.collections.GetItemByID(trimPrefix(itemID))
 	if i == nil {
 		apierror(w, "Item not found", http.StatusNotFound)
 		return
 	}
-	serveJSON(j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID, c.Type, false), w)
+	serveJSON(j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID), w)
 }
 
 // /UserItems/1d57ee2251656c5fb9a05becdf0e62a3/Userdata
@@ -226,7 +226,6 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 			parentFound = true
 		// Return list of playlists if requested
 		case isJFCollectionPlaylistID(parentID):
-			log.Printf("1")
 			items, err = j.makeJFItemPlaylistOverview(r.Context(), accessToken.UserID)
 			if err != nil {
 				apierror(w, "Could not find playlist collection", http.StatusNotFound)
@@ -235,7 +234,6 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 			parentFound = true
 		// Return specific playlist if requested
 		case isJFPlaylistID(parentID):
-			log.Printf("2")
 			playlistID := trimPrefix(parentID)
 			items, err = j.makeJFItemPlaylistItemList(r.Context(), accessToken.UserID, playlistID)
 			if err != nil {
@@ -260,7 +258,7 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			for _, i := range c.Items {
-				jfitem := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID, c.Type, true)
+				jfitem := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID)
 				if j.applyItemFilter(&jfitem, queryparams) {
 					items = append(items, jfitem)
 				}
@@ -342,7 +340,7 @@ func (j *Jellyfin) usersItemsLatestHandler(w http.ResponseWriter, r *http.Reques
 			continue
 		}
 		for _, i := range c.Items {
-			jfitem := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID, c.Type, true)
+			jfitem := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID)
 			if j.applyItemFilter(&jfitem, queryparams) {
 				items = append(items, jfitem)
 			}
@@ -392,7 +390,7 @@ func (j *Jellyfin) searchHintsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for _, i := range c.Items {
-			jfitem := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID, c.Type, true)
+			jfitem := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID)
 			if j.applyItemFilter(&jfitem, queryparams) {
 				items = append(items, jfitem)
 			}
@@ -439,15 +437,8 @@ func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 
 	items := make([]JFItem, 0)
 	for _, id := range nextUpItemIDs {
-		// Any movies we should include?
-		// if c, i := j.collections.GetItemByID(id); c != nil && i != nil {
-		// 	if j.applyItemFilter(r.Context(), i, queryparams) {
-		// 		items = append(items, j.makeJFItem(accessToken.UserID, i, idhash.IdHash(c.Name_), c.Type, true))
-		// 	}
-		// 	continue
-		// }
-		if _, i, _, e := j.collections.GetEpisodeByID(id); i != nil {
-			jfitem, err := j.makeJFItemEpisode(r.Context(), accessToken.UserID, e.ID)
+		if _, i, s, e := j.collections.GetEpisodeByID(id); i != nil {
+			jfitem, err := j.makeJFItemEpisode(r.Context(), accessToken.UserID, e, s.ID())
 			if err == nil && j.applyItemFilter(&jfitem, queryparams) {
 				items = append(items, jfitem)
 			}
@@ -491,15 +482,8 @@ func (j *Jellyfin) usersItemsResumeHandler(w http.ResponseWriter, r *http.Reques
 	items := make([]JFItem, 0)
 	for _, id := range resumeItemIDs {
 		if c, i := j.collections.GetItemByID(id); c != nil && i != nil {
-			jfitem := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID, c.Type, true)
+			jfitem := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID)
 			if j.applyItemFilter(&jfitem, queryparams) {
-				items = append(items, jfitem)
-			}
-			continue
-		}
-		if _, i, _, e := j.collections.GetEpisodeByID(id); i != nil {
-			jfitem, err := j.makeJFItemEpisode(r.Context(), accessToken.UserID, e.ID)
-			if err == nil && j.applyItemFilter(&jfitem, queryparams) {
 				items = append(items, jfitem)
 			}
 			continue
@@ -585,10 +569,17 @@ func (j *Jellyfin) showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
 		apierror(w, "Show not found", http.StatusNotFound)
 		return
 	}
+
+	show, ok := i.(*collection.Show)
+	if !ok {
+		apierror(w, "Item is not a show", http.StatusInternalServerError)
+		return
+	}
+
 	// Create API response
 	seasons := make([]JFItem, 0)
-	for _, s := range i.Seasons {
-		jfitem, err := j.makeJFItemSeason(r.Context(), accessToken.UserID, s.ID)
+	for _, s := range show.Seasons {
+		jfitem, err := j.makeJFItemSeason(r.Context(), accessToken.UserID, &s, show.ID())
 		if err != nil {
 			log.Printf("makeJFItemSeason returned error %s", err)
 			continue
@@ -637,16 +628,23 @@ func (j *Jellyfin) showsEpisodesHandler(w http.ResponseWriter, r *http.Request) 
 		requestedSeasonID = ""
 	}
 
+	show, ok := i.(*collection.Show)
+	if !ok {
+		apierror(w, "Item is not a show", http.StatusInternalServerError)
+		return
+	}
+
 	// Create API response for requested season
 	episodes := make([]JFItem, 0)
-	for _, s := range i.Seasons {
+	for _, s := range show.Seasons {
 		// Limit results to one season if seasionid was provided.
-		if requestedSeasonID != "" && requestedSeasonID != itemprefix_season+s.ID {
+		if requestedSeasonID != "" && requestedSeasonID != itemprefix_season+s.ID() {
 			continue
 		}
 		for _, e := range s.Episodes {
-			if episode, err := j.makeJFItemEpisode(r.Context(), accessToken.UserID, e.ID); err == nil {
-				jfitem := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID, c.Type, true)
+			episode, err := j.makeJFItemEpisode(r.Context(), accessToken.UserID, &e, s.ID())
+			if err == nil {
+				jfitem := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID)
 				if j.applyItemFilter(&jfitem, queryparams) {
 					episodes = append(episodes, episode)
 				}
@@ -1076,50 +1074,50 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 	imageType := vars["type"]
 
 	switch {
-	case isJFSeasonID(itemID):
-		c, item, season := j.collections.GetSeasonByID(trimPrefix(itemID))
-		if season == nil {
-			apierror(w, "Could not find season", http.StatusNotFound)
-			return
-		}
-		switch strings.ToLower(imageType) {
-		case "primary":
-			// Serve season specific poster
-			dir := c.Directory + "/" + item.Name + "/"
-			if season.Poster != "" {
-				j.serveImage(w, r, dir+season.Poster, j.imageQualityPoster)
-				return
-			}
-			// Serve item season all poster
-			if item.SeasonAllPoster != "" {
-				j.serveImage(w, r, dir+item.SeasonAllPoster, j.imageQualityPoster)
-				return
-			}
-			// Serve show poster as fallback
-			if item.Poster != "" {
-				j.serveImage(w, r, dir+item.Poster, j.imageQualityPoster)
-				return
-			}
-			log.Printf("Image request %s, no poster found for season %s", itemID, season.ID)
-			apierror(w, "Poster not found for season", http.StatusNotFound)
-			return
-		default:
-			log.Printf("Image request %s, unknown type %s", itemID, imageType)
-			return
-		}
-	case isJFEpisodeID(itemID):
-		c, item, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemID))
-		if episode == nil {
-			apierror(w, "Item not found (could not find episode)", http.StatusNotFound)
-			return
-		}
-		if episode.Thumb != "" {
-			j.serveFile(w, r, c.Directory+"/"+item.Name+"/"+episode.Thumb)
-			return
-		}
-		log.Printf("Image request %s, no thumbnail for episode %s", itemID, episode.ID)
-		apierror(w, "Thumbnail not found for episode", http.StatusNotFound)
-		return
+	// case isJFSeasonID(itemID):
+	// 	c, item, season := j.collections.GetSeasonByID(trimPrefix(itemID))
+	// 	if season == nil {
+	// 		apierror(w, "Could not find season", http.StatusNotFound)
+	// 		return
+	// 	}
+	// 	switch strings.ToLower(imageType) {
+	// 	case "primary":
+	// 		// Serve season specific poster
+	// 		dir := c.Directory + "/" + item.Name + "/"
+	// 		if season.Poster != "" {
+	// 			j.serveImage(w, r, dir+season.Poster, j.imageQualityPoster)
+	// 			return
+	// 		}
+	// 		// Serve item season all poster
+	// 		if item.SeasonAllPoster != "" {
+	// 			j.serveImage(w, r, dir+item.SeasonAllPoster, j.imageQualityPoster)
+	// 			return
+	// 		}
+	// 		// Serve show poster as fallback
+	// 		if item.Poster != "" {
+	// 			j.serveImage(w, r, dir+item.Poster, j.imageQualityPoster)
+	// 			return
+	// 		}
+	// 		log.Printf("Image request %s, no poster found for season %s", itemID, season.ID)
+	// 		apierror(w, "Poster not found for season", http.StatusNotFound)
+	// 		return
+	// 	default:
+	// 		log.Printf("Image request %s, unknown type %s", itemID, imageType)
+	// 		return
+	// 	}
+	// case isJFEpisodeID(itemID):
+	// 	c, item, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemID))
+	// 	if episode == nil {
+	// 		apierror(w, "Item not found (could not find episode)", http.StatusNotFound)
+	// 		return
+	// 	}
+	// 	if episode.Thumb != "" {
+	// 		j.serveFile(w, r, c.Directory+"/"+item.Name+"/"+episode.Thumb)
+	// 		return
+	// 	}
+	// 	log.Printf("Image request %s, no thumbnail for episode %s", itemID, episode.ID)
+	// 	apierror(w, "Thumbnail not found for episode", http.StatusNotFound)
+	// 	return
 	case isJFCollectionID(itemID):
 		fallthrough
 	case isJFCollectionFavoritesID(itemID):
@@ -1130,7 +1128,7 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c, i := j.collections.GetItemByID(itemID)
+	c, i := j.collections.GetItemByID(trimPrefix(itemID))
 	if i == nil {
 		apierror(w, "Item not found", http.StatusNotFound)
 		return
@@ -1138,22 +1136,26 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch strings.ToLower(imageType) {
 	case "primary":
-		if i.Poster != "" {
-			j.serveImage(w, r, c.Directory+"/"+i.Name+"/"+i.Poster, j.imageQualityPoster)
+		if i.Poster() != "" {
+			j.serveImage(w, r, c.Directory+"/"+i.Path()+"/"+i.Poster(), j.imageQualityPoster)
 			return
 		}
+		// todo implement fallback options:
+		// 1. Serve item season all poster
+		// 2. Serve show poster as fallback
 		apierror(w, "Poster not found", http.StatusNotFound)
 		return
 	case "backdrop":
-		if i.Fanart != "" {
-			j.serveFile(w, r, c.Directory+"/"+i.Name+"/"+i.Fanart)
+		if i.Fanart() != "" {
+			j.serveFile(w, r, c.Directory+"/"+i.Path()+"/"+i.Fanart())
 			return
 		}
 		apierror(w, "Backdrop not found", http.StatusNotFound)
 		return
 	case "logo":
-		if i.Logo != "" {
-			j.serveImage(w, r, c.Directory+"/"+i.Name+"/"+i.Logo, j.imageQualityPoster)
+		if i.Logo() != "" {
+			j.serveImage(w, r, c.Directory+"/"+i.Path()+"/"+i.Logo(), j.imageQualityPoster)
+			return
 		}
 		apierror(w, "Logo not found", http.StatusNotFound)
 		return
@@ -1162,22 +1164,19 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 	apierror(w, "Item image not found", http.StatusNotFound)
 }
 
-// curl -v 'http://127.0.0.1:9090/Items/68d73f6f48efedb7db697bf9fee580cb/PlaybackInfo?UserId=2b1ec0a52b09456c9823a367d84ac9e5'
+// /Items/68d73f6f48efedb7db697bf9fee580cb/PlaybackInfo?UserId=2b1ec0a52b09456c9823a367d84ac9e5
+//
+// itemsPlaybackInfoHandler returns playback information about an item, including media sources
 func (j *Jellyfin) itemsPlaybackInfoHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	itemID := vars["item"]
 
-	var mediaSource []JFMediaSources
-
-	if _, i := j.collections.GetItemByID(itemID); i != nil {
-		mediaSource = j.makeMediaSource(i.FileName, i.FileSize, i.Nfo)
+	_, i := j.collections.GetItemByID(trimPrefix(itemID))
+	if i == nil {
+		apierror(w, "Could not find item", http.StatusNotFound)
+		return
 	}
-
-	if isJFEpisodeID(itemID) {
-		if _, _, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemID)); episode != nil {
-			mediaSource = j.makeMediaSource(episode.FileName, episode.FileSize, episode.Nfo)
-		}
-	}
+	mediaSource := j.makeMediaSource(i)
 	if mediaSource == nil {
 		apierror(w, "Could not find item", http.StatusNotFound)
 		return
@@ -1192,7 +1191,9 @@ func (j *Jellyfin) itemsPlaybackInfoHandler(w http.ResponseWriter, r *http.Reque
 	serveJSON(response, w)
 }
 
-// return information about intro, commercial, preview, recap, outro segments
+// /Items/NrXTYiS6xAxFj4QAiJoT/MediaSegments
+//
+// mediaSegmentsHandler returns information about intro, commercial, preview, recap, outro segments
 // of an item, not supported.
 func (j *Jellyfin) mediaSegmentsHandler(w http.ResponseWriter, r *http.Request) {
 	response := UserItemsResponse{
@@ -1210,23 +1211,12 @@ func (j *Jellyfin) videoStreamHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	itemID := vars["item"]
 
-	// Is episode?
-	if isJFEpisodeID(itemID) {
-		c, item, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemID))
-		if episode == nil {
-			apierror(w, "Could not find episode", http.StatusNotFound)
-			return
-		}
-		j.serveFile(w, r, c.Directory+"/"+item.Name+"/"+episode.FileName)
-		return
-	}
-
-	c, i := j.collections.GetItemByID(vars["item"])
-	if i == nil || i.FileName == "" {
+	c, i := j.collections.GetItemByID(trimPrefix(itemID))
+	if i == nil || i.FileName() == "" {
 		apierror(w, "Item not found", http.StatusNotFound)
 		return
 	}
-	j.serveFile(w, r, c.Directory+"/"+i.Name+"/"+i.FileName)
+	j.serveFile(w, r, c.Directory+"/"+i.Path()+"/"+i.FileName())
 }
 
 // return list of actors (hit by Infuse's search)

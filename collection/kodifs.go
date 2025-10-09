@@ -24,11 +24,6 @@ var isExt1 = regexp.MustCompile(`^(.*)()\.(png|jpg|jpeg|tbn|nfo|srt)$`)
 var isExt2 = regexp.MustCompile(`^(.*)[.-]([a-z]+)\.(png|jpg|jpeg|tbn|nfo|srt)$`)
 var isYear = regexp.MustCompile(` \(([0-9]+)\)$`)
 
-const (
-	ItemTypeMovie = `movie`
-	ItemTypeShow  = `show`
-)
-
 type epMapType struct {
 	eps *Episodes
 	idx int
@@ -37,7 +32,7 @@ type epMapType struct {
 // buildMovies builds the movies in a collection. pace is the time to wait
 // between processing each movie directory, to avoid overloading the filesystem.
 // If pace is 0, no waiting is done.
-func (cr *CollectionRepo) buildMovies(coll *Collection, pace time.Duration) (items []*Item) {
+func (cr *CollectionRepo) buildMovies(coll *Collection, pace time.Duration) (items []Item) {
 	f, err := OpenDir(coll.Directory)
 	if err != nil {
 		return
@@ -67,7 +62,7 @@ func (cr *CollectionRepo) buildMovies(coll *Collection, pace time.Duration) (ite
 
 // buildMovie builds a movie item from a movie directory. It scans the directory
 // for video files and images, and returns an Item.
-func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Item) {
+func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Movie) {
 	d := path.Join(coll.Directory, dir)
 	f, err := OpenDir(d)
 	if err != nil {
@@ -113,18 +108,16 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Item)
 		year = time.Now().Year()
 	}
 
-	movie = &Item{
-		ID:       idhash.IdHash(mname),
-		Name:     mname,
-		SortName: makeSortName(mname),
+	movie = &Movie{
+		id:       idhash.IdHash(mname),
+		name:     mname,
+		sortName: makeSortName(mname),
 		Year:     year,
 		// BaseUrl:    coll.BaseUrl,
-		Path:       dir,
-		FileName:   video,
-		FileSize:   filesize,
-		FirstVideo: created,
-		LastVideo:  created,
-		Type:       ItemTypeMovie,
+		path:       dir,
+		fileName:   video,
+		fileSize:   filesize,
+		firstVideo: created,
 	}
 
 	for _, f := range fi {
@@ -156,13 +149,13 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Item)
 			}
 			switch aux {
 			case `banner`:
-				movie.Banner = name
+				movie.banner = name
 			case `fanart`:
-				movie.Fanart = name
+				movie.fanart = name
 			case `folder`:
-				movie.Folder = name
+				movie.folder = name
 			case `poster`:
-				movie.Poster = name
+				movie.poster = name
 			}
 			continue
 		}
@@ -198,10 +191,10 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Item)
 	cr.copySrtVttSubs(movie.SrtSubs, &movie.VttSubs)
 
 	dbItemMovie := &database.Item{
-		ID:    movie.ID,
-		Name:  movie.Name,
-		Year:  movie.Year,
-		Genre: strings.Join(movie.Genres, ","),
+		ID:    movie.id,
+		Name:  movie.name,
+		Year:  movie.GetYear(),
+		Genre: strings.Join(movie.GetGenres(), ","),
 	}
 
 	cr.db.DbLoadItem(dbItemMovie)
@@ -212,7 +205,7 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Item)
 // buildMovies builds the movies in a collection. pace is the time to wait
 // between processing each movie directory, to avoid overloading the filesystem.
 // If pace is 0, no waiting is done.
-func (cr *CollectionRepo) buildShows(coll *Collection, pace time.Duration) (items []*Item) {
+func (cr *CollectionRepo) buildShows(coll *Collection, pace time.Duration) (items []Item) {
 	f, err := OpenDir(coll.Directory)
 	if err != nil {
 		return
@@ -240,22 +233,28 @@ func (cr *CollectionRepo) buildShows(coll *Collection, pace time.Duration) (item
 	return
 }
 
-func (cr *CollectionRepo) getSeason(show *Item, seasonNo int) (s *Season) {
+func (cr *CollectionRepo) getSeason(show *Show, seasonNo int) (s *Season) {
 	// find
 	var i int
-	for i = 0; i < len(show.Seasons); i++ {
-		if seasonNo == show.Seasons[i].SeasonNo {
+	for i := 0; i < len(show.Seasons); i++ {
+		if seasonNo == show.Seasons[i].seasonno {
 			return &(show.Seasons[i])
 		}
 	}
 
 	// insert new
+	name := idhash.IdHash(fmt.Sprintf("%s-season-%d", show.name, seasonNo))
 	sn := &Season{
-		ID:       idhash.IdHash(fmt.Sprintf("%s-season-%d", show.Name, seasonNo)),
-		SeasonNo: seasonNo,
+		id:       idhash.IdHash(name),
+		name:     name,
+		path:     show.path,
+		seasonno: seasonNo,
+		// Default images in case we do not have season-specific ones.
+		seasonAllBanner: show.seasonAllBanner,
+		seasonAllPoster: show.seasonAllPoster,
 	}
 	for i = 0; i < len(show.Seasons); i++ {
-		if seasonNo < show.Seasons[i].SeasonNo {
+		if seasonNo < show.Seasons[i].seasonno {
 			break
 		}
 	}
@@ -284,9 +283,8 @@ func epMatch(epMap map[string]epMapType, s []string) (ep *Episode, aux, ext stri
 
 // showScanDir scans a show directory for episodes and images. It updates the
 // show item with the found episodes and images.
-func (cr *CollectionRepo) showScanDir(baseDir string, dir string, seasonHint int, show *Item) {
-
-	d := path.Join(baseDir, dir)
+func (cr *CollectionRepo) showScanDir(showDir, baseDir, seasonDir string, seasonHint int, show *Show) {
+	d := path.Join(baseDir, seasonDir)
 	f, err := OpenDir(d)
 	if err != nil {
 		return
@@ -310,7 +308,7 @@ func (cr *CollectionRepo) showScanDir(baseDir string, dir string, seasonHint int
 			s := isShowSubdir.FindStringSubmatch(fn)
 			if len(s) > 0 {
 				sn := parseInt(s[1])
-				cr.showScanDir(d, fn, sn, show)
+				cr.showScanDir(showDir, d, fn, sn, show)
 				continue
 			}
 
@@ -325,24 +323,24 @@ func (cr *CollectionRepo) showScanDir(baseDir string, dir string, seasonHint int
 			if len(s) > 0 {
 				switch s[1] {
 				case "season-all-banner":
-					show.SeasonAllBanner = fn
+					show.seasonAllBanner = fn
 				case "season-all-poster":
-					show.SeasonAllPoster = fn
+					show.seasonAllPoster = fn
 				case "season-specials-poster":
 					// Assign specials poster to season 0.
 					if season := cr.getSeason(show, 0); season != nil {
-						season.Poster = path.Join(dir, fn)
+						season.poster = path.Join(seasonDir, fn)
 					}
 				case "banner":
-					show.Banner = fn
+					show.banner = fn
 				case "clearlogo":
-					show.Logo = fn
+					show.logo = fn
 				case "fanart":
-					show.Fanart = fn
+					show.fanart = fn
 				case "folder":
-					show.Folder = fn
+					show.folder = fn
 				case "poster":
-					show.Poster = fn
+					show.poster = fn
 				}
 			}
 		}
@@ -353,15 +351,15 @@ func (cr *CollectionRepo) showScanDir(baseDir string, dir string, seasonHint int
 			s := isImage.FindStringSubmatch(fn)
 			c := false
 			if len(s) > 0 {
-				p := path.Join(dir, fn)
+				p := path.Join(seasonDir, fn)
 				switch s[1] {
 				case "banner":
 					season := cr.getSeason(show, seasonHint)
-					season.Banner = p
+					season.banner = p
 					c = true
 				case "poster":
 					season := cr.getSeason(show, seasonHint)
-					season.Poster = p
+					season.poster = p
 					c = true
 				}
 			}
@@ -375,15 +373,15 @@ func (cr *CollectionRepo) showScanDir(baseDir string, dir string, seasonHint int
 		if len(s) > 0 {
 			sn := parseInt(s[1])
 			season := cr.getSeason(show, sn)
-			p := path.Join(dir, fn)
+			p := path.Join(seasonDir, fn)
 			switch s[2] {
 			case "poster":
-				season.Poster = p
+				season.poster = p
 			case "banner":
-				season.Banner = p
+				season.banner = p
 			default:
 				// probably a poster.
-				season.Poster = p
+				season.poster = p
 			}
 			continue
 		}
@@ -392,10 +390,11 @@ func (cr *CollectionRepo) showScanDir(baseDir string, dir string, seasonHint int
 		s = isVideo.FindStringSubmatch(fn)
 		if len(s) > 0 {
 			ep := Episode{
-				ID:       idhash.IdHash(s[0]),
-				FileName: path.Join(dir, fn),
-				FileSize: f.Size(),
-				BaseName: s[1],
+				id:       idhash.IdHash(s[0]),
+				path:     showDir,
+				fileName: path.Join(seasonDir, fn),
+				fileSize: f.Size(),
+				baseName: s[1],
 			}
 			ep.VideoTS = f.CreatetimeMS()
 			if parseEpisodeName(s[1], seasonHint, &ep) {
@@ -424,7 +423,7 @@ func (cr *CollectionRepo) showScanDir(baseDir string, dir string, seasonHint int
 		if ep == nil {
 			continue
 		}
-		p := path.Join(dir, name)
+		p := path.Join(seasonDir, name)
 
 		if isImageExt.MatchString(ext) {
 			if ext == "tbn" && aux == "" {
@@ -460,7 +459,7 @@ func (cr *CollectionRepo) showScanDir(baseDir string, dir string, seasonHint int
 		}
 
 		if ext == "nfo" {
-			ep.nfoPath = path.Join(baseDir, dir, name)
+			ep.nfoPath = path.Join(baseDir, seasonDir, name)
 			continue
 		}
 	}
@@ -468,25 +467,24 @@ func (cr *CollectionRepo) showScanDir(baseDir string, dir string, seasonHint int
 
 // buildShow builds a show item from a show directory.
 // It scans the directory for episodes and images, and returns an Item
-func (cr *CollectionRepo) buildShow(coll *Collection, dir string) (show *Item) {
+func (cr *CollectionRepo) buildShow(coll *Collection, dir string) (show *Show) {
 	name := path.Base(dir)
-	item := &Item{
-		ID:       idhash.IdHash(name),
-		Name:     name,
-		SortName: makeSortName(name),
+	item := &Show{
+		id:       idhash.IdHash(name),
+		name:     name,
+		sortName: makeSortName(name),
 		// BaseUrl: coll.BaseUrl,
-		Path: dir,
-		Type: ItemTypeShow,
+		path: dir,
 	}
 	d := path.Join(coll.Directory, dir)
-	cr.showScanDir(d, "", -1, item)
+	cr.showScanDir(dir, d, "", -1, item)
 
 	for i := range item.Seasons {
 		s := &(item.Seasons[i])
 		// remove episodes without video
 		eps := make(Episodes, 0, len(s.Episodes))
 		for i := range s.Episodes {
-			if s.Episodes[i].FileName != "" {
+			if s.Episodes[i].fileName != "" {
 				eps = append(eps, s.Episodes[i])
 			}
 		}
@@ -509,13 +507,13 @@ func (cr *CollectionRepo) buildShow(coll *Collection, dir string) (show *Item) {
 	if len(item.Seasons) > 0 {
 		fs := item.Seasons[0]
 		ls := item.Seasons[len(item.Seasons)-1]
-		item.FirstVideo = fs.Episodes[0].VideoTS
-		item.LastVideo = ls.Episodes[len(ls.Episodes)-1].VideoTS
+		item.firstVideo = fs.Episodes[0].VideoTS
+		item.lastVideo = ls.Episodes[len(ls.Episodes)-1].VideoTS
 	}
 
 	// If we have an NFO and at least one image, accept it.
 	if item.nfoPath != "" &&
-		(item.Fanart != "" || item.Poster != "" || item.Thumb != "") {
+		(item.fanart != "" || item.poster != "") {
 		show = item
 	}
 
@@ -532,8 +530,8 @@ func (cr *CollectionRepo) buildShow(coll *Collection, dir string) (show *Item) {
 
 	// guess the year in case it's not in the NFO file.
 	year := 0
-	if item.FirstVideo > 0 {
-		t := time.Unix(item.FirstVideo/1000, 0)
+	if item.firstVideo > 0 {
+		t := time.Unix(item.firstVideo/1000, 0)
 		year = t.Year()
 	}
 	if year == 0 {
@@ -542,8 +540,8 @@ func (cr *CollectionRepo) buildShow(coll *Collection, dir string) (show *Item) {
 	item.Year = year
 
 	dbItemShow := &database.Item{
-		ID:    item.ID,
-		Name:  item.Name,
+		ID:    item.id,
+		Name:  item.name,
 		Year:  item.Year,
 		Genre: strings.Join(item.Genres, ","),
 	}

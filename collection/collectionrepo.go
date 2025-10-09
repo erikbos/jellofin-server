@@ -112,41 +112,38 @@ func (cr *CollectionRepo) GetCollection(collectionID string) (c *Collection) {
 	return
 }
 
-// GetCollectionItems returns all items in a collection by its ID.
-func (cr *CollectionRepo) GetCollectionItems(colllectionID string) []Item {
-	items := make([]Item, 0)
-
-	for _, c := range cr.collections {
-		// Skip if we are searching in one particular collection?
-		if c.ID != colllectionID {
-			continue
-		}
-		for _, i := range c.Items {
-			items = append(items, *i)
-		}
-	}
-	return items
-}
-
 // GetItem returns an item in a collection by its ID or name.
-func (cr *CollectionRepo) GetItem(collectionID string, itemName string) (i *Item) {
+func (cr *CollectionRepo) GetItem(collectionID string, itemName string) (i Item) {
 	c := cr.GetCollection(collectionID)
 	if c == nil {
 		return
 	}
 	for _, n := range c.Items {
-		if n.Name == itemName || n.ID == itemName {
-			i = n
-			return
+		if n.Name() == itemName || n.ID() == itemName {
+			return n
+		}
+		// If item is a show, also search in seasons and episodes
+		switch v := n.(type) {
+		case *Show:
+			for _, s := range v.Seasons {
+				if s.ID() == itemName {
+					return &s
+				}
+				for _, e := range s.Episodes {
+					if e.ID() == itemName {
+						return &e
+					}
+				}
+			}
 		}
 	}
 	return
 }
 
 // GetItemByID returns an item in a collection by its ID.
-func (cr *CollectionRepo) GetItemByID(itemID string) (c *Collection, i *Item) {
+func (cr *CollectionRepo) GetItemByID(itemID string) (*Collection, Item) {
 	for _, c := range cr.collections {
-		if i = cr.GetItem(c.ID, itemID); i != nil {
+		if i := cr.GetItem(c.ID, itemID); i != nil {
 			return &c, i
 		}
 	}
@@ -154,13 +151,16 @@ func (cr *CollectionRepo) GetItemByID(itemID string) (c *Collection, i *Item) {
 }
 
 // GetSeasonByID returns a season in a collection by its ID.
-func (cr *CollectionRepo) GetSeasonByID(saesonID string) (*Collection, *Item, *Season) {
+func (cr *CollectionRepo) GetSeasonByID(saesonID string) (*Collection, *Show, *Season) {
 	// fixme: wooho O(n^^3) "just temporarily.."
 	for _, c := range cr.collections {
 		for _, i := range c.Items {
-			for _, s := range i.Seasons {
-				if s.ID == saesonID {
-					return &c, i, &s
+			switch v := i.(type) {
+			case *Show:
+				for _, s := range v.Seasons {
+					if s.id == saesonID {
+						return &c, v, &s
+					}
 				}
 			}
 		}
@@ -169,16 +169,18 @@ func (cr *CollectionRepo) GetSeasonByID(saesonID string) (*Collection, *Item, *S
 }
 
 // GetEpisodeByID returns an episode in a collection by its ID.
-func (cr *CollectionRepo) GetEpisodeByID(episodeID string) (*Collection, *Item, *Season, *Episode) {
+func (cr *CollectionRepo) GetEpisodeByID(episodeID string) (*Collection, *Show, *Season, *Episode) {
 	// fixme: wooho O(n^^4) "just temporarily.."
 	for _, c := range cr.collections {
 		for _, i := range c.Items {
-			for _, s := range i.Seasons {
-				for _, e := range s.Episodes {
-					if e.ID == episodeID {
-						return &c, i, &s, &e
+			switch v := i.(type) {
+			case *Show:
+				for _, s := range v.Seasons {
+					for _, e := range s.Episodes {
+						if e.id == episodeID {
+							return &c, v, &s, &e
+						}
 					}
-
 				}
 			}
 		}
@@ -190,7 +192,7 @@ func (cr *CollectionRepo) GetEpisodeByID(episodeID string) (*Collection, *Item, 
 func (cr *CollectionRepo) NextUp(watchedEpisodeIDs []string) (nextUpEpisodeIDs []string, e error) {
 
 	type ShowEntry struct {
-		show          *Item
+		show          *Show
 		seasonNumber  int
 		episodeNumber int
 		seasonIdx     int
@@ -210,17 +212,17 @@ func (cr *CollectionRepo) NextUp(watchedEpisodeIDs []string) (nextUpEpisodeIDs [
 			continue
 		}
 
-		log.Printf("NextUp: %s(%s) %s, %d-%d\n", show.Name, show.ID, episode.ID, episode.SeasonNo, episode.EpisodeNo)
+		log.Printf("NextUp: %s(%s) %s, %d-%d\n", show.name, show.id, episode.id, episode.SeasonNo, episode.EpisodeNo)
 
 		// Find season and episode index
 		seasonIdx, epIdx := -1, -1
 		// seasonIdx = season.SeasonNo - 1
 		// epIdx = episode.EpisodeNo - 1
 		for si, s := range show.Seasons {
-			if s.ID == season.ID {
+			if s.id == season.id {
 				seasonIdx = si
 				for ei, e := range s.Episodes {
-					if e.ID == episode.ID {
+					if e.id == episode.id {
 						epIdx = ei
 						break
 					}
@@ -232,16 +234,16 @@ func (cr *CollectionRepo) NextUp(watchedEpisodeIDs []string) (nextUpEpisodeIDs [
 			continue
 		}
 
-		entry, exists := showMap[show.ID]
+		entry, exists := showMap[show.id]
 		// No entries for this show, add it
 		if !exists ||
 			// watched item is in next season
-			season.SeasonNo > entry.seasonNumber ||
+			season.seasonno > entry.seasonNumber ||
 			// watched item is in same season but next episode
-			(season.SeasonNo == entry.seasonNumber && episode.EpisodeNo > entry.episodeNumber) {
-			showMap[show.ID] = ShowEntry{
+			(season.seasonno == entry.seasonNumber && episode.EpisodeNo > entry.episodeNumber) {
+			showMap[show.id] = ShowEntry{
 				show:          show,
-				seasonNumber:  season.SeasonNo,
+				seasonNumber:  season.seasonno,
 				episodeNumber: episode.EpisodeNo,
 				seasonIdx:     seasonIdx,
 				epIdx:         epIdx,
@@ -260,15 +262,15 @@ func (cr *CollectionRepo) NextUp(watchedEpisodeIDs []string) (nextUpEpisodeIDs [
 		if seasonIdx < len(item.Seasons) {
 			season := &item.Seasons[seasonIdx]
 			if epIdx+1 < len(season.Episodes) {
-				log.Printf("Adding: in same season %s(%s) %s, %d-%d\n", item.Name, item.ID, season.Episodes[epIdx+1].ID, seasonIdx, epIdx+1)
+				log.Printf("Adding: in same season %s(%s) %s, %d-%d\n", item.name, item.id, season.Episodes[epIdx+1].id, seasonIdx, epIdx+1)
 				// Try next episode in same season
-				nextUpEpisodeIDs = append(nextUpEpisodeIDs, season.Episodes[epIdx+1].ID)
+				nextUpEpisodeIDs = append(nextUpEpisodeIDs, season.Episodes[epIdx+1].id)
 				continue
 			}
 			// Try first episode in next season
 			if seasonIdx+1 < len(item.Seasons) && len(item.Seasons[seasonIdx+1].Episodes) > 0 {
-				log.Printf("Adding: in next season %s(%s) %s, %d-%d\n", item.Name, item.ID, item.Seasons[seasonIdx+1].Episodes[0].ID, seasonIdx+1, 0)
-				nextUpEpisodeIDs = append(nextUpEpisodeIDs, item.Seasons[seasonIdx+1].Episodes[0].ID)
+				log.Printf("Adding: in next season %s(%s) %s, %d-%d\n", item.name, item.id, item.Seasons[seasonIdx+1].Episodes[0].id, seasonIdx+1, 0)
+				nextUpEpisodeIDs = append(nextUpEpisodeIDs, item.Seasons[seasonIdx+1].Episodes[0].id)
 			}
 		}
 	}
@@ -285,17 +287,19 @@ func (c *CollectionRepo) Details() CollectionDetails {
 
 	for _, collection := range c.collections {
 		for _, i := range collection.Items {
-			for _, g := range i.Genres {
+			for _, g := range i.GetGenres() {
 				g := normalizeGenre(g)
 				if !slices.Contains(genres, g) {
 					genres = append(genres, g)
 				}
 			}
-			if i.OfficialRating != "" && !slices.Contains(official, i.OfficialRating) {
-				official = append(official, i.OfficialRating)
+			itemOfficialRating := i.GetOfficialRating()
+			if itemOfficialRating != "" && !slices.Contains(official, itemOfficialRating) {
+				official = append(official, itemOfficialRating)
 			}
-			if i.Year != 0 && !slices.Contains(years, i.Year) {
-				years = append(years, i.Year)
+			itemYear := i.GetYear()
+			if itemYear != 0 && !slices.Contains(years, itemYear) {
+				years = append(years, itemYear)
 			}
 		}
 	}
@@ -314,7 +318,7 @@ func (c *CollectionRepo) GenreItemCount() map[string]int {
 	genreCount := make(map[string]int)
 	for _, collection := range c.collections {
 		for _, i := range collection.Items {
-			for _, g := range i.Genres {
+			for _, g := range i.GetGenres() {
 				if g == "" {
 					continue
 				}

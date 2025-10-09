@@ -4,9 +4,67 @@ package collection
 import (
 	"encoding/xml"
 	"io"
+	"log"
+	"os"
 	"strconv"
 	"strings"
 )
+
+type MetadataNfo struct {
+	// filename is the full path to the NFO file, e.g. "/mnt/media/casablanca.nfo"
+	filename string
+	Nfo      *Nfo
+}
+
+func NewNfoMetadata(filename string) *MetadataNfo {
+	return &MetadataNfo{
+		filename: filename,
+	}
+}
+
+// Duration returns the duration of the video in seconds.
+func (n *MetadataNfo) Duration() int {
+	return n.Nfo.FileInfo.StreamDetails.Video.DurationInSeconds
+}
+
+// GetGenres returns the genres.
+func (n *MetadataNfo) GetGenres() []string {
+	return n.Nfo.Genre
+}
+
+func (n *MetadataNfo) GetVotes() int {
+	return n.Nfo.Votes
+
+}
+func (n *MetadataNfo) GetYear() int {
+	return n.Nfo.Year
+}
+
+func (n *MetadataNfo) GetRating() float32 {
+	return n.Nfo.Rating
+}
+
+func (n *MetadataNfo) GetOfficialRating() string {
+	return n.Nfo.Mpaa
+}
+
+func (n *MetadataNfo) GetNfo() *Nfo {
+	return n.Nfo
+}
+
+func (n *MetadataNfo) LoadNfo() {
+	// NFO already loaded and parsed?
+	if n.Nfo != nil {
+		return
+	}
+	if file, err := os.Open(n.filename); err == nil {
+		defer file.Close()
+		n.Nfo, err = NfoDecode(file)
+		if err != nil {
+			log.Printf("Error parsing NFO file %s: %v\n", n.filename, err)
+		}
+	}
+}
 
 type Nfo struct {
 	Title        string       `xml:"title,omitempty"`

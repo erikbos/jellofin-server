@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -124,38 +123,14 @@ func (j *Jellyfin) sessionsPlayingStoppedHandler(w http.ResponseWriter, r *http.
 }
 
 func (j *Jellyfin) userDataUpdate(ctx context.Context, userID, itemID string, positionTicks int, markAsWatched bool) (err error) {
-	// log.Printf("playStateUpdate userID: %s, itemID: %s, Progress: %d sec\n",
-	// 	userID, itemID, positionTicks/TicsToSeconds)
-
-	// fixme: duration determination should be moved to collection package
 	var duration int
-	if strings.HasPrefix(itemID, itemprefix_episode) {
-		_, _, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemID))
-
-		// fix me: we should not have to load NFO here
-		episode.LoadNfo()
-		if episode.Nfo != nil &&
-			episode.Nfo.FileInfo != nil &&
-			episode.Nfo.FileInfo.StreamDetails != nil &&
-			episode.Nfo.FileInfo.StreamDetails.Video != nil {
-			duration = episode.Nfo.FileInfo.StreamDetails.Video.DurationInSeconds
-		} else {
-			log.Printf("playStateUpdate: no duration for episode %s\n", itemID)
-		}
-	} else {
-		_, item := j.collections.GetItemByID(itemID)
-		if item != nil {
-			item.LoadNfo()
-		}
-		if item.Nfo != nil {
-			if item.Nfo.Runtime != 0 {
-				duration = item.Nfo.Runtime * 60
-			} else if item.Nfo.FileInfo.StreamDetails.Video.DurationInSeconds != 0 {
-				duration = item.Nfo.FileInfo.StreamDetails.Video.DurationInSeconds
-			}
-		}
+	if _, item := j.collections.GetItemByID(trimPrefix(itemID)); item != nil {
+		duration = item.Duration()
 	}
-	// fixme: hack: if we don't have a duration, we assume 1 hour
+	// log.Printf("userDataUpdate userID: %s, itemID: %s, Progress: %d sec, Duration: %d sec\n",
+	// 	userID, itemID, positionTicks/TicsToSeconds, duration)
+
+	// If we don't have a duration, we assume 1 hour
 	if duration == 0 {
 		duration = 60 * 60
 	}

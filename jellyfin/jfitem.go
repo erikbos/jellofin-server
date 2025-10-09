@@ -193,7 +193,11 @@ func (j *Jellyfin) makeJFItemFavoritesOverview(ctx context.Context, userID strin
 	items := []JFItem{}
 	for _, itemID := range favoriteIDs {
 		if c, i := j.collections.GetItemByID(itemID); c != nil && i != nil {
-			items = append(items, j.makeJFItem(ctx, userID, i, c.ID, c.Type, false))
+			// We only add movies and shows in favorites
+			switch i.(type) {
+			case *collection.Movie, *collection.Show:
+				items = append(items, j.makeJFItem(ctx, userID, i, c.ID))
+			}
 		}
 	}
 	return items, nil
@@ -308,7 +312,7 @@ func (j *Jellyfin) makeJFItemPlaylistItemList(ctx context.Context, userID, playl
 	for _, itemID := range playlist.ItemIDs {
 		c, i := j.collections.GetItemByID(itemID)
 		if i != nil {
-			item := j.makeJFItem(ctx, userID, i, c.ID, c.Type, false)
+			item := j.makeJFItem(ctx, userID, i, c.ID)
 			items = append(items, item)
 		}
 	}
@@ -316,58 +320,66 @@ func (j *Jellyfin) makeJFItemPlaylistItemList(ctx context.Context, userID, playl
 }
 
 // makeJFItem make movie or show from provided item
-func (j *Jellyfin) makeJFItem(ctx context.Context, userID string, item *collection.Item, parentID string, collectionType collection.CollectionType, listView bool) (response JFItem) {
-	switch collectionType {
-	case collection.CollectionTypeMovies:
-		return j.makeJFItemMovie(ctx, userID, item, parentID, listView)
-	case collection.CollectionTypeShows:
-		return j.makeJFItemShow(ctx, userID, item, parentID)
+func (j *Jellyfin) makeJFItem(ctx context.Context, userID string, item collection.Item, parentID string) (response JFItem) {
+	switch i := item.(type) {
+	case *collection.Movie:
+		return j.makeJFItemMovie(ctx, userID, i, parentID)
+	case *collection.Show:
+		return j.makeJFItemShow(ctx, userID, i, parentID)
+	case *collection.Season:
+		if response, err := j.makeJFItemSeason(ctx, userID, i, parentID); err == nil {
+			return response
+		}
+	case *collection.Episode:
+		if response, err := j.makeJFItemEpisode(ctx, userID, i, parentID); err == nil {
+			return response
+		}
 	}
-	log.Printf("makeJFItem: unknown item type: %+v", item)
+	log.Printf("makeJFItem: unknown item type (%T): %+v", item, item)
 	return JFItem{}
 }
 
 // makeJFItem make movie item
-func (j *Jellyfin) makeJFItemMovie(ctx context.Context, userID string, i *collection.Item, parentID string, listView bool) (response JFItem) {
+func (j *Jellyfin) makeJFItemMovie(ctx context.Context, userID string, movie *collection.Movie, parentID string) (response JFItem) {
 	response = JFItem{
 		Type:                    itemTypeMovie,
-		ID:                      i.ID,
+		ID:                      movie.ID(),
 		ParentID:                makeJFCollectionID(parentID),
 		ServerID:                j.serverID,
-		Name:                    i.Name,
-		OriginalTitle:           i.Name,
-		SortName:                i.SortName,
-		ForcedSortName:          i.SortName,
+		Name:                    movie.Name(),
+		OriginalTitle:           movie.Name(),
+		SortName:                movie.SortName(),
+		ForcedSortName:          movie.SortName(),
 		IsFolder:                false,
 		LocationType:            "FileSystem",
 		Path:                    "file.mp4",
-		Etag:                    idhash.IdHash(i.ID),
+		Etag:                    idhash.IdHash(movie.ID()),
 		MediaType:               "Video",
 		VideoType:               "VideoFile",
 		Container:               "mov,mp4,m4a",
-		DateCreated:             time.Unix(i.FirstVideo/1000, 0).UTC(),
-		PremiereDate:            time.Unix(i.FirstVideo/1000, 0).UTC(),
+		DateCreated:             time.Unix(movie.FirstVideo()/1000, 0).UTC(),
+		PremiereDate:            time.Unix(movie.FirstVideo()/1000, 0).UTC(),
 		PrimaryImageAspectRatio: 0.6666666666666666,
 		CanDelete:               false,
 		CanDownload:             true,
 		DisplayPreferencesID:    displayPreferencesID,
 		PlayAccess:              "Full",
 		ImageTags: &JFImageTags{
-			Primary:  "primary_" + i.ID,
-			Backdrop: "backdrop_" + i.ID,
+			Primary:  "primary_" + movie.ID(),
+			Backdrop: "backdrop_" + movie.ID(),
 		},
 		// Required to have Infuse load backdrop of episode
 		BackdropImageTags: []string{
-			"backdrop_" + i.ID,
+			"backdrop_" + movie.ID(),
 		},
 		Tags:      []string{},
 		Taglines:  []string{},
 		Trickplay: []string{},
 	}
 
-	i.LoadNfo()
+	movie.LoadNfo()
 	// fixme: this should come from collection package
-	response.MediaSources = j.makeMediaSource(i.FileName, i.FileSize, i.Nfo)
+	response.MediaSources = j.makeMediaSource(movie)
 	response.RunTimeTicks = response.MediaSources[0].RunTimeTicks
 	response.MediaStreams = response.MediaSources[0].MediaStreams
 
@@ -377,61 +389,61 @@ func (j *Jellyfin) makeJFItemMovie(ctx context.Context, userID string, i *collec
 	// 	response.ImageTags = nil
 	// }
 
-	j.enrichResponseWithNFO(&response, i.Nfo)
-	if i.Nfo != nil {
-		i.Genres = response.Genres
-		i.OfficialRating = response.OfficialRating
-		i.Year = response.ProductionYear
+	j.enrichResponseWithNFO(&response, movie.Nfo)
+	if movie.Nfo != nil {
+		movie.Genres = response.Genres
+		movie.OfficialRating = response.OfficialRating
+		movie.Year = response.ProductionYear
 	}
 
-	if playstate, err := j.db.UserDataRepo.Get(ctx, userID, i.ID); err == nil {
-		response.UserData = j.makeJFUserData(userID, i.ID, &playstate)
+	if playstate, err := j.db.UserDataRepo.Get(ctx, userID, movie.ID()); err == nil {
+		response.UserData = j.makeJFUserData(userID, movie.ID(), &playstate)
 	} else {
-		response.UserData = j.makeJFUserData(userID, i.ID, nil)
+		response.UserData = j.makeJFUserData(userID, movie.ID(), nil)
 	}
 
 	return response
 }
 
 // makeJFItemShow makes show item
-func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, i *collection.Item, parentID string) (response JFItem) {
+func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, show *collection.Show, parentID string) (response JFItem) {
 	response = JFItem{
 		Type:                    itemTypeShow,
-		ID:                      i.ID,
+		ID:                      show.ID(),
 		ParentID:                makeJFCollectionID(parentID),
 		ServerID:                j.serverID,
-		Name:                    i.Name,
-		OriginalTitle:           i.Name,
-		SortName:                i.SortName,
-		ForcedSortName:          i.SortName,
+		Name:                    show.Name(),
+		OriginalTitle:           show.Name(),
+		SortName:                show.SortName(),
+		ForcedSortName:          show.SortName(),
 		IsFolder:                true,
-		Etag:                    idhash.IdHash(i.ID),
-		DateCreated:             time.Unix(i.FirstVideo/1000, 0).UTC(),
-		PremiereDate:            time.Unix(i.FirstVideo/1000, 0).UTC(),
+		Etag:                    idhash.IdHash(show.ID()),
+		DateCreated:             time.Unix(show.FirstVideo()/1000, 0).UTC(),
+		PremiereDate:            time.Unix(show.FirstVideo()/1000, 0).UTC(),
 		PrimaryImageAspectRatio: 0.6666666666666666,
 		CanDelete:               false,
 		CanDownload:             true,
 		DisplayPreferencesID:    displayPreferencesID,
 		PlayAccess:              "Full",
 		ImageTags: &JFImageTags{
-			Primary:  "primary_" + i.ID,
-			Backdrop: "backdrop_" + i.ID,
+			Primary:  "primary_" + show.ID(),
+			Backdrop: "backdrop_" + show.ID(),
 		},
 		// Required to have Infuse load backdrop of episode
 		BackdropImageTags: []string{
-			"backdrop_" + i.ID,
+			"backdrop_" + show.ID(),
 		},
 		Tags:      []string{},
 		Taglines:  []string{},
 		Trickplay: []string{},
 	}
-	if i.Logo != "" {
-		response.ImageTags.Logo = "logo_" + i.ID
+	if show.Logo() != "" {
+		response.ImageTags.Logo = "logo_" + show.ID()
 	}
 
-	j.enrichResponseWithNFO(&response, i.Nfo)
+	j.enrichResponseWithNFO(&response, show.Nfo)
 
-	response.ChildCount = len(i.Seasons)
+	response.ChildCount = len(show.Seasons)
 	// In case show does not have any seasons no need to calculate userdata
 	if response.ChildCount == 0 {
 		return response
@@ -440,10 +452,10 @@ func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, i *collect
 	// Calculate the number of episodes and played episode in the show
 	var playedEpisodes, totalEpisodes int
 	var lastestPlayed time.Time
-	for _, s := range i.Seasons {
+	for _, s := range show.Seasons {
 		for _, e := range s.Episodes {
 			totalEpisodes++
-			episodePlaystate, err := j.db.UserDataRepo.Get(ctx, userID, e.ID)
+			episodePlaystate, err := j.db.UserDataRepo.Get(ctx, userID, e.ID())
 			if err == nil {
 				if episodePlaystate.Played {
 					playedEpisodes++
@@ -455,13 +467,13 @@ func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, i *collect
 		}
 	}
 	if totalEpisodes != 0 {
-		playstate, err := j.db.UserDataRepo.Get(ctx, userID, i.ID)
+		playstate, err := j.db.UserDataRepo.Get(ctx, userID, show.ID())
 		if err != nil {
 			playstate = database.UserData{
 				Timestamp: time.Now().UTC(),
 			}
 		}
-		response.UserData = j.makeJFUserData(userID, i.ID, &playstate)
+		response.UserData = j.makeJFUserData(userID, show.ID(), &playstate)
 
 		response.UserData.UnplayedItemCount = totalEpisodes - playedEpisodes
 		response.UserData.PlayedPercentage = 100 * playedEpisodes / totalEpisodes
@@ -475,8 +487,8 @@ func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, i *collect
 }
 
 // makeJFItemSeason makes a season
-func (j *Jellyfin) makeJFItemSeason(ctx context.Context, userID, seasonID string) (response JFItem, err error) {
-	_, show, season := j.collections.GetSeasonByID(seasonID)
+func (j *Jellyfin) makeJFItemSeason(ctx context.Context, userID string, season *collection.Season, parentID string) (response JFItem, err error) {
+	_, show, season := j.collections.GetSeasonByID(season.ID())
 	if season == nil {
 		err = errors.New("could not find season")
 		return
@@ -484,15 +496,15 @@ func (j *Jellyfin) makeJFItemSeason(ctx context.Context, userID, seasonID string
 
 	response = JFItem{
 		Type:                 itemTypeSeason,
-		ID:                   makeJFSeasonID(seasonID),
-		SeriesID:             show.ID,
-		SeriesName:           show.Name,
-		ParentID:             show.ID,
-		ParentLogoItemId:     show.ID,
+		ID:                   makeJFSeasonID(season.ID()),
+		SeriesID:             show.ID(),
+		SeriesName:           show.Name(),
+		ParentID:             show.ID(),
+		ParentLogoItemId:     show.ID(),
 		ServerID:             j.serverID,
 		IsFolder:             true,
 		LocationType:         "FileSystem",
-		Etag:                 idhash.IdHash(seasonID),
+		Etag:                 idhash.IdHash(season.ID()),
 		MediaType:            "Unknown",
 		ChildCount:           len(season.Episodes),
 		RecursiveItemCount:   len(season.Episodes),
@@ -503,29 +515,30 @@ func (j *Jellyfin) makeJFItemSeason(ctx context.Context, userID, seasonID string
 		DisplayPreferencesID: displayPreferencesID,
 		PlayAccess:           "Full",
 		ImageTags: &JFImageTags{
-			Primary: makeJFSeasonID(seasonID),
+			Primary: makeJFSeasonID(season.ID()),
 		},
 		Tags:      []string{},
 		Taglines:  []string{},
 		Trickplay: []string{},
 	}
 	// Regular season? (>0)
-	if season.SeasonNo != 0 {
-		response.IndexNumber = season.SeasonNo
-		response.Name = makeSeasonName(season.SeasonNo)
-		response.SortName = fmt.Sprintf("%04d", season.SeasonNo)
+	seasonNumber := season.Number()
+	if seasonNumber != 0 {
+		response.IndexNumber = seasonNumber
+		response.Name = makeSeasonName(seasonNumber)
+		response.SortName = fmt.Sprintf("%04d", seasonNumber)
 	} else {
 		// Specials tend to have season number 0, set season
 		// number to 99 to make it sort at the end
 		response.IndexNumber = 99
-		response.Name = makeSeasonName(season.SeasonNo)
+		response.Name = makeSeasonName(seasonNumber)
 		response.SortName = "9999"
 	}
 
 	var playedEpisodes int
 	var lastestPlayed time.Time
 	for _, e := range season.Episodes {
-		episodePlaystate, err := j.db.UserDataRepo.Get(ctx, userID, e.ID)
+		episodePlaystate, err := j.db.UserDataRepo.Get(ctx, userID, e.ID())
 		if err == nil {
 			if episodePlaystate.Played {
 				playedEpisodes++
@@ -536,13 +549,13 @@ func (j *Jellyfin) makeJFItemSeason(ctx context.Context, userID, seasonID string
 		}
 	}
 
-	playstate, err := j.db.UserDataRepo.Get(ctx, userID, seasonID)
+	playstate, err := j.db.UserDataRepo.Get(ctx, userID, season.ID())
 	if err != nil {
 		playstate = database.UserData{
 			Timestamp: time.Now().UTC(),
 		}
 	}
-	response.UserData = j.makeJFUserData(userID, seasonID, &playstate)
+	response.UserData = j.makeJFUserData(userID, season.ID(), &playstate)
 
 	response.UserData.UnplayedItemCount = response.ChildCount - playedEpisodes
 	response.UserData.PlayedPercentage = 100 * playedEpisodes / response.ChildCount
@@ -564,8 +577,8 @@ func makeSeasonName(seasonNo int) string {
 }
 
 // makeJFItemEpisode makes an episode
-func (j *Jellyfin) makeJFItemEpisode(ctx context.Context, userID, episodeID string) (response JFItem, err error) {
-	_, show, season, episode := j.collections.GetEpisodeByID(episodeID)
+func (j *Jellyfin) makeJFItemEpisode(ctx context.Context, userID string, episode *collection.Episode, parentID string) (response JFItem, err error) {
+	_, show, season, episode := j.collections.GetEpisodeByID(episode.ID())
 	if episode == nil {
 		err = errors.New("could not find episode")
 		return
@@ -573,17 +586,17 @@ func (j *Jellyfin) makeJFItemEpisode(ctx context.Context, userID, episodeID stri
 
 	response = JFItem{
 		Type:                 itemTypeEpisode,
-		ID:                   makeJFEpisodeID(episodeID),
-		SeasonID:             makeJFSeasonID(season.ID),
-		SeasonName:           makeSeasonName(season.SeasonNo),
-		SeriesID:             show.ID,
-		SeriesName:           show.Name,
-		ParentLogoItemId:     show.ID,
+		ID:                   makeJFEpisodeID(episode.ID()),
+		SeasonID:             makeJFSeasonID(season.ID()),
+		SeasonName:           makeSeasonName(season.Number()),
+		SeriesID:             show.ID(),
+		SeriesName:           show.Name(),
+		ParentLogoItemId:     show.ID(),
 		ServerID:             j.serverID,
 		IsFolder:             false,
 		LocationType:         "FileSystem",
 		Path:                 "episode.mp4",
-		Etag:                 idhash.IdHash(episodeID),
+		Etag:                 idhash.IdHash(episode.ID()),
 		MediaType:            "Video",
 		VideoType:            "VideoFile",
 		Container:            "mov,mp4,m4a",
@@ -600,7 +613,7 @@ func (j *Jellyfin) makeJFItemEpisode(ctx context.Context, userID, episodeID stri
 	}
 	if episode.Thumb != "" {
 		response.ImageTags = &JFImageTags{
-			Primary: episodeID,
+			Primary: episode.ID(),
 		}
 	}
 
@@ -626,14 +639,14 @@ func (j *Jellyfin) makeJFItemEpisode(ctx context.Context, userID, episodeID stri
 	}
 
 	// Add some generic mediasource to indicate "720p, stereo"
-	response.MediaSources = j.makeMediaSource(episode.FileName, episode.FileSize, episode.Nfo)
+	response.MediaSources = j.makeMediaSource(episode)
 	response.RunTimeTicks = response.MediaSources[0].RunTimeTicks
 	response.MediaStreams = response.MediaSources[0].MediaStreams
 
-	if playstate, err := j.db.UserDataRepo.Get(ctx, userID, episodeID); err == nil {
-		response.UserData = j.makeJFUserData(userID, episodeID, &playstate)
+	if playstate, err := j.db.UserDataRepo.Get(ctx, userID, episode.ID()); err == nil {
+		response.UserData = j.makeJFUserData(userID, episode.ID(), &playstate)
 	} else {
-		response.UserData = j.makeJFUserData(userID, episodeID, nil)
+		response.UserData = j.makeJFUserData(userID, episode.ID(), nil)
 	}
 	return response, nil
 }
@@ -772,7 +785,8 @@ func (j *Jellyfin) enrichResponseWithNFO(response *JFItem, n *collection.Nfo) {
 	}
 }
 
-func (j *Jellyfin) makeMediaSource(filename string, filesize int64, n *collection.Nfo) (mediasources []JFMediaSources) {
+func (j *Jellyfin) makeMediaSource(item collection.Item) (mediasources []JFMediaSources) {
+	filename := item.FileName()
 	mediasource := JFMediaSources{
 		ID:                    idhash.IdHash(filename),
 		ETag:                  idhash.IdHash(filename),
@@ -782,7 +796,7 @@ func (j *Jellyfin) makeMediaSource(filename string, filesize int64, n *collectio
 		Container:             "mp4",
 		Protocol:              "File",
 		VideoType:             "VideoFile",
-		Size:                  filesize,
+		Size:                  item.FileSize(),
 		IsRemote:              false,
 		ReadAtNativeFramerate: false,
 		HasSegments:           false,
@@ -800,6 +814,9 @@ func (j *Jellyfin) makeMediaSource(filename string, filesize int64, n *collectio
 		SupportsProbing:      true,
 		Formats:              []string{},
 	}
+
+	item.LoadNfo()
+	n := item.GetNfo()
 
 	// log.Printf("makeMediaSource: n: %+v, n2: %+v, n3: %+v\n", n, n.FileInfo, n.FileInfo.StreamDetails)
 	if n == nil || n.FileInfo == nil || n.FileInfo.StreamDetails == nil {

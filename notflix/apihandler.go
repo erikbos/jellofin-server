@@ -132,8 +132,11 @@ func (n *Notflix) itemsHandler(w http.ResponseWriter, r *http.Request) {
 
 	var lastVideo int64
 	for i := range c.Items {
-		if c.Items[i].LastVideo > lastVideo {
-			lastVideo = c.Items[i].LastVideo
+		switch s := c.Items[i].(type) {
+		case *collection.Show:
+			if s.LastVideo() > lastVideo {
+				lastVideo = s.LastVideo()
+			}
 		}
 	}
 	if lastVideo > 0 && checkEtagObj(w, r, time.UnixMilli(lastVideo)) {
@@ -156,8 +159,15 @@ func (n *Notflix) itemHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if i.LastVideo > 0 && checkEtagObj(w, r, time.UnixMilli(i.LastVideo)) {
-		return
+	switch s := i.(type) {
+	case *collection.Movie:
+		if s.FirstVideo() > 0 && checkEtagObj(w, r, time.UnixMilli(s.FirstVideo())) {
+			return
+		}
+	case *collection.Show:
+		if s.LastVideo() > 0 && checkEtagObj(w, r, time.UnixMilli(s.LastVideo())) {
+			return
+		}
 	}
 	if r.Method == "HEAD" {
 		return
@@ -173,12 +183,16 @@ func (n *Notflix) itemHandler(w http.ResponseWriter, r *http.Request) {
 		i.LoadNfo()
 	}
 
-	i2 := copyItem(*i)
-	if i.Seasons != nil {
-		for _, s := range i.Seasons {
-			i2.Seasons = append(i2.Seasons, copySeason(s, doNfo))
+	i2 := copyItem(i)
+
+	if show, ok := i.(*collection.Show); ok {
+		if show.Seasons != nil {
+			for _, s := range show.Seasons {
+				i2.Seasons = append(i2.Seasons, copySeason(s, doNfo))
+			}
 		}
 	}
+
 	serveJSON(&i2, w)
 }
 
@@ -264,45 +278,52 @@ func copyCollection(c collection.Collection) Collection {
 	return cc
 }
 
-func copyItems(c []*collection.Item) []Item {
+func copyItems(c []collection.Item) []Item {
 	items := make([]Item, len(c))
 	for i := range c {
-		items[i] = copyItem(*c[i])
+		items[i] = copyItem(c[i])
 	}
 	return items
 }
 
 func copyItem(item collection.Item) Item {
 	ci := Item{
-		ID:         item.ID,
-		Name:       item.Name,
-		SortName:   item.SortName,
-		Path:       escapePath(item.Path),
-		BaseUrl:    item.BaseUrl,
-		Type:       item.Type,
-		FirstVideo: item.FirstVideo,
-		LastVideo:  item.LastVideo,
-		Fanart:     item.Fanart,
-		Poster:     escapePath(item.Poster),
-		Rating:     item.Rating,
-		Genre:      item.Genres,
-		Year:       item.Year,
-		Video:      escapePath(item.FileName),
-
-		SeasonAllBanner: escapePath(item.SeasonAllBanner),
-		SeasonAllPoster: escapePath(item.SeasonAllPoster),
-		SeasonAllFanart: escapePath(item.SeasonAllFanart),
+		ID:       item.ID(),
+		Name:     item.Name(),
+		SortName: item.SortName(),
+		Path:     escapePath(item.Path()),
+		BaseUrl:  item.BaseUrl(),
+		Fanart:   item.Fanart(),
+		Poster:   escapePath(item.Poster()),
+		Rating:   item.GetRating(),
+		Genre:    item.GetGenres(),
+		Year:     item.GetYear(),
+		Video:    escapePath(item.FileName()),
 	}
-	if item.Nfo != nil {
+
+	switch v := item.(type) {
+	case *collection.Movie:
+		ci.Type = "movie"
+		ci.FirstVideo = v.FirstVideo()
+		ci.LastVideo = v.FirstVideo()
+	case *collection.Show:
+		ci.Type = "show"
+		ci.FirstVideo = v.FirstVideo()
+		ci.LastVideo = v.LastVideo()
+		ci.SeasonAllBanner = v.SeasonAllBanner()
+		ci.SeasonAllPoster = v.SeasonAllPoster()
+	}
+
+	if nfo := item.GetNfo(); nfo != nil {
 		ci.Nfo = ItemNfo{
-			ID:        item.Nfo.Id,
-			Title:     item.Nfo.Title,
-			Plot:      item.Nfo.Plot,
-			Genre:     item.Nfo.Genre,
-			Premiered: item.Nfo.Premiered,
-			MPAA:      item.Nfo.Mpaa,
-			Aired:     item.Nfo.Aired,
-			Studio:    item.Nfo.Studio,
+			ID:        nfo.Id,
+			Title:     nfo.Title,
+			Plot:      nfo.Plot,
+			Genre:     nfo.Genre,
+			Premiered: nfo.Premiered,
+			MPAA:      nfo.Mpaa,
+			Aired:     nfo.Aired,
+			Studio:    nfo.Studio,
 		}
 	}
 	return ci
@@ -310,10 +331,10 @@ func copyItem(item collection.Item) Item {
 
 func copySeason(season collection.Season, doNfo bool) Season {
 	cs := Season{
-		SeasonNo: season.SeasonNo,
-		Banner:   escapePath(season.Banner),
-		Fanart:   escapePath(season.Fanart),
-		Poster:   escapePath(season.Poster),
+		SeasonNo: season.Number(),
+		Banner:   escapePath(season.Banner()),
+		Fanart:   escapePath(season.Fanart()),
+		Poster:   escapePath(season.Poster()),
 	}
 
 	cs.Episodes = make([]Episode, len(season.Episodes))
@@ -325,12 +346,12 @@ func copySeason(season collection.Season, doNfo bool) Season {
 
 func copyEpisode(episode collection.Episode, doNfo bool) Episode {
 	ce := Episode{
-		Name:      episode.Name,
+		Name:      episode.Name(),
 		SeasonNo:  episode.SeasonNo,
 		EpisodeNo: episode.EpisodeNo,
 		Double:    episode.Double,
-		SortName:  episode.SortName,
-		Video:     escapePath(episode.FileName),
+		SortName:  episode.SortName(),
+		Video:     escapePath(episode.FileName()),
 		Thumb:     episode.Thumb,
 		// SrtSubs:   c.SrtSubs,
 		// VttSubs:   c.VttSubs,

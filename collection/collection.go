@@ -9,8 +9,8 @@ type Collection struct {
 	Name string
 	// Type of the collection, e.g., "movies", "shows"
 	Type CollectionType
-	// Items in the collection, each of type Item
-	Items []*Item
+	// Items in the collection, could be type movies or shows
+	Items []Item
 	// Directory where the collection is stored
 	Directory string
 	// BaseUrl   string
@@ -51,17 +51,23 @@ func (c *Collection) Details() CollectionDetails {
 	years := make([]int, 0)
 
 	for _, i := range c.Items {
-		for _, g := range i.Genres {
+		itemGenres := i.GetGenres()
+
+		for _, g := range itemGenres {
 			g := normalizeGenre(g)
-			if !slices.Contains(genres, g) {
-				genres = append(genres, g)
+			if !slices.Contains(itemGenres, g) {
+				itemGenres = append(itemGenres, g)
 			}
 		}
-		if i.OfficialRating != "" && !slices.Contains(official, i.OfficialRating) {
-			official = append(official, i.OfficialRating)
+
+		itemOfficialRating := i.GetOfficialRating()
+		if itemOfficialRating != "" && !slices.Contains(official, itemOfficialRating) {
+			official = append(official, itemOfficialRating)
 		}
-		if i.Year != 0 && !slices.Contains(years, i.Year) {
-			years = append(years, i.Year)
+
+		itemYear := i.GetYear()
+		if itemYear != 0 && !slices.Contains(years, itemYear) {
+			years = append(years, itemYear)
 		}
 	}
 
@@ -80,7 +86,7 @@ func (c *Collection) Details() CollectionDetails {
 func (c *Collection) GenreCount() map[string]int {
 	genreCount := make(map[string]int)
 	for _, i := range c.Items {
-		for _, g := range i.Genres {
+		for _, g := range i.GetGenres() {
 			if g == "" {
 				continue
 			}

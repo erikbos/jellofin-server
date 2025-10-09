@@ -25,7 +25,7 @@ func parseEpisodeName(name string, seasonHint int, ep *Episode) (ok bool) {
 
 	s := pat1.FindStringSubmatch(name)
 	if len(s) > 0 {
-		ep.Name = fmt.Sprintf("%sx%s", s[1], s[2])
+		ep.name = fmt.Sprintf("%sx%s", s[1], s[2])
 		ep.SeasonNo = parseInt(s[1])
 		ep.EpisodeNo = parseInt(s[2])
 		return
@@ -33,7 +33,7 @@ func parseEpisodeName(name string, seasonHint int, ep *Episode) (ok bool) {
 
 	s = pat2.FindStringSubmatch(name)
 	if len(s) > 0 {
-		ep.Name = fmt.Sprintf("%sx%s-%s", s[1], s[2], s[3])
+		ep.name = fmt.Sprintf("%sx%s-%s", s[1], s[2], s[3])
 		ep.SeasonNo = parseInt(s[1])
 		ep.EpisodeNo = parseInt(s[2])
 		ep.Double = true
@@ -42,7 +42,7 @@ func parseEpisodeName(name string, seasonHint int, ep *Episode) (ok bool) {
 
 	s = pat3.FindStringSubmatch(name)
 	if len(s) > 0 {
-		ep.Name = s[1] + "." + s[2] + "." + s[3]
+		ep.name = s[1] + "." + s[2] + "." + s[3]
 		ep.SeasonNo = seasonHint
 		ep.EpisodeNo = parseInt(s[1] + s[2] + s[3])
 		return
@@ -52,7 +52,7 @@ func parseEpisodeName(name string, seasonHint int, ep *Episode) (ok bool) {
 	if len(s) > 0 {
 		sn := parseInt(s[1])
 		if seasonHint < 0 || seasonHint == sn {
-			ep.Name = fmt.Sprintf("%02dx%s", sn, s[2])
+			ep.name = fmt.Sprintf("%02dx%s", sn, s[2])
 			ep.SeasonNo = sn
 			ep.EpisodeNo = parseInt(s[2])
 		}

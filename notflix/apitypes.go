@@ -38,7 +38,6 @@ type Item struct {
 
 	// show
 	SeasonAllBanner string   `json:"seasonAllBanner,omitempty"`
-	SeasonAllFanart string   `json:"seasonAllFanart,omitempty"`
 	SeasonAllPoster string   `json:"seasonAllPoster,omitempty"`
 	Seasons         []Season `json:"seasons,omitempty"`
 }
