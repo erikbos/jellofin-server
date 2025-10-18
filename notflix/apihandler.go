@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -179,12 +180,7 @@ func (n *Notflix) itemHandler(w http.ResponseWriter, r *http.Request) {
 		doNfo = false
 	}
 
-	if doNfo {
-		i.LoadNfo()
-	}
-
 	i2 := copyItem(i)
-
 	if show, ok := i.(*collection.Show); ok {
 		if show.Seasons != nil {
 			for _, s := range show.Seasons {
@@ -295,10 +291,13 @@ func copyItem(item collection.Item) Item {
 		BaseUrl:  item.BaseUrl(),
 		Fanart:   item.Fanart(),
 		Poster:   escapePath(item.Poster()),
-		Rating:   item.GetRating(),
-		Genre:    item.GetGenres(),
-		Year:     item.GetYear(),
+		Rating:   item.Rating(),
+		Genre:    item.Genres(),
+		Year:     item.Year(),
 		Video:    escapePath(item.FileName()),
+		Nfo: ItemNfo{
+			ID: item.ID(),
+		},
 	}
 
 	switch v := item.(type) {
@@ -306,25 +305,24 @@ func copyItem(item collection.Item) Item {
 		ci.Type = "movie"
 		ci.FirstVideo = v.FirstVideo()
 		ci.LastVideo = v.FirstVideo()
+		ci.Nfo.Title = v.Metadata.Title()
+		ci.Nfo.Plot = v.Metadata.Plot()
+		ci.Nfo.Premiered = v.Metadata.Premiered().Format("2006-01-02")
+		ci.Nfo.MPAA = v.Metadata.OfficialRating()
+		ci.Nfo.Aired = v.Metadata.Premiered().Format("2006-01-02")
+		ci.Nfo.Studio = v.Metadata.Studios()[0]
 	case *collection.Show:
 		ci.Type = "show"
 		ci.FirstVideo = v.FirstVideo()
 		ci.LastVideo = v.LastVideo()
+		ci.Nfo.Title = v.Metadata.Title()
+		ci.Nfo.Plot = v.Metadata.Plot()
+		ci.Nfo.Premiered = v.Metadata.Premiered().Format("2006-01-02")
+		ci.Nfo.MPAA = v.Metadata.OfficialRating()
+		ci.Nfo.Aired = v.Metadata.Premiered().Format("2006-01-02")
+		ci.Nfo.Studio = v.Metadata.Studios()[0]
 		ci.SeasonAllBanner = v.SeasonAllBanner()
 		ci.SeasonAllPoster = v.SeasonAllPoster()
-	}
-
-	if nfo := item.GetNfo(); nfo != nil {
-		ci.Nfo = ItemNfo{
-			ID:        nfo.Id,
-			Title:     nfo.Title,
-			Plot:      nfo.Plot,
-			Genre:     nfo.Genre,
-			Premiered: nfo.Premiered,
-			MPAA:      nfo.Mpaa,
-			Aired:     nfo.Aired,
-			Studio:    nfo.Studio,
-		}
 	}
 	return ci
 }
@@ -352,22 +350,17 @@ func copyEpisode(episode collection.Episode, doNfo bool) Episode {
 		Double:    episode.Double,
 		SortName:  episode.SortName(),
 		Video:     escapePath(episode.FileName()),
-		Thumb:     episode.Thumb,
+		Thumb:     episode.Poster(),
 		// SrtSubs:   c.SrtSubs,
 		// VttSubs:   c.VttSubs,
 	}
 	if doNfo {
-		// log.Printf("Loading NFO for %s\n", episode.NfoPath)
-		episode.LoadNfo()
-		// log.Printf("NFO: %+v\n", ce.Nfo)
-		if episode.Nfo != nil {
-			ce.Nfo = EpisodeNfo{
-				Title:   episode.Nfo.Title,
-				Plot:    episode.Nfo.Plot,
-				Season:  episode.Nfo.Season,
-				Episode: episode.Nfo.Episode,
-				Aired:   episode.Nfo.Aired,
-			}
+		ce.Nfo = EpisodeNfo{
+			Title:   episode.Metadata.Title(),
+			Plot:    episode.Metadata.Plot(),
+			Season:  strconv.Itoa(episode.SeasonNo),
+			Episode: strconv.Itoa(episode.Number()),
+			Aired:   episode.Metadata.Premiered().Format("2006-01-02"),
 		}
 	}
 	return ce

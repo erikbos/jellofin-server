@@ -3,14 +3,14 @@ package collection
 
 import (
 	"fmt"
-	"log"
-	"os"
 	"path"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/erikbos/jellofin-server/collection/metadata"
 	"github.com/erikbos/jellofin-server/database"
 	"github.com/erikbos/jellofin-server/idhash"
 )
@@ -112,7 +112,6 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Movie
 		id:       idhash.IdHash(mname),
 		name:     mname,
 		sortName: makeSortName(mname),
-		Year:     year,
 		// BaseUrl:    coll.BaseUrl,
 		path:       dir,
 		fileName:   video,
@@ -183,9 +182,15 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Movie
 		}
 
 		if ext == "nfo" {
-			movie.nfoPath = path.Join(coll.Directory, dir, name)
+			movie.Metadata = metadata.NewNfo(path.Join(coll.Directory, dir, name))
+			movie.Metadata.SetYear(year)
 			continue
 		}
+	}
+
+	// Setup a filename-based metadata handler in case of no metadata yet.
+	if movie.Metadata == nil {
+		movie.Metadata = metadata.NewFilename(movie.name, year)
 	}
 
 	cr.copySrtVttSubs(movie.SrtSubs, &movie.VttSubs)
@@ -193,8 +198,8 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Movie
 	dbItemMovie := &database.Item{
 		ID:    movie.id,
 		Name:  movie.name,
-		Year:  movie.GetYear(),
-		Genre: strings.Join(movie.GetGenres(), ","),
+		Year:  movie.Year(),
+		Genre: strings.Join(movie.Genres(), ","),
 	}
 
 	cr.db.DbLoadItem(dbItemMovie)
@@ -314,7 +319,7 @@ func (cr *CollectionRepo) showScanDir(showDir, baseDir, seasonDir string, season
 
 			// nfo file.
 			if fn == "tvshow.nfo" {
-				show.nfoPath = path.Join(d, fn)
+				show.Metadata = metadata.NewNfo(path.Join(d, fn))
 				continue
 			}
 
@@ -395,8 +400,9 @@ func (cr *CollectionRepo) showScanDir(showDir, baseDir, seasonDir string, season
 				fileName: path.Join(seasonDir, fn),
 				fileSize: f.Size(),
 				baseName: s[1],
+				Metadata: metadata.NewFilename(s[1], 0),
+				VideoTS:  f.CreatetimeMS(),
 			}
-			ep.VideoTS = f.CreatetimeMS()
 			if parseEpisodeName(s[1], seasonHint, &ep) {
 				season := cr.getSeason(show, ep.SeasonNo)
 				season.Episodes =
@@ -431,7 +437,7 @@ func (cr *CollectionRepo) showScanDir(showDir, baseDir, seasonDir string, season
 			}
 			switch aux {
 			case "thumb":
-				ep.Thumb = p
+				ep.thumb = p
 			}
 			continue
 		}
@@ -459,7 +465,7 @@ func (cr *CollectionRepo) showScanDir(showDir, baseDir, seasonDir string, season
 		}
 
 		if ext == "nfo" {
-			ep.nfoPath = path.Join(baseDir, seasonDir, name)
+			ep.Metadata = metadata.NewNfo(path.Join(baseDir, seasonDir, name))
 			continue
 		}
 	}
@@ -512,7 +518,7 @@ func (cr *CollectionRepo) buildShow(coll *Collection, dir string) (show *Show) {
 	}
 
 	// If we have an NFO and at least one image, accept it.
-	if item.nfoPath != "" &&
+	if item.Metadata != nil &&
 		(item.fanart != "" || item.poster != "") {
 		show = item
 	}
@@ -537,13 +543,18 @@ func (cr *CollectionRepo) buildShow(coll *Collection, dir string) (show *Show) {
 	if year == 0 {
 		year = time.Now().Year()
 	}
-	item.Year = year
+
+	// Setup a filename-based metadata handler in case of no metadata yet.
+	if item.Metadata == nil {
+		item.Metadata = metadata.NewFilename(item.name, year)
+	}
+	item.Metadata.SetYear(year)
 
 	dbItemShow := &database.Item{
 		ID:    item.id,
 		Name:  item.name,
-		Year:  item.Year,
-		Genre: strings.Join(item.Genres, ","),
+		Year:  item.Metadata.Year(),
+		Genre: strings.Join(item.Metadata.Genres(), ","),
 	}
 	cr.db.DbLoadItem(dbItemShow)
 	return
@@ -561,16 +572,10 @@ func (cr *CollectionRepo) copySrtVttSubs(srt Subtitles, vtt *Subtitles) {
 	}
 }
 
-func loadNFO(n **Nfo, filename string) {
-	// NFO already loaded and parsed?
-	if *n != nil {
-		return
+func parseInt(s string) (i int) {
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err == nil {
+		i = int(n)
 	}
-	if file, err := os.Open(filename); err == nil {
-		defer file.Close()
-		*n, err = NfoDecode(file)
-		if err != nil {
-			log.Printf("Error parsing NFO file %s: %v\n", filename, err)
-		}
-	}
+	return
 }

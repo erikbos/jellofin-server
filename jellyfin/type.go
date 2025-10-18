@@ -259,7 +259,7 @@ type JFItem struct {
 	Taglines                 []string           `json:"Taglines,omitempty"`
 	Trickplay                []string           `json:"Trickplay,omitempty"`
 	Genres                   []string           `json:"Genres,omitempty"`
-	CommunityRating          float64            `json:"CommunityRating,omitempty"`
+	CommunityRating          float32            `json:"CommunityRating,omitempty"`
 	RunTimeTicks             int64              `json:"RunTimeTicks,omitempty"`
 	PlayAccess               string             `json:"PlayAccess,omitempty"`
 	ProductionYear           int                `json:"ProductionYear,omitempty"`
@@ -271,6 +271,9 @@ type JFItem struct {
 	Height                   int                `json:"Height,omitempty"`
 	IsFolder                 bool               `json:"IsFolder"`
 	IsHD                     bool               `json:"IsHD"`
+	Is4K                     bool               `json:"Is4K"`
+	LockData                 bool               `json:"LockData"`
+	HasSubtitles             bool               `json:"HasSubtitles,omitempty"`
 	People                   []JFPeople         `json:"People,omitempty"`
 	Studios                  []JFStudios        `json:"Studios,omitempty"`
 	GenreItems               []JFGenreItem      `json:"GenreItems,omitempty"`
@@ -280,7 +283,6 @@ type JFItem struct {
 	ExternalUrls             []JFExternalUrls   `json:"ExternalUrls,omitempty"`
 	Tags                     []string           `json:"Tags,omitempty"`
 	LockedFields             []string           `json:"LockedFields"`
-	LockData                 bool               `json:"LockData"`
 	LocalTrailerCount        int                `json:"LocalTrailerCount,omitempty"`
 	SpecialFeatureCount      int                `json:"SpecialFeatureCount,omitempty"`
 	DisplayPreferencesID     string             `json:"DisplayPreferencesId,omitempty"`
@@ -289,7 +291,6 @@ type JFItem struct {
 	Chapters                 []string           `json:"Chapters,omitempty"`
 	ParentLogoItemId         string             `json:"ParentLogoItemId,omitempty"`
 	RecursiveItemCount       int                `json:"RecursiveItemCount,omitempty"`
-	HasSubtitles             bool               `json:"HasSubtitles,omitempty"`
 }
 
 type JFExternalUrls struct {
@@ -387,6 +388,7 @@ type JFRemoteTrailers struct {
 
 type JFProviderIds struct {
 	Tmdb string `json:"Tmdb,omitempty"`
+	Tvdb string `json:"Tvdb,omitempty"`
 	Imdb string `json:"Imdb,omitempty"`
 }
 

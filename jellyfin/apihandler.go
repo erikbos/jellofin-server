@@ -11,7 +11,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gorilla/mux"
 
@@ -141,22 +140,6 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		serveJSON(playlistItem, w)
 		return
-		// case isJFSeasonID(itemID):
-		// 	seasonItem, err := j.makeJFItemSeason(r.Context(), accessToken.UserID, trimPrefix(itemID))
-		// 	if err != nil {
-		// 		apierror(w, err.Error(), http.StatusNotFound)
-		// 		return
-		// 	}
-		// 	serveJSON(seasonItem, w)
-		// 	return
-		// case isJFEpisodeID(itemID):
-		// 	episodeItem, err := j.makeJFItemEpisode(r.Context(), accessToken.UserID, trimPrefix(itemID))
-		// 	if err != nil {
-		// 		apierror(w, err.Error(), http.StatusNotFound)
-		// 		return
-		// 	}
-		// 	serveJSON(episodeItem, w)
-		// 	return
 	}
 
 	// Try to fetch individual item: movie or show
@@ -165,7 +148,12 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 		apierror(w, "Item not found", http.StatusNotFound)
 		return
 	}
-	serveJSON(j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID), w)
+	response, err := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID)
+	if err != nil {
+		apierror(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	serveJSON(response, w)
 }
 
 // /UserItems/1d57ee2251656c5fb9a05becdf0e62a3/Userdata
@@ -258,7 +246,11 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			for _, i := range c.Items {
-				jfitem := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID)
+				jfitem, err := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID)
+				if err != nil {
+					apierror(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
 				if j.applyItemFilter(&jfitem, queryparams) {
 					items = append(items, jfitem)
 				}
@@ -340,7 +332,11 @@ func (j *Jellyfin) usersItemsLatestHandler(w http.ResponseWriter, r *http.Reques
 			continue
 		}
 		for _, i := range c.Items {
-			jfitem := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID)
+			jfitem, err := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID)
+			if err != nil {
+				apierror(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 			if j.applyItemFilter(&jfitem, queryparams) {
 				items = append(items, jfitem)
 			}
@@ -390,7 +386,11 @@ func (j *Jellyfin) searchHintsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for _, i := range c.Items {
-			jfitem := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID)
+			jfitem, err := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID)
+			if err != nil {
+				apierror(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 			if j.applyItemFilter(&jfitem, queryparams) {
 				items = append(items, jfitem)
 			}
@@ -482,7 +482,11 @@ func (j *Jellyfin) usersItemsResumeHandler(w http.ResponseWriter, r *http.Reques
 	items := make([]JFItem, 0)
 	for _, id := range resumeItemIDs {
 		if c, i := j.collections.GetItemByID(id); c != nil && i != nil {
-			jfitem := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID)
+			jfitem, err := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID)
+			if err != nil {
+				apierror(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 			if j.applyItemFilter(&jfitem, queryparams) {
 				items = append(items, jfitem)
 			}
@@ -644,7 +648,11 @@ func (j *Jellyfin) showsEpisodesHandler(w http.ResponseWriter, r *http.Request) 
 		for _, e := range s.Episodes {
 			episode, err := j.makeJFItemEpisode(r.Context(), accessToken.UserID, &e, s.ID())
 			if err == nil {
-				jfitem := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID)
+				jfitem, err := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID)
+				if err != nil {
+					apierror(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
 				if j.applyItemFilter(&jfitem, queryparams) {
 					episodes = append(episodes, episode)
 				}
@@ -846,8 +854,8 @@ func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
 
 	// filter on minCommunityRating
 	if minCommunityRatingStr := queryparams.Get("minCommunityRating"); minCommunityRatingStr != "" {
-		if minCommunityRating, err := strconv.ParseFloat(minCommunityRatingStr, 64); err == nil {
-			if i.CommunityRating < minCommunityRating {
+		if minCommunityRating, err := strconv.ParseFloat(minCommunityRatingStr, 32); err == nil {
+			if i.CommunityRating < float32(minCommunityRating) {
 				return false
 			}
 		}
@@ -855,8 +863,8 @@ func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
 
 	// filter on minCriticRating
 	if minCriticRatingStr := queryparams.Get("minCriticRating"); minCriticRatingStr != "" {
-		if minCriticRating, err := strconv.ParseFloat(minCriticRatingStr, 64); err == nil {
-			if float64(i.CriticRating) < minCriticRating {
+		if minCriticRating, err := strconv.ParseFloat(minCriticRatingStr, 32); err == nil {
+			if float32(i.CriticRating) < float32(minCriticRating) {
 				return false
 			}
 		}
@@ -1074,50 +1082,6 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 	imageType := vars["type"]
 
 	switch {
-	// case isJFSeasonID(itemID):
-	// 	c, item, season := j.collections.GetSeasonByID(trimPrefix(itemID))
-	// 	if season == nil {
-	// 		apierror(w, "Could not find season", http.StatusNotFound)
-	// 		return
-	// 	}
-	// 	switch strings.ToLower(imageType) {
-	// 	case "primary":
-	// 		// Serve season specific poster
-	// 		dir := c.Directory + "/" + item.Name + "/"
-	// 		if season.Poster != "" {
-	// 			j.serveImage(w, r, dir+season.Poster, j.imageQualityPoster)
-	// 			return
-	// 		}
-	// 		// Serve item season all poster
-	// 		if item.SeasonAllPoster != "" {
-	// 			j.serveImage(w, r, dir+item.SeasonAllPoster, j.imageQualityPoster)
-	// 			return
-	// 		}
-	// 		// Serve show poster as fallback
-	// 		if item.Poster != "" {
-	// 			j.serveImage(w, r, dir+item.Poster, j.imageQualityPoster)
-	// 			return
-	// 		}
-	// 		log.Printf("Image request %s, no poster found for season %s", itemID, season.ID)
-	// 		apierror(w, "Poster not found for season", http.StatusNotFound)
-	// 		return
-	// 	default:
-	// 		log.Printf("Image request %s, unknown type %s", itemID, imageType)
-	// 		return
-	// 	}
-	// case isJFEpisodeID(itemID):
-	// 	c, item, _, episode := j.collections.GetEpisodeByID(trimPrefix(itemID))
-	// 	if episode == nil {
-	// 		apierror(w, "Item not found (could not find episode)", http.StatusNotFound)
-	// 		return
-	// 	}
-	// 	if episode.Thumb != "" {
-	// 		j.serveFile(w, r, c.Directory+"/"+item.Name+"/"+episode.Thumb)
-	// 		return
-	// 	}
-	// 	log.Printf("Image request %s, no thumbnail for episode %s", itemID, episode.ID)
-	// 	apierror(w, "Thumbnail not found for episode", http.StatusNotFound)
-	// 	return
 	case isJFCollectionID(itemID):
 		fallthrough
 	case isJFCollectionFavoritesID(itemID):
@@ -1263,32 +1227,7 @@ func (j *Jellyfin) serveImage(w http.ResponseWriter, r *http.Request, filename s
 	http.ServeContent(w, r, fileStat.Name(), fileStat.ModTime(), file)
 }
 
-func parseTime(input string) (parsedTime time.Time, err error) {
-	timeFormats := []string{
-		"15:04:05",
-		"2006-01-02",
-		"2006/01/02",
-		"2006-01-02 15:04:05",
-		"2006/01/02 15:04:05",
-		"02 Jan 2006",
-		"02 Jan 2006 15:04:05",
-	}
-
-	// Try each format until one succeeds
-	for _, format := range timeFormats {
-		if parsedTime, err = time.Parse(format, input); err == nil {
-			// log.Printf("Parsed: %s as %v\n", input, parsedTime)
-			return
-		}
-	}
-	return
-}
-
 func serveJSON(obj any, w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(obj)
-
-	// j := json.NewEncoder(w)
-	// j.SetIndent("", "  ")
-	// j.Encode(obj)
 }

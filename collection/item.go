@@ -1,9 +1,10 @@
 package collection
 
 import (
-	"log"
 	"strings"
 	"unicode"
+
+	"github.com/erikbos/jellofin-server/collection/metadata"
 )
 
 type Item interface {
@@ -31,38 +32,18 @@ type Item interface {
 	FileName() string
 	// FileSize returns the size of the video file in bytes.
 	FileSize() int64
-
-	Metadata
-
 	// Duration returns the duration of the video in seconds.
 	Duration() int
-	// GetGenres returns the genres.
-	GetGenres() []string
-	GetYear() int
-	GetRating() float32
-	GetOfficialRating() string
-	GetNfo() *Nfo
-	LoadNfo()
-}
+	// Genres returns the genres.
 
-type Metadata interface {
-	// Duration returns the duration of the video in seconds.
-	Duration() int
-	// GetGenres returns the genres.
-	GetGenres() []string
-	GetYear() int
-	GetRating() float32
-	GetOfficialRating() string
-	GetNfo() *Nfo
-	LoadNfo()
-}
+	metadata.VideoMetadata
+	metadata.AudioMetadata
 
-// type Metadata struct {
-// 	Genre  []string
-// 	Year   int
-// 	Rating float32
-// 	Votes  int
-// }
+	Genres() []string
+	Year() int
+	Rating() float32
+	OfficialRating() string
+}
 
 // Movie represents a movie m in a collection.
 type Movie struct {
@@ -92,29 +73,18 @@ type Movie struct {
 	fileName string
 	// fileSize is the size of the video file in bytes.
 	fileSize int64
-	SrtSubs  Subtitles
-	VttSubs  Subtitles
+	// Metadata holds the metadata for the movie, e.g. from NFO file.
+	Metadata metadata.Metadata
 
-	// nfoPath is the full path to the NFO file, e.g. "/mnt/media/casablanca.nfo"
-	nfoPath string
-	Nfo     *Nfo
-
-	Metadata Metadata
-
-	Genres         []string
-	OfficialRating string
-	Year           int
-	Rating         float32
-	Votes          int
+	SrtSubs Subtitles
+	VttSubs Subtitles
 }
 
-func (m *Movie) ID() string       { return m.id }
-func (m *Movie) Name() string     { return m.name }
-func (m *Movie) SortName() string { return m.sortName }
-func (m *Movie) Path() string     { return m.path }
-func (m *Movie) BaseUrl() string  { return m.baseUrl }
-
-// FirstVideo returns the timestamp of the first video in the item.
+func (m *Movie) ID() string        { return m.id }
+func (m *Movie) Name() string      { return m.name }
+func (m *Movie) SortName() string  { return m.sortName }
+func (m *Movie) Path() string      { return m.path }
+func (m *Movie) BaseUrl() string   { return m.baseUrl }
 func (m *Movie) FirstVideo() int64 { return m.firstVideo }
 func (m *Movie) Banner() string    { return m.banner }
 func (m *Movie) Fanart() string    { return m.fanart }
@@ -124,39 +94,23 @@ func (m *Movie) Logo() string      { return m.logo }
 func (m *Movie) FileName() string  { return m.fileName }
 func (m *Movie) FilePath() string  { return m.path + "/" + m.fileName }
 func (m *Movie) FileSize() int64   { return m.fileSize }
-func (m *Movie) Duration() int {
-	m.LoadNfo()
-	if m.Nfo == nil {
-		return 0
-	}
-	// Try primary field to get duration
-	if m.Nfo.Runtime != 0 {
-		return m.Nfo.Runtime * 60
-	}
-	// Fallback to NFO stream details if available
-	if m.Nfo.FileInfo != nil &&
-		m.Nfo.FileInfo.StreamDetails != nil &&
-		m.Nfo.FileInfo.StreamDetails.Video != nil {
-		return m.Nfo.FileInfo.StreamDetails.Video.DurationInSeconds
-	}
-	return 0
-}
+func (m *Movie) Duration() int     { return m.Metadata.Duration() }
 
-func (m *Movie) GetGenres() []string       { return m.Genres }
-func (m *Movie) GetYear() int              { return m.Year }
-func (m *Movie) GetRating() float32        { return m.Rating }
-func (m *Movie) GetOfficialRating() string { return m.OfficialRating }
-func (m *Movie) GetNfo() *Nfo              { return m.Nfo }
-
-// LoadNfo loads the NFO file for the m if not loaded already
-func (m *Movie) LoadNfo() {
-	loadNFO(&m.Nfo, m.nfoPath)
-	if m.Nfo != nil {
-		m.Genres = m.Nfo.Genre
-		m.OfficialRating = m.Nfo.Mpaa
-		m.Year = m.Nfo.Year
-	}
-}
+// func (m *Movie) IsHD() bool              { return m.Metadata.IsHD() }
+// func (m *Movie) Is4K() bool              { return m.Metadata.Is4K() }
+func (m *Movie) VideoCodec() string      { return m.Metadata.VideoCodec() }
+func (m *Movie) VideoBitrate() int       { return m.Metadata.VideoBitrate() }
+func (m *Movie) VideoFrameRate() float64 { return m.Metadata.VideoFrameRate() }
+func (m *Movie) VideoHeight() int        { return m.Metadata.VideoHeight() }
+func (m *Movie) VideoWidth() int         { return m.Metadata.VideoWidth() }
+func (m *Movie) AudioCodec() string      { return m.Metadata.AudioCodec() }
+func (m *Movie) AudioBitrate() int       { return m.Metadata.AudioBitrate() }
+func (m *Movie) AudioChannels() int      { return m.Metadata.AudioChannels() }
+func (m *Movie) AudioLanguage() string   { return m.Metadata.AudioLanguage() }
+func (m *Movie) Genres() []string        { return m.Metadata.Genres() }
+func (m *Movie) Year() int               { return m.Metadata.Year() }
+func (m *Movie) Rating() float32         { return m.Metadata.Rating() }
+func (m *Movie) OfficialRating() string  { return m.Metadata.OfficialRating() }
 
 // Show represents a TV show with multiple seasons and episodes.
 type Show struct {
@@ -192,34 +146,21 @@ type Show struct {
 	fileName string
 	// fileSize is the size of the video file in bytes.
 	fileSize int64
-	SrtSubs  Subtitles
-	VttSubs  Subtitles
+	// Metadata holds the metadata for the show, e.g. from NFO file.
+	Metadata metadata.Metadata
+
+	SrtSubs Subtitles
+	VttSubs Subtitles
 	// Seasons contains the seasons in this TV show.
 	Seasons Seasons
-
-	// nfoPath is the full path to the NFO file, e.g. "/mnt/media/casablanca.nfo"
-	nfoPath string
-	Nfo     *Nfo
-
-	Metadata Metadata
-
-	Genres         []string
-	OfficialRating string
-	Year           int
-	Rating         float32
-	Votes          int
 }
 
-func (s *Show) ID() string       { return s.id }
-func (s *Show) Name() string     { return s.name }
-func (s *Show) SortName() string { return s.sortName }
-func (s *Show) Path() string     { return s.path }
-func (s *Show) BaseUrl() string  { return s.baseUrl }
-
-// FirstVideo returns the timestamp of the first video in the show.
-func (s *Show) FirstVideo() int64 { return s.firstVideo }
-
-// LastVideo returns the timestamp of the last video in the show.
+func (s *Show) ID() string              { return s.id }
+func (s *Show) Name() string            { return s.name }
+func (s *Show) SortName() string        { return s.sortName }
+func (s *Show) Path() string            { return s.path }
+func (s *Show) BaseUrl() string         { return s.baseUrl }
+func (s *Show) FirstVideo() int64       { return s.firstVideo }
 func (s *Show) LastVideo() int64        { return s.lastVideo }
 func (s *Show) Banner() string          { return s.banner }
 func (s *Show) Fanart() string          { return s.fanart }
@@ -237,21 +178,19 @@ func (s *Show) Duration() int {
 	}
 	return duration
 }
-func (s *Show) GetGenres() []string       { return s.Genres }
-func (s *Show) GetYear() int              { return s.Year }
-func (s *Show) GetRating() float32        { return s.Rating }
-func (s *Show) GetOfficialRating() string { return s.OfficialRating }
-func (s *Show) GetNfo() *Nfo              { return s.Nfo }
-
-// LoadNfo loads the NFO file for the m if not loaded already
-func (s *Show) LoadNfo() {
-	loadNFO(&s.Nfo, s.nfoPath)
-	if s.Nfo != nil {
-		s.Genres = s.Nfo.Genre
-		s.OfficialRating = s.Nfo.Mpaa
-		s.Year = s.Nfo.Year
-	}
-}
+func (s *Show) VideoCodec() string      { return s.Metadata.VideoCodec() }
+func (s *Show) VideoBitrate() int       { return s.Metadata.VideoBitrate() }
+func (s *Show) VideoFrameRate() float64 { return s.Metadata.VideoFrameRate() }
+func (s *Show) VideoHeight() int        { return s.Metadata.VideoHeight() }
+func (s *Show) VideoWidth() int         { return s.Metadata.VideoWidth() }
+func (s *Show) AudioCodec() string      { return s.Metadata.AudioCodec() }
+func (s *Show) AudioBitrate() int       { return s.Metadata.AudioBitrate() }
+func (s *Show) AudioChannels() int      { return s.Metadata.AudioChannels() }
+func (s *Show) AudioLanguage() string   { return s.Metadata.AudioLanguage() }
+func (s *Show) Genres() []string        { return s.Metadata.Genres() }
+func (s *Show) Year() int               { return s.Metadata.Year() }
+func (s *Show) Rating() float32         { return s.Metadata.Rating() }
+func (s *Show) OfficialRating() string  { return s.Metadata.OfficialRating() }
 
 // Season represents a season of a TV show, containing multiple episodes.
 type Season struct {
@@ -261,7 +200,7 @@ type Season struct {
 	name string
 	// path is the directory to the show(!), relative to collection root. (e.g. Casablanca)
 	path string
-	// seasonno is the season seasonno, e.g., 1, 2, etc. 0 is used for specials.
+	// seasonno is the season number, e.g., 1, 2, etc. 0 is used for specials.
 	seasonno int
 	// banner is the path to the season banner image.
 	banner string
@@ -307,15 +246,20 @@ func (season *Season) Duration() int {
 	}
 	return duration
 }
-func (season *Season) GetGenres() []string       { return []string{} }
-func (season *Season) GetYear() int              { return 0 }
-func (season *Season) GetRating() float32        { return 0 }
-func (season *Season) GetOfficialRating() string { return "" }
-func (season *Season) GetNfo() *Nfo              { return nil }
 
-// LoadNfo loads the NFO file for the m if not loaded already
-func (season *Season) LoadNfo() {
-}
+func (season *Season) VideoCodec() string      { return "" }
+func (season *Season) VideoBitrate() int       { return 0 }
+func (season *Season) VideoFrameRate() float64 { return 0 }
+func (season *Season) VideoHeight() int        { return 0 }
+func (season *Season) VideoWidth() int         { return 0 }
+func (season *Season) AudioCodec() string      { return "" }
+func (season *Season) AudioBitrate() int       { return 0 }
+func (season *Season) AudioChannels() int      { return 0 }
+func (season *Season) AudioLanguage() string   { return "eng" }
+func (season *Season) Genres() []string        { return []string{} }
+func (season *Season) Year() int               { return 0 }
+func (season *Season) Rating() float32         { return 0 }
+func (season *Season) OfficialRating() string  { return "" }
 
 type Seasons []Season
 
@@ -356,12 +300,11 @@ type Episode struct {
 	// fileSize is the size of the video file in bytes.
 	fileSize int64
 	// Thumb is the thumbname image relative to show directory, e.g. "S01/casablanca.s01e01-thumb.jpg"
-	Thumb   string
-	SrtSubs Subtitles
-	VttSubs Subtitles
-	// nfoPath is the full path to the NFO file, e.g. "/mnt/media/casablanca.nfo"
-	nfoPath string
-	Nfo     *Nfo
+	thumb string
+	// Metadata holds the metadata for the episode, e.g. from NFO file.
+	Metadata metadata.Metadata
+	SrtSubs  Subtitles
+	VttSubs  Subtitles
 }
 
 func (e *Episode) ID() string        { return e.id }
@@ -374,31 +317,28 @@ func (e *Episode) LastVideo() int64  { return e.VideoTS }
 func (e *Episode) Banner() string    { return "" }
 func (e *Episode) Fanart() string    { return "" }
 func (e *Episode) Folder() string    { return "" }
-func (e *Episode) Poster() string    { return e.Thumb }
+func (e *Episode) Poster() string    { return e.thumb }
 func (e *Episode) Logo() string      { return "" }
 func (e *Episode) FileName() string  { return e.fileName }
 func (e *Episode) FileSize() int64   { return e.fileSize }
-func (e *Episode) Duration() int {
-	e.LoadNfo()
-	if e.Nfo != nil &&
-		e.Nfo.FileInfo != nil &&
-		e.Nfo.FileInfo.StreamDetails != nil &&
-		e.Nfo.FileInfo.StreamDetails.Video != nil {
-		return e.Nfo.FileInfo.StreamDetails.Video.DurationInSeconds
-	}
-	log.Printf("GetDuration(): no duration for episode %s\n", e.id)
-	return 0
-}
-func (e *Episode) GetGenres() []string       { return []string{} }
-func (e *Episode) GetYear() int              { return 0 }
-func (e *Episode) GetRating() float32        { return 0 }
-func (e *Episode) GetOfficialRating() string { return "" }
-func (e *Episode) GetNfo() *Nfo              { return e.Nfo }
+func (e *Episode) Number() int       { return e.EpisodeNo }
+func (e *Episode) Duration() int     { return e.Metadata.Duration() }
 
-// LoadNfo loads the NFO file for the episode if not loaded already
-func (e *Episode) LoadNfo() {
-	loadNFO(&e.Nfo, e.nfoPath)
-}
+// func (e *Episode) IsHD() bool              { return e.Metadata.IsHD() }
+// func (e *Episode) Is4K() bool              { return e.Metadata.Is4K() }
+func (e *Episode) VideoCodec() string      { return e.Metadata.VideoCodec() }
+func (e *Episode) VideoBitrate() int       { return e.Metadata.VideoBitrate() }
+func (e *Episode) VideoFrameRate() float64 { return e.Metadata.VideoFrameRate() }
+func (e *Episode) VideoHeight() int        { return e.Metadata.VideoHeight() }
+func (e *Episode) VideoWidth() int         { return e.Metadata.VideoWidth() }
+func (e *Episode) AudioCodec() string      { return e.Metadata.AudioCodec() }
+func (e *Episode) AudioBitrate() int       { return e.Metadata.AudioBitrate() }
+func (e *Episode) AudioChannels() int      { return e.Metadata.AudioChannels() }
+func (e *Episode) AudioLanguage() string   { return e.Metadata.AudioLanguage() }
+func (e *Episode) Genres() []string        { return e.Metadata.Genres() }
+func (e *Episode) Year() int               { return e.Metadata.Year() }
+func (e *Episode) Rating() float32         { return e.Metadata.Rating() }
+func (e *Episode) OfficialRating() string  { return e.Metadata.OfficialRating() }
 
 type Episodes []Episode
 

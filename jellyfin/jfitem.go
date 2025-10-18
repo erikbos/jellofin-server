@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math"
-	"strconv"
 	"strings"
 	"time"
 
@@ -196,7 +194,11 @@ func (j *Jellyfin) makeJFItemFavoritesOverview(ctx context.Context, userID strin
 			// We only add movies and shows in favorites
 			switch i.(type) {
 			case *collection.Movie, *collection.Show:
-				items = append(items, j.makeJFItem(ctx, userID, i, c.ID))
+				jfitem, err := j.makeJFItem(ctx, userID, i, c.ID)
+				if err != nil {
+					return []JFItem{}, err
+				}
+				items = append(items, jfitem)
 			}
 		}
 	}
@@ -312,7 +314,10 @@ func (j *Jellyfin) makeJFItemPlaylistItemList(ctx context.Context, userID, playl
 	for _, itemID := range playlist.ItemIDs {
 		c, i := j.collections.GetItemByID(itemID)
 		if i != nil {
-			item := j.makeJFItem(ctx, userID, i, c.ID)
+			item, err := j.makeJFItem(ctx, userID, i, c.ID)
+			if err != nil {
+				return []JFItem{}, err
+			}
 			items = append(items, item)
 		}
 	}
@@ -320,27 +325,24 @@ func (j *Jellyfin) makeJFItemPlaylistItemList(ctx context.Context, userID, playl
 }
 
 // makeJFItem make movie or show from provided item
-func (j *Jellyfin) makeJFItem(ctx context.Context, userID string, item collection.Item, parentID string) (response JFItem) {
+func (j *Jellyfin) makeJFItem(ctx context.Context, userID string, item collection.Item, parentID string) (response JFItem, e error) {
 	switch i := item.(type) {
 	case *collection.Movie:
 		return j.makeJFItemMovie(ctx, userID, i, parentID)
 	case *collection.Show:
 		return j.makeJFItemShow(ctx, userID, i, parentID)
 	case *collection.Season:
-		if response, err := j.makeJFItemSeason(ctx, userID, i, parentID); err == nil {
-			return response
-		}
+		return j.makeJFItemSeason(ctx, userID, i, parentID)
 	case *collection.Episode:
-		if response, err := j.makeJFItemEpisode(ctx, userID, i, parentID); err == nil {
-			return response
-		}
+		return j.makeJFItemEpisode(ctx, userID, i, parentID)
 	}
-	log.Printf("makeJFItem: unknown item type (%T): %+v", item, item)
-	return JFItem{}
+	log.Printf("makeJFItem: item %s has unknown type %T", item.ID(), item)
+	return JFItem{}, fmt.Errorf("item %s unknown type %T", item.ID(), item)
 }
 
 // makeJFItem make movie item
-func (j *Jellyfin) makeJFItemMovie(ctx context.Context, userID string, movie *collection.Movie, parentID string) (response JFItem) {
+func (j *Jellyfin) makeJFItemMovie(ctx context.Context, userID string, movie *collection.Movie, parentID string) (response JFItem, e error) {
+
 	response = JFItem{
 		Type:                    itemTypeMovie,
 		ID:                      movie.ID(),
@@ -350,6 +352,12 @@ func (j *Jellyfin) makeJFItemMovie(ctx context.Context, userID string, movie *co
 		OriginalTitle:           movie.Name(),
 		SortName:                movie.SortName(),
 		ForcedSortName:          movie.SortName(),
+		Genres:                  movie.Metadata.Genres(),
+		GenreItems:              makeJFGenreItems(movie.Metadata.Genres()),
+		Studios:                 makeJFStudios(movie.Metadata.Studios()),
+		IsHD:                    itemIsHD(movie),
+		Is4K:                    itemIs4K(movie),
+		RunTimeTicks:            int64(movie.Duration() * TicsToSeconds),
 		IsFolder:                false,
 		LocationType:            "FileSystem",
 		Path:                    "file.mp4",
@@ -365,23 +373,30 @@ func (j *Jellyfin) makeJFItemMovie(ctx context.Context, userID string, movie *co
 		DisplayPreferencesID:    displayPreferencesID,
 		PlayAccess:              "Full",
 		ImageTags: &JFImageTags{
-			Primary:  "primary_" + movie.ID(),
-			Backdrop: "backdrop_" + movie.ID(),
+			Primary:  movie.ID(),
+			Backdrop: movie.ID(),
 		},
 		// Required to have Infuse load backdrop of episode
-		BackdropImageTags: []string{
-			"backdrop_" + movie.ID(),
-		},
-		Tags:      []string{},
-		Taglines:  []string{},
-		Trickplay: []string{},
+		BackdropImageTags: []string{movie.ID()},
+		Overview:          movie.Metadata.Plot(),
+		OfficialRating:    movie.Metadata.OfficialRating(),
+		CommunityRating:   movie.Metadata.Rating(),
+		ProductionYear:    movie.Metadata.Year(),
+		ProviderIds:       makeJFProviderIds(movie.Metadata.ProviderIDs()),
+		Tags:              []string{},
+		Taglines:          []string{movie.Metadata.Tagline()},
+		Trickplay:         []string{},
+		LockedFields:      []string{},
 	}
 
-	movie.LoadNfo()
-	// fixme: this should come from collection package
-	response.MediaSources = j.makeMediaSource(movie)
-	response.RunTimeTicks = response.MediaSources[0].RunTimeTicks
-	response.MediaStreams = response.MediaSources[0].MediaStreams
+	// Metadata might have a better title
+	if movie.Metadata.Title() != "" {
+		response.Name = movie.Metadata.Title()
+	}
+
+	if !movie.Metadata.Premiered().IsZero() {
+		response.PremiereDate = movie.Metadata.Premiered()
+	}
 
 	// listview = true, movie carousel return both primary and BackdropImageTags
 	// non-listview = false, remove primary (thumbnail) image reference
@@ -389,12 +404,8 @@ func (j *Jellyfin) makeJFItemMovie(ctx context.Context, userID string, movie *co
 	// 	response.ImageTags = nil
 	// }
 
-	j.enrichResponseWithNFO(&response, movie.Nfo)
-	if movie.Nfo != nil {
-		movie.Genres = response.Genres
-		movie.OfficialRating = response.OfficialRating
-		movie.Year = response.ProductionYear
-	}
+	response.MediaSources = j.makeMediaSource(movie)
+	response.MediaStreams = response.MediaSources[0].MediaStreams
 
 	if playstate, err := j.db.UserDataRepo.Get(ctx, userID, movie.ID()); err == nil {
 		response.UserData = j.makeJFUserData(userID, movie.ID(), &playstate)
@@ -402,11 +413,11 @@ func (j *Jellyfin) makeJFItemMovie(ctx context.Context, userID string, movie *co
 		response.UserData = j.makeJFUserData(userID, movie.ID(), nil)
 	}
 
-	return response
+	return response, nil
 }
 
 // makeJFItemShow makes show item
-func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, show *collection.Show, parentID string) (response JFItem) {
+func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, show *collection.Show, parentID string) (response JFItem, e error) {
 	response = JFItem{
 		Type:                    itemTypeShow,
 		ID:                      show.ID(),
@@ -416,6 +427,9 @@ func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, show *coll
 		OriginalTitle:           show.Name(),
 		SortName:                show.SortName(),
 		ForcedSortName:          show.SortName(),
+		Genres:                  show.Metadata.Genres(),
+		GenreItems:              makeJFGenreItems(show.Metadata.Genres()),
+		Studios:                 makeJFStudios(show.Metadata.Studios()),
 		IsFolder:                true,
 		Etag:                    idhash.IdHash(show.ID()),
 		DateCreated:             time.Unix(show.FirstVideo()/1000, 0).UTC(),
@@ -426,27 +440,59 @@ func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, show *coll
 		DisplayPreferencesID:    displayPreferencesID,
 		PlayAccess:              "Full",
 		ImageTags: &JFImageTags{
-			Primary:  "primary_" + show.ID(),
-			Backdrop: "backdrop_" + show.ID(),
+			Primary:  show.ID(),
+			Backdrop: show.ID(),
 		},
 		// Required to have Infuse load backdrop of episode
 		BackdropImageTags: []string{
-			"backdrop_" + show.ID(),
+			show.ID(),
 		},
-		Tags:      []string{},
-		Taglines:  []string{},
-		Trickplay: []string{},
+		Overview:        show.Metadata.Plot(),
+		OfficialRating:  show.Metadata.OfficialRating(),
+		CommunityRating: show.Metadata.Rating(),
+		Tags:            []string{},
+		Taglines:        []string{show.Metadata.Tagline()},
+		Trickplay:       []string{},
+		LockedFields:    []string{},
 	}
+
+	// Show logo tends to be optional
 	if show.Logo() != "" {
-		response.ImageTags.Logo = "logo_" + show.ID()
+		response.ImageTags.Logo = show.ID()
 	}
 
-	j.enrichResponseWithNFO(&response, show.Nfo)
+	// Metadata might have a better title
+	if show.Metadata.Title() != "" {
+		response.Name = show.Metadata.Title()
+	}
 
+	if show.Metadata.Year() != 0 {
+		response.ProductionYear = show.Metadata.Year()
+	}
+
+	if !show.Metadata.Premiered().IsZero() {
+		response.PremiereDate = show.Metadata.Premiered()
+	}
+
+	// Get playstate of the show itself
+	playstate, err := j.db.UserDataRepo.Get(ctx, userID, show.ID())
+	if err != nil {
+		playstate = database.UserData{
+			Timestamp: time.Now().UTC(),
+		}
+	}
+	response.UserData = j.makeJFUserData(userID, show.ID(), &playstate)
+
+	// Set child count to number of seasons
 	response.ChildCount = len(show.Seasons)
 	// In case show does not have any seasons no need to calculate userdata
 	if response.ChildCount == 0 {
-		return response
+		return response, nil
+	}
+
+	// Set recursive item count to number of episodes
+	for _, s := range show.Seasons {
+		response.RecursiveItemCount += len(s.Episodes)
 	}
 
 	// Calculate the number of episodes and played episode in the show
@@ -466,15 +512,9 @@ func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, show *coll
 			}
 		}
 	}
-	if totalEpisodes != 0 {
-		playstate, err := j.db.UserDataRepo.Get(ctx, userID, show.ID())
-		if err != nil {
-			playstate = database.UserData{
-				Timestamp: time.Now().UTC(),
-			}
-		}
-		response.UserData = j.makeJFUserData(userID, show.ID(), &playstate)
 
+	// In case show has played episodes get playstate of the show itself
+	if totalEpisodes != 0 {
 		response.UserData.UnplayedItemCount = totalEpisodes - playedEpisodes
 		response.UserData.PlayedPercentage = 100 * playedEpisodes / totalEpisodes
 		response.UserData.LastPlayedDate = lastestPlayed
@@ -483,11 +523,11 @@ func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, show *coll
 			response.UserData.Played = true
 		}
 	}
-	return response
+	return response, nil
 }
 
 // makeJFItemSeason makes a season
-func (j *Jellyfin) makeJFItemSeason(ctx context.Context, userID string, season *collection.Season, parentID string) (response JFItem, err error) {
+func (j *Jellyfin) makeJFItemSeason(ctx context.Context, userID string, season *collection.Season, _ string) (response JFItem, err error) {
 	_, show, season := j.collections.GetSeasonByID(season.ID())
 	if season == nil {
 		err = errors.New("could not find season")
@@ -517,9 +557,10 @@ func (j *Jellyfin) makeJFItemSeason(ctx context.Context, userID string, season *
 		ImageTags: &JFImageTags{
 			Primary: makeJFSeasonID(season.ID()),
 		},
-		Tags:      []string{},
-		Taglines:  []string{},
-		Trickplay: []string{},
+		Tags:         []string{},
+		Taglines:     []string{},
+		Trickplay:    []string{},
+		LockedFields: []string{},
 	}
 	// Regular season? (>0)
 	seasonNumber := season.Number()
@@ -535,6 +576,21 @@ func (j *Jellyfin) makeJFItemSeason(ctx context.Context, userID string, season *
 		response.SortName = "9999"
 	}
 
+	// Set season premiere date to first episode airdate if available
+	if len(season.Episodes) != 0 {
+		response.PremiereDate = season.Episodes[0].Metadata.Premiered()
+	}
+
+	// Get playstate of the season itself
+	playstate, err := j.db.UserDataRepo.Get(ctx, userID, season.ID())
+	if err != nil {
+		playstate = database.UserData{
+			Timestamp: time.Now().UTC(),
+		}
+	}
+	response.UserData = j.makeJFUserData(userID, season.ID(), &playstate)
+
+	// Calculate the number of played episodes in the season
 	var playedEpisodes int
 	var lastestPlayed time.Time
 	for _, e := range season.Episodes {
@@ -549,17 +605,11 @@ func (j *Jellyfin) makeJFItemSeason(ctx context.Context, userID string, season *
 		}
 	}
 
-	playstate, err := j.db.UserDataRepo.Get(ctx, userID, season.ID())
-	if err != nil {
-		playstate = database.UserData{
-			Timestamp: time.Now().UTC(),
-		}
-	}
-	response.UserData = j.makeJFUserData(userID, season.ID(), &playstate)
-
+	// Populate playstate fields with playstate of episodes in the season
 	response.UserData.UnplayedItemCount = response.ChildCount - playedEpisodes
 	response.UserData.PlayedPercentage = 100 * playedEpisodes / response.ChildCount
 	response.UserData.LastPlayedDate = lastestPlayed
+	// Mark season as played when all episodes are played
 	if playedEpisodes == response.ChildCount {
 		response.UserData.Played = true
 	}
@@ -593,6 +643,12 @@ func (j *Jellyfin) makeJFItemEpisode(ctx context.Context, userID string, episode
 		SeriesName:           show.Name(),
 		ParentLogoItemId:     show.ID(),
 		ServerID:             j.serverID,
+		ParentIndexNumber:    season.Number(),
+		IndexNumber:          episode.Number(),
+		Overview:             episode.Metadata.Plot(),
+		IsHD:                 itemIsHD(episode),
+		Is4K:                 itemIs4K(episode),
+		RunTimeTicks:         int64(episode.Duration() * TicsToSeconds),
 		IsFolder:             false,
 		LocationType:         "FileSystem",
 		Path:                 "episode.mp4",
@@ -607,40 +663,46 @@ func (j *Jellyfin) makeJFItemEpisode(ctx context.Context, userID string, episode
 		CanDownload:          true,
 		DisplayPreferencesID: displayPreferencesID,
 		PlayAccess:           "Full",
+		ProductionYear:       episode.Metadata.Year(),
+		CommunityRating:      episode.Metadata.Rating(),
+		ProviderIds:          makeJFProviderIds(episode.Metadata.ProviderIDs()),
 		Tags:                 []string{},
 		Taglines:             []string{},
 		Trickplay:            []string{},
+		LockedFields:         []string{},
 	}
-	if episode.Thumb != "" {
+
+	if episode.Poster() != "" {
 		response.ImageTags = &JFImageTags{
 			Primary: episode.ID(),
 		}
 	}
 
-	// Get a bunch of metadata from show-level nfo
-	show.LoadNfo()
-	if show.Nfo != nil {
-		j.enrichResponseWithNFO(&response, show.Nfo)
-		if show.Nfo != nil {
-			show.Genres = response.Genres
-			show.OfficialRating = response.OfficialRating
-			show.Year = response.ProductionYear
-		}
+	// Get genres from episode, if not available use show genres
+	genres := episode.Metadata.Genres()
+	if len(genres) == 0 {
+		genres = show.Metadata.Genres()
+	}
+	response.Genres = genres
+	response.GenreItems = makeJFGenreItems(genres)
+
+	// Get studios from episode, if not available use show studios
+	studios := episode.Metadata.Studios()
+	if len(studios) == 0 {
+		studios = show.Metadata.Studios()
+	}
+	response.Studios = makeJFStudios(studios)
+
+	// Metadata might have a better title
+	if episode.Metadata.Title() != "" {
+		response.Name = episode.Metadata.Title()
 	}
 
-	// Remove ratings as we do not want ratings from series apply to an episode
-	response.OfficialRating = ""
-	response.CommunityRating = 0
-
-	// Enrich and override metadata using episode nfo, if available, as it is more specific than data from show
-	episode.LoadNfo()
-	if episode.Nfo != nil {
-		j.enrichResponseWithNFO(&response, episode.Nfo)
+	if !show.Metadata.Premiered().IsZero() {
+		response.PremiereDate = show.Metadata.Premiered()
 	}
 
-	// Add some generic mediasource to indicate "720p, stereo"
 	response.MediaSources = j.makeMediaSource(episode)
-	response.RunTimeTicks = response.MediaSources[0].RunTimeTicks
 	response.MediaStreams = response.MediaSources[0].MediaStreams
 
 	if playstate, err := j.db.UserDataRepo.Get(ctx, userID, episode.ID()); err == nil {
@@ -676,6 +738,31 @@ func (j *Jellyfin) makeJFItemGenre(_ context.Context, genre string) (response JF
 	return
 }
 
+func makeJFStudios(studios []string) []JFStudios {
+	var studioItems []JFStudios
+	for _, studio := range studios {
+		studioItems = append(studioItems, JFStudios{
+			Name: studio, ID: makeJFStudioID(studio),
+		})
+	}
+	return studioItems
+}
+
+func makeJFProviderIds(providerIDs map[string]string) JFProviderIds {
+	ids := JFProviderIds{}
+	for k, v := range providerIDs {
+		switch strings.ToLower(k) {
+		case "imdb":
+			ids.Imdb = v
+		case "themoviedb":
+			ids.Tmdb = v
+		case "tvdb":
+			ids.Tvdb = v
+		}
+	}
+	return ids
+}
+
 // makeJFUserData creates a JFUserData object, and populates from Userdata if provided
 func (j *Jellyfin) makeJFUserData(UserID, itemID string, p *database.UserData) (response *JFUserData) {
 	response = &JFUserData{
@@ -691,98 +778,6 @@ func (j *Jellyfin) makeJFUserData(UserID, itemID string, p *database.UserData) (
 	}
 
 	return
-}
-
-func (j *Jellyfin) enrichResponseWithNFO(response *JFItem, n *collection.Nfo) {
-	if n == nil {
-		return
-	}
-
-	response.Name = n.Title
-	response.Overview = n.Plot
-	if n.Tagline != "" {
-		response.Taglines = []string{n.Tagline}
-	}
-
-	// Handle episode naming & numbering
-	if n.Season != "" {
-		if n.Season == "0" {
-			n.Season = "99"
-		}
-		response.SeasonName = "Season " + n.Season
-		response.ParentIndexNumber, _ = strconv.Atoi(n.Season)
-	}
-	if n.Episode != "" {
-		response.IndexNumber, _ = strconv.Atoi(n.Episode)
-	}
-	if response.ParentIndexNumber != 0 && response.IndexNumber != 0 {
-		response.SortName = fmt.Sprintf("%03s - %04s - %s", n.Season, n.Episode, n.Title)
-	}
-
-	// TV-14
-	response.OfficialRating = n.Mpaa
-
-	if n.Rating != 0 {
-		response.CommunityRating = math.Round(float64(n.Rating)*10) / 10
-	}
-
-	if len(n.Genre) != 0 {
-		normalizedGenres := collection.NormalizeGenres(n.Genre)
-		// Why do we populate two response fields with same data?
-		response.Genres = normalizedGenres
-		response.GenreItems = makeJFGenreItems(normalizedGenres)
-	}
-
-	if n.Studio != "" {
-		response.Studios = []JFStudios{
-			{
-				Name: n.Studio,
-				ID:   idhash.IdHash(n.Studio),
-			},
-		}
-	}
-
-	if len(n.UniqueIDs) != 0 {
-		ids := JFProviderIds{}
-		for _, id := range n.UniqueIDs {
-			switch id.Type {
-			case "imdb":
-				ids.Imdb = id.Value
-			case "themoviedb":
-				ids.Tmdb = id.Value
-			}
-		}
-		response.ProviderIds = ids
-	}
-
-	// if n.Actor != nil {
-	// 	for _, actor := range n.Actor {
-	// 		p := JFPeople{
-	// 			Type: "Actor",
-	// 			Name: actor.Name,
-	// 			ID:   idhash.IdHash(actor.Name),
-	// 		}
-	// 		if actor.Thumb != "" {
-	// 			p.PrimaryImageTag = tagprefix_redirect + actor.Thumb
-	// 		}
-	// 		response.People = append(response.People, p)
-	// 	}
-	// }
-
-	if n.Year != 0 {
-		response.ProductionYear = n.Year
-	}
-
-	if n.Premiered != "" {
-		if parsedTime, err := parseTime(n.Premiered); err == nil {
-			response.PremiereDate = parsedTime
-		}
-	}
-	if n.Aired != "" {
-		if parsedTime, err := parseTime(n.Aired); err == nil {
-			response.PremiereDate = parsedTime
-		}
-	}
 }
 
 func (j *Jellyfin) makeMediaSource(item collection.Item) (mediasources []JFMediaSources) {
@@ -813,48 +808,37 @@ func (j *Jellyfin) makeMediaSource(item collection.Item) (mediasources []JFMedia
 		RequiresLooping:      false,
 		SupportsProbing:      true,
 		Formats:              []string{},
+		RunTimeTicks:         int64(item.Duration() * TicsToSeconds),
 	}
 
-	item.LoadNfo()
-	n := item.GetNfo()
+	// Total bitrate is sum of audio and video bitrate
+	mediasource.Bitrate = item.VideoBitrate() + item.AudioBitrate()
+	mediasource.MediaStreams = j.makeJFMediaStreams(item)
 
-	// log.Printf("makeMediaSource: n: %+v, n2: %+v, n3: %+v\n", n, n.FileInfo, n.FileInfo.StreamDetails)
-	if n == nil || n.FileInfo == nil || n.FileInfo.StreamDetails == nil {
-		return []JFMediaSources{mediasource}
-	}
+	return []JFMediaSources{mediasource}
+}
 
-	NfoVideo := n.FileInfo.StreamDetails.Video
-	mediasource.Bitrate = NfoVideo.Bitrate
-	mediasource.RunTimeTicks = int64(NfoVideo.DurationInSeconds) * 10000000
-
-	// Take first alpha-3 language code, ignore others
-	var language string
-	if n.FileInfo.StreamDetails.Audio != nil && n.FileInfo.StreamDetails.Audio.Language != "" {
-		language = n.FileInfo.StreamDetails.Audio.Language[0:3]
-	} else {
-		language = "eng"
-	}
-
-	// Create video stream with high-level details based upon NFO
+// makeJFMediaStreams creates media stream information for the provided item
+func (j *Jellyfin) makeJFMediaStreams(item collection.Item) []JFMediaStreams {
 	videostream := JFMediaStreams{
 		Index:            0,
 		Type:             "Video",
 		IsDefault:        true,
-		Language:         language,
-		AverageFrameRate: math.Round(float64(NfoVideo.FrameRate*100)) / 100,
-		RealFrameRate:    math.Round(float64(NfoVideo.FrameRate*100)) / 100,
+		Language:         item.AudioLanguage(),
+		AverageFrameRate: item.VideoFrameRate(),
+		RealFrameRate:    item.VideoFrameRate(),
 		TimeBase:         "1/16000",
-		Height:           NfoVideo.Height,
-		Width:            NfoVideo.Width,
-		Codec:            NfoVideo.Codec,
+		Height:           item.VideoHeight(),
+		Width:            item.VideoWidth(),
+		Codec:            item.VideoCodec(),
 		AspectRatio:      "2.35:1",
 		VideoRange:       "SDR",
 		VideoRangeType:   "SDR",
 		IsAnamorphic:     false,
 		BitDepth:         8,
-		BitRate:          NfoVideo.Bitrate,
+		BitRate:          item.VideoBitrate(),
 	}
-	switch strings.ToLower(NfoVideo.Codec) {
+	switch strings.ToLower(item.VideoCodec()) {
 	case "avc":
 		fallthrough
 	case "x264":
@@ -873,18 +857,17 @@ func (j *Jellyfin) makeMediaSource(item collection.Item) (mediasources []JFMedia
 		videostream.Codec = "vc1"
 		videostream.CodecTag = "wvc1"
 	default:
-		log.Printf("Nfo of %s has unknown video codec %s", filename, NfoVideo.Codec)
+		videostream.Codec = "unknown"
+		videostream.CodecTag = "unknown"
+		log.Printf("Item %s/%s has unknown video codec %s", item.ID(), item.FileName(), item.VideoCodec())
 	}
 	videostream.Title = strings.ToUpper(videostream.Codec)
 	videostream.DisplayTitle = videostream.Title + " - " + videostream.VideoRange
 
-	mediasource.MediaStreams = append(mediasource.MediaStreams, videostream)
-
-	// Create audio stream with high-level details based upon NFO
 	audiostream := JFMediaStreams{
 		Index:              1,
 		Type:               "Audio",
-		Language:           language,
+		Language:           item.AudioLanguage(),
 		TimeBase:           "1/48000",
 		SampleRate:         48000,
 		AudioSpatialFormat: "None",
@@ -895,13 +878,11 @@ func (j *Jellyfin) makeMediaSource(item collection.Item) (mediasources []JFMedia
 		IsDefault:          true,
 		VideoRange:         "Unknown",
 		VideoRangeType:     "Unknown",
+		BitRate:            item.AudioBitrate(),
+		Channels:           item.AudioChannels(),
 	}
 
-	NfoAudio := n.FileInfo.StreamDetails.Audio
-	audiostream.BitRate = NfoAudio.Bitrate
-	audiostream.Channels = NfoAudio.Channels
-
-	switch NfoAudio.Channels {
+	switch audiostream.Channels {
 	case 1:
 		audiostream.Title = "Mono"
 		audiostream.ChannelLayout = "mono"
@@ -924,12 +905,12 @@ func (j *Jellyfin) makeMediaSource(item collection.Item) (mediasources []JFMedia
 		audiostream.Title = "7.1 Channel"
 		audiostream.ChannelLayout = "7.1"
 	default:
-		log.Printf("Nfo of %s has unknown audio channel configuration %d", filename, NfoAudio.Channels)
 		audiostream.Title = "Unknown"
 		audiostream.ChannelLayout = "unknown"
+		log.Printf("Item %s/%s has unknown audio channel configuration %d", item.ID(), item.FileName(), audiostream.Channels)
 	}
 
-	switch strings.ToLower(NfoAudio.Codec) {
+	switch strings.ToLower(item.AudioCodec()) {
 	case "ac3":
 		audiostream.Codec = "ac3"
 		audiostream.CodecTag = "ac-3"
@@ -939,14 +920,13 @@ func (j *Jellyfin) makeMediaSource(item collection.Item) (mediasources []JFMedia
 	case "wma":
 		audiostream.Codec = "wmapro"
 	default:
-		log.Printf("Nfo of %s has unknown audio codec %s", filename, NfoAudio.Codec)
+		audiostream.Codec = "unknown"
+		log.Printf("Item %s/%s has unknown audio codec %s", item.ID(), item.FileName(), item.AudioCodec())
 	}
 
 	audiostream.DisplayTitle = audiostream.Title + " - " + strings.ToUpper(audiostream.Codec)
 
-	mediasource.MediaStreams = append(mediasource.MediaStreams, audiostream)
-
-	return []JFMediaSources{mediasource}
+	return []JFMediaStreams{videostream, audiostream}
 }
 
 // Most internal IDs get a prefixed when used in an API response. This helps
@@ -1007,6 +987,11 @@ func makeJFGenreID(genre string) string {
 	return idhash.IdHash(genre)
 }
 
+// makeJFGenreID returns an external id for a studio.
+func makeJFStudioID(studio string) string {
+	return idhash.IdHash(studio)
+}
+
 // trimPrefix removes the type prefix from an item id.
 func trimPrefix(s string) string {
 	if i := strings.Index(s, itemprefix_separator); i != -1 {
@@ -1049,4 +1034,20 @@ func isJFSeasonID(id string) bool {
 // isJFEpisodeID checks if the provided ID is an episode ID.
 func isJFEpisodeID(id string) bool {
 	return strings.HasPrefix(id, itemprefix_episode)
+}
+
+// itemIsHD checks if the provided item is HD (720p or higher)
+func itemIsHD(item collection.Item) bool {
+	if item.VideoHeight() >= 720 {
+		return true
+	}
+	return false
+}
+
+// itemIs4K checks if the provided item is 4K (2160p or higher)
+func itemIs4K(item collection.Item) bool {
+	if item.VideoHeight() >= 2160 {
+		return true
+	}
+	return false
 }

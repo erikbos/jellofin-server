@@ -1,4 +1,4 @@
-package collection
+package metadata
 
 import (
 	"slices"
@@ -64,7 +64,7 @@ var genreMap = map[string]string{
 	"western":         "Western",
 }
 
-func normalizeGenre(genre string) string {
+func NormalizeGenre(genre string) string {
 	l := strings.ToLower(genre)
 	if m, ok := genreMap[l]; ok {
 		return m
@@ -74,7 +74,7 @@ func normalizeGenre(genre string) string {
 
 func NormalizeGenres(genres []string) (res []string) {
 	for _, g := range genres {
-		m := normalizeGenre(g)
+		m := NormalizeGenre(g)
 		if !slices.Contains(res, m) && len(m) > 1 {
 			res = append(res, m)
 		}

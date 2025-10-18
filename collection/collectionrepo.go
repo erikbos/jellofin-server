@@ -8,6 +8,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/erikbos/jellofin-server/collection/metadata"
 	"github.com/erikbos/jellofin-server/database"
 	"github.com/erikbos/jellofin-server/idhash"
 )
@@ -287,17 +288,17 @@ func (c *CollectionRepo) Details() CollectionDetails {
 
 	for _, collection := range c.collections {
 		for _, i := range collection.Items {
-			for _, g := range i.GetGenres() {
-				g := normalizeGenre(g)
+			for _, g := range i.Genres() {
+				g := metadata.NormalizeGenre(g)
 				if !slices.Contains(genres, g) {
 					genres = append(genres, g)
 				}
 			}
-			itemOfficialRating := i.GetOfficialRating()
+			itemOfficialRating := i.OfficialRating()
 			if itemOfficialRating != "" && !slices.Contains(official, itemOfficialRating) {
 				official = append(official, itemOfficialRating)
 			}
-			itemYear := i.GetYear()
+			itemYear := i.Year()
 			if itemYear != 0 && !slices.Contains(years, itemYear) {
 				years = append(years, itemYear)
 			}
@@ -318,7 +319,7 @@ func (c *CollectionRepo) GenreItemCount() map[string]int {
 	genreCount := make(map[string]int)
 	for _, collection := range c.collections {
 		for _, i := range collection.Items {
-			for _, g := range i.GetGenres() {
+			for _, g := range i.Genres() {
 				if g == "" {
 					continue
 				}

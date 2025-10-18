@@ -1,6 +1,10 @@
 package collection
 
-import "slices"
+import (
+	"slices"
+
+	"github.com/erikbos/jellofin-server/collection/metadata"
+)
 
 type Collection struct {
 	// Unique identifier for the collection. Hash of the collection name, or taken from configfile.
@@ -51,21 +55,21 @@ func (c *Collection) Details() CollectionDetails {
 	years := make([]int, 0)
 
 	for _, i := range c.Items {
-		itemGenres := i.GetGenres()
+		itemGenres := i.Genres()
 
 		for _, g := range itemGenres {
-			g := normalizeGenre(g)
+			g := metadata.NormalizeGenre(g)
 			if !slices.Contains(itemGenres, g) {
 				itemGenres = append(itemGenres, g)
 			}
 		}
 
-		itemOfficialRating := i.GetOfficialRating()
+		itemOfficialRating := i.OfficialRating()
 		if itemOfficialRating != "" && !slices.Contains(official, itemOfficialRating) {
 			official = append(official, itemOfficialRating)
 		}
 
-		itemYear := i.GetYear()
+		itemYear := i.Year()
 		if itemYear != 0 && !slices.Contains(years, itemYear) {
 			years = append(years, itemYear)
 		}
@@ -86,7 +90,7 @@ func (c *Collection) Details() CollectionDetails {
 func (c *Collection) GenreCount() map[string]int {
 	genreCount := make(map[string]int)
 	for _, i := range c.Items {
-		for _, g := range i.GetGenres() {
+		for _, g := range i.Genres() {
 			if g == "" {
 				continue
 			}
