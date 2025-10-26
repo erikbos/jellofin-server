@@ -2,8 +2,6 @@ package collection
 
 import (
 	"slices"
-
-	"github.com/erikbos/jellofin-server/collection/metadata"
 )
 
 type Collection struct {
@@ -55,20 +53,15 @@ func (c *Collection) Details() CollectionDetails {
 	years := make([]int, 0)
 
 	for _, i := range c.Items {
-		itemGenres := i.Genres()
-
-		for _, g := range itemGenres {
-			g := metadata.NormalizeGenre(g)
-			if !slices.Contains(itemGenres, g) {
-				itemGenres = append(itemGenres, g)
+		for _, g := range i.Genres() {
+			if !slices.Contains(genres, g) {
+				genres = append(genres, g)
 			}
 		}
-
 		itemOfficialRating := i.OfficialRating()
 		if itemOfficialRating != "" && !slices.Contains(official, itemOfficialRating) {
 			official = append(official, itemOfficialRating)
 		}
-
 		itemYear := i.Year()
 		if itemYear != 0 && !slices.Contains(years, itemYear) {
 			years = append(years, itemYear)

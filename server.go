@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"io"
 	"log"
@@ -148,9 +149,8 @@ func main() {
 
 	r.PathPrefix("/").Handler(http.FileServer(http.Dir(config.Appdir)))
 
-	log.Printf("Initializing collections..")
 	collection.Init()
-	go collection.Background()
+	go collection.Background(context.Background())
 
 	addr := net.JoinHostPort(config.Listen.Address, config.Listen.Port)
 

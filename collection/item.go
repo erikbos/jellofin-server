@@ -67,8 +67,6 @@ type Movie struct {
 	folder string
 	// Posten is this movie's poster image, often "poster.jpg"
 	poster string
-	// logo is this movie's transparent logo, often "clearlogo.png", TV shows only.
-	logo string
 	// Filename, e.g. "casablanca.mp4"
 	fileName string
 	// fileSize is the size of the video file in bytes.
@@ -80,24 +78,21 @@ type Movie struct {
 	VttSubs Subtitles
 }
 
-func (m *Movie) ID() string        { return m.id }
-func (m *Movie) Name() string      { return m.name }
-func (m *Movie) SortName() string  { return m.sortName }
-func (m *Movie) Path() string      { return m.path }
-func (m *Movie) BaseUrl() string   { return m.baseUrl }
-func (m *Movie) FirstVideo() int64 { return m.firstVideo }
-func (m *Movie) Banner() string    { return m.banner }
-func (m *Movie) Fanart() string    { return m.fanart }
-func (m *Movie) Folder() string    { return m.folder }
-func (m *Movie) Poster() string    { return m.poster }
-func (m *Movie) Logo() string      { return m.logo }
-func (m *Movie) FileName() string  { return m.fileName }
-func (m *Movie) FilePath() string  { return m.path + "/" + m.fileName }
-func (m *Movie) FileSize() int64   { return m.fileSize }
-func (m *Movie) Duration() int     { return m.Metadata.Duration() }
-
-// func (m *Movie) IsHD() bool              { return m.Metadata.IsHD() }
-// func (m *Movie) Is4K() bool              { return m.Metadata.Is4K() }
+func (m *Movie) ID() string              { return m.id }
+func (m *Movie) Name() string            { return m.name }
+func (m *Movie) SortName() string        { return m.sortName }
+func (m *Movie) Path() string            { return m.path }
+func (m *Movie) BaseUrl() string         { return m.baseUrl }
+func (m *Movie) FirstVideo() int64       { return m.firstVideo }
+func (m *Movie) Banner() string          { return m.banner }
+func (m *Movie) Fanart() string          { return m.fanart }
+func (m *Movie) Folder() string          { return m.folder }
+func (m *Movie) Poster() string          { return m.poster }
+func (m *Movie) Logo() string            { return "" }
+func (m *Movie) FileName() string        { return m.fileName }
+func (m *Movie) FilePath() string        { return m.path + "/" + m.fileName }
+func (m *Movie) FileSize() int64         { return m.fileSize }
+func (m *Movie) Duration() int           { return m.Metadata.Duration() }
 func (m *Movie) VideoCodec() string      { return m.Metadata.VideoCodec() }
 func (m *Movie) VideoBitrate() int       { return m.Metadata.VideoBitrate() }
 func (m *Movie) VideoFrameRate() float64 { return m.Metadata.VideoFrameRate() }
@@ -114,13 +109,13 @@ func (m *Movie) OfficialRating() string  { return m.Metadata.OfficialRating() }
 
 // Show represents a TV show with multiple seasons and episodes.
 type Show struct {
-	// id is the unique identifier for the m. Typically Idhash() of name.
+	// id is the unique identifier of the show. Typically Idhash() of name.
 	id string
-	// name is the name of the m, e.g. "Casablanca (1949)"
+	// name is the display name of the show, e.g. "Casablanca"
 	name string
 	// sortName is used to sort on.
 	sortName string
-	// path is the directory to the show, relative to collection root. (e.g. Casablanca)
+	// path is the directory to the show, relative to collection root. E.g. "Casablanca (1949)"
 	path string
 	// baseUrl is the base URL for accessing the m.
 	baseUrl string
@@ -128,15 +123,15 @@ type Show struct {
 	firstVideo int64
 	// lastVideo is the timestamp of the last video in the m.
 	lastVideo int64
-	// banner is the m's banner image, often "banner.jpg", TV shows only.
+	// banner is the show's banner image, often "banner.jpg".
 	banner string
-	// fanart is this m's fanart image, often "fanart.jpg"
+	// fanart is this show's fanart image, often "fanart.jpg"
 	fanart string
-	// folder is this m's folder image, often "folder.jpg"
+	// folder is this show's folder image, often "folder.jpg"
 	folder string
-	// posten is this m's poster image, often "poster.jpg"
+	// posten is this show's poster image, often "poster.jpg"
 	poster string
-	// logo is this m's transparent logo, often "clearlogo.png", TV shows only.
+	// logo is this show's transparent logo, often "clearlogo.png", TV shows only.
 	logo string
 	// seasonAllBanner is the banner to be used in case we do not have a season-specific banner.
 	seasonAllBanner string
@@ -307,25 +302,22 @@ type Episode struct {
 	VttSubs  Subtitles
 }
 
-func (e *Episode) ID() string        { return e.id }
-func (e *Episode) Name() string      { return e.name }
-func (e *Episode) SortName() string  { return e.sortName }
-func (e *Episode) Path() string      { return e.path }
-func (e *Episode) BaseUrl() string   { return "" }
-func (e *Episode) FirstVideo() int64 { return e.VideoTS }
-func (e *Episode) LastVideo() int64  { return e.VideoTS }
-func (e *Episode) Banner() string    { return "" }
-func (e *Episode) Fanart() string    { return "" }
-func (e *Episode) Folder() string    { return "" }
-func (e *Episode) Poster() string    { return e.thumb }
-func (e *Episode) Logo() string      { return "" }
-func (e *Episode) FileName() string  { return e.fileName }
-func (e *Episode) FileSize() int64   { return e.fileSize }
-func (e *Episode) Number() int       { return e.EpisodeNo }
-func (e *Episode) Duration() int     { return e.Metadata.Duration() }
-
-// func (e *Episode) IsHD() bool              { return e.Metadata.IsHD() }
-// func (e *Episode) Is4K() bool              { return e.Metadata.Is4K() }
+func (e *Episode) ID() string              { return e.id }
+func (e *Episode) Name() string            { return e.name }
+func (e *Episode) SortName() string        { return e.sortName }
+func (e *Episode) Path() string            { return e.path }
+func (e *Episode) BaseUrl() string         { return "" }
+func (e *Episode) FirstVideo() int64       { return e.VideoTS }
+func (e *Episode) LastVideo() int64        { return e.VideoTS }
+func (e *Episode) Banner() string          { return "" }
+func (e *Episode) Fanart() string          { return "" }
+func (e *Episode) Folder() string          { return "" }
+func (e *Episode) Poster() string          { return e.thumb }
+func (e *Episode) Logo() string            { return "" }
+func (e *Episode) FileName() string        { return e.fileName }
+func (e *Episode) FileSize() int64         { return e.fileSize }
+func (e *Episode) Number() int             { return e.EpisodeNo }
+func (e *Episode) Duration() int           { return e.Metadata.Duration() }
 func (e *Episode) VideoCodec() string      { return e.Metadata.VideoCodec() }
 func (e *Episode) VideoBitrate() int       { return e.Metadata.VideoBitrate() }
 func (e *Episode) VideoFrameRate() float64 { return e.Metadata.VideoFrameRate() }
@@ -381,5 +373,16 @@ func makeSortName(name string) string {
 		return unicode.IsSpace(r) || unicode.IsPunct(r)
 	})
 
+	// Remove year suffix if present.
+	title = removeYearSuffix(title)
 	return title
+}
+
+// removeYearSuffix remoyes year suffix from item name.
+func removeYearSuffix(name string) string {
+	s := isYear.FindStringSubmatch(name)
+	if len(s) > 0 {
+		name = strings.TrimSpace(name[:len(name)-len(s[0])])
+	}
+	return name
 }

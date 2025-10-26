@@ -4,11 +4,14 @@
 package collection
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"slices"
+	"strings"
 	"time"
 
-	"github.com/erikbos/jellofin-server/collection/metadata"
+	"github.com/erikbos/jellofin-server/collection/search"
 	"github.com/erikbos/jellofin-server/database"
 	"github.com/erikbos/jellofin-server/idhash"
 )
@@ -17,6 +20,7 @@ import (
 type CollectionRepo struct {
 	collections Collections
 	db          *database.DatabaseRepo
+	bleveIndex  *search.Search
 }
 
 type Options struct {
@@ -68,15 +72,20 @@ func (cr *CollectionRepo) AddCollection(name string, ID string,
 
 // Init starts scanning the repository for contents for the first time.
 func (cr *CollectionRepo) Init() {
+	log.Printf("Initializing collections..")
 	// scan all collections without delay
 	cr.updateCollections(0)
+	// Build search index
+	cr.BuildSearchIndex(context.Background())
 }
 
 // Background keeps scanning the repository for content changes continously.
-func (cr *CollectionRepo) Background() {
+func (cr *CollectionRepo) Background(ctx context.Context) {
 	for {
 		// scan all collections with delay
-		cr.updateCollections(500 * time.Millisecond)
+		cr.updateCollections(1500 * time.Millisecond)
+		// Rebuild search index to ensure any new items are included
+		cr.BuildSearchIndex(ctx)
 	}
 }
 
@@ -289,7 +298,6 @@ func (c *CollectionRepo) Details() CollectionDetails {
 	for _, collection := range c.collections {
 		for _, i := range collection.Items {
 			for _, g := range i.Genres() {
-				g := metadata.NormalizeGenre(g)
 				if !slices.Contains(genres, g) {
 					genres = append(genres, g)
 				}
@@ -332,4 +340,81 @@ func (c *CollectionRepo) GenreItemCount() map[string]int {
 		}
 	}
 	return genreCount
+}
+
+// BuildSearchIndex builds the search index for the collection repository.
+func (j *CollectionRepo) BuildSearchIndex(ctx context.Context) error {
+	log.Printf("Search compiling dataset..")
+
+	index, err := search.New()
+	if err != nil {
+		return err
+	}
+
+	var docs []search.Document
+	for _, c := range j.collections {
+		for _, i := range c.Items {
+			docs = append(docs, makeSearchDocument(&c, i))
+		}
+	}
+
+	log.Printf("Search initializing index..")
+	err = index.IndexBatch(ctx, docs)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("Search added %d items.", len(docs))
+	j.bleveIndex = index
+
+	return nil
+}
+
+// Search performs a item search in collection repository and returns matching items.
+func (j *CollectionRepo) Search(ctx context.Context, term string) ([]string, error) {
+	if j.bleveIndex == nil {
+		return nil, fmt.Errorf("search index not initialized")
+	}
+	return j.bleveIndex.Search(ctx, term, 15)
+}
+
+// Search performs a item search in collection repository and returns matching items.
+func (j *CollectionRepo) Similar(ctx context.Context, c *Collection, i Item) ([]string, error) {
+	if j.bleveIndex == nil {
+		return nil, fmt.Errorf("search index not initialized")
+	}
+	return j.bleveIndex.Similar(ctx, makeSearchDocument(c, i), 15)
+}
+
+// makeSearchDocument creates a search document from a collection item.
+func makeSearchDocument(c *Collection, i Item) search.Document {
+	var name, overview string
+	switch v := i.(type) {
+	case *Movie:
+		name = v.Metadata.Title()
+		overview = v.Metadata.Plot()
+	case *Show:
+		name = v.Metadata.Title()
+		overview = v.Metadata.Plot()
+	case *Season:
+		//
+	case *Episode:
+		name = v.Metadata.Title()
+		overview = v.Metadata.Plot()
+	}
+
+	// log.Printf("makeSearchDocument: item %s (%s), type: %s, name: %s\n", i.ID(), c.ID, t, name)
+
+	// Strings need to be lowercase as all search matching is done in lower case.
+	doc := search.Document{
+		ID:        i.ID(),
+		ParentID:  c.ID,
+		Name:      strings.ToLower(name),
+		NameExact: strings.ToLower(name),
+		SortName:  strings.ToLower(i.SortName()),
+		Overview:  strings.ToLower(overview),
+		Genres:    i.Genres(),
+		Year:      i.Year(),
+	}
+	return doc
 }

@@ -64,19 +64,13 @@ var genreMap = map[string]string{
 	"western":         "Western",
 }
 
-func NormalizeGenre(genre string) string {
-	l := strings.ToLower(genre)
-	if m, ok := genreMap[l]; ok {
-		return m
-	}
-	return genre
-}
-
-func NormalizeGenres(genres []string) (res []string) {
+func normalizeGenres(genres []string) (res []string) {
 	for _, g := range genres {
-		m := NormalizeGenre(g)
-		if !slices.Contains(res, m) && len(m) > 1 {
-			res = append(res, m)
+		if normalizedGenre, ok := genreMap[strings.ToLower(g)]; ok {
+			g = normalizedGenre
+		}
+		if !slices.Contains(res, g) && len(g) > 1 {
+			res = append(res, g)
 		}
 	}
 	return

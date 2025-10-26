@@ -347,7 +347,7 @@ func NfoDecode(r io.ReadSeeker) (*nfo, error) {
 		data.Genre = genre
 	}
 
-	data.Genre = NormalizeGenres(data.Genre)
+	data.Genre = normalizeGenres(data.Genre)
 
 	// Some non-string fields can be fscked up and explode the
 	// XML decoder, so decode them after the fact.

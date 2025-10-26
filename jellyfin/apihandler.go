@@ -183,7 +183,7 @@ func (j *Jellyfin) usersItemUserDataHandler(w http.ResponseWriter, r *http.Reque
 // /Users/{user}/Items
 //
 // usersItemsHandler returns list of items based upon provided query params
-//
+
 // Supported query params:
 // - ParentId, if provided scope result set to this collection
 // - SearchTerm, substring to match on
@@ -232,14 +232,40 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Search for items in case items was not yet populated earlier
-	if !parentFound {
-		var searchC *collection.Collection
-		if parentID != "" {
-			collectionid := strings.TrimPrefix(parentID, itemprefix_collection)
-			searchC = j.collections.GetCollection(collectionid)
-		}
+	var searchC *collection.Collection
+	if parentID != "" {
+		collectionid := strings.TrimPrefix(parentID, itemprefix_collection)
+		searchC = j.collections.GetCollection(collectionid)
+	}
 
+	// Get ordered list of itemIDs that match search term
+	var allowedIDs []string
+
+	// If searchTerm is provided, we ignore parentID and search all collections
+	// FIXME: should we really ignore parentID here?
+	searchTerm := queryparams.Get("searchTerm")
+	if searchTerm != "" {
+		var err error
+		allowedIDs, err = j.collections.Search(r.Context(), searchTerm)
+		if allowedIDs == nil || err != nil {
+			apierror(w, "Search index not available", http.StatusInternalServerError)
+			return
+		}
+		for _, id := range allowedIDs {
+			c, i := j.collections.GetItemByID(id)
+			jfitem, err := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID)
+			if err != nil {
+				apierror(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if j.applyItemFilter(&jfitem, queryparams) {
+				items = append(items, jfitem)
+			}
+		}
+	}
+
+	// If no search term provided, we list all items in the collections
+	if searchTerm == "" && !parentFound {
 		for _, c := range j.collections.GetCollections() {
 			// Skip if we are searching in one particular collection?
 			if searchC != nil && searchC.ID != c.ID {
@@ -512,10 +538,47 @@ func (j *Jellyfin) usersItemsResumeHandler(w http.ResponseWriter, r *http.Reques
 //
 // usersItemsSimilarHandler returns a list of items that are similar
 func (j *Jellyfin) usersItemsSimilarHandler(w http.ResponseWriter, r *http.Request) {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
+		return
+	}
+
+	vars := mux.Vars(r)
+	itemID := vars["item"]
+	queryparams := r.URL.Query()
+
+	// Retrieve item to find similars for
+	c, i := j.collections.GetItemByID(trimPrefix(itemID))
+	if i == nil {
+		apierror(w, "Item not found", http.StatusNotFound)
+		return
+	}
+
+	similarItemIDs, err := j.collections.Similar(r.Context(), c, i)
+	if err != nil {
+		apierror(w, "Could not get similar items list", http.StatusInternalServerError)
+		return
+	}
+
+	items := make([]JFItem, 0)
+	for _, id := range similarItemIDs {
+		c, i := j.collections.GetItemByID(id)
+		jfitem, err := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID)
+		if err != nil {
+			apierror(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if j.applyItemFilter(&jfitem, queryparams) {
+			items = append(items, jfitem)
+		}
+	}
+
+	totalItemCount := len(items)
+	responseItems, startIndex := j.applyItemPaginating(j.applyItemSorting(items, queryparams), queryparams)
 	response := JFUsersItemsSimilarResponse{
-		Items:            []JFItem{},
-		StartIndex:       0,
-		TotalRecordCount: 0,
+		Items:            responseItems,
+		StartIndex:       startIndex,
+		TotalRecordCount: totalItemCount,
 	}
 	serveJSON(response, w)
 }
@@ -675,16 +738,7 @@ func (j *Jellyfin) showsEpisodesHandler(w http.ResponseWriter, r *http.Request) 
 // returns true if the item should be included, false if it should be skipped.
 func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
 	// log.Printf("applyItemFilter: item %s, name: %s, type %s, parentID %s\n", i.ID, i.Name, i.Type, i.ParentID)
-
-	// filter on search term
-	if searchTerm := queryparams["searchTerm"]; searchTerm != nil && searchTerm[0] != "" {
-		term := strings.ToLower(searchTerm[0])
-		if !strings.Contains(strings.ToLower(i.Name), term) {
-			// TODO: we should also search in other fields like overview and actors
-			return false
-		}
-	}
-
+	//
 	// media type filtering
 
 	// includeItemTypes can be provided multiple times and contains a comma separated list of types

@@ -1038,16 +1038,10 @@ func isJFEpisodeID(id string) bool {
 
 // itemIsHD checks if the provided item is HD (720p or higher)
 func itemIsHD(item collection.Item) bool {
-	if item.VideoHeight() >= 720 {
-		return true
-	}
-	return false
+	return item.VideoHeight() >= 720
 }
 
 // itemIs4K checks if the provided item is 4K (2160p or higher)
 func itemIs4K(item collection.Item) bool {
-	if item.VideoHeight() >= 2160 {
-		return true
-	}
-	return false
+	return item.VideoHeight() >= 1500
 }
