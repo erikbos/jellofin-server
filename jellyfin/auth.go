@@ -11,7 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erikbos/jellofin-server/database"
+	"golang.org/x/crypto/bcrypt"
+
+	"github.com/erikbos/jellofin-server/database/model"
+	"github.com/erikbos/jellofin-server/idhash"
 )
 
 // Authentication specs:
@@ -42,16 +45,21 @@ func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	user, err := j.db.UserRepo.Validate(r.Context(), request.Username, request.Pw)
-	if err != nil {
-		if err == database.ErrUserNotFound && j.autoRegister {
-			user, err = j.db.UserRepo.Insert(r.Context(), request.Username, request.Pw)
-			if err != nil {
-				http.Error(w, "Failed to auto-register user", http.StatusInternalServerError)
-				return
-			}
-		} else {
+	// Get user from database
+	user, err := j.repo.GetUser(r.Context(), request.Username)
+	if err == nil {
+		// User found, verify password
+		if err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(request.Pw)); err != nil {
 			http.Error(w, "Invalid username/password", http.StatusUnauthorized)
+			return
+		}
+	}
+
+	// Try to auto-register user if not found and auto-register is enabled
+	if user == nil && j.autoRegister {
+		user, err = j.createUser(r.Context(), request.Username, request.Pw)
+		if err != nil || user == nil {
+			http.Error(w, "Failed to auto-register user", http.StatusInternalServerError)
 			return
 		}
 	}
@@ -62,26 +70,22 @@ func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http
 		embyHeader = &authSchemeValues{}
 	}
 
-	remoteAddress, _, _ := net.SplitHostPort(r.RemoteAddr)
-
-	session := &JFSessionInfo{
-		Id:                 sessionID,
-		UserId:             user.ID,
-		UserName:           user.Username,
-		Client:             embyHeader.client,
-		DeviceName:         embyHeader.device,
-		DeviceId:           embyHeader.deviceID,
-		ApplicationVersion: embyHeader.version,
-		RemoteEndPoint:     remoteAddress,
-		LastActivityDate:   time.Now().UTC(),
-		IsActive:           true,
-	}
-
-	accesstoken, err := j.db.AccessTokenRepo.Generate(r.Context(), user.ID)
+	accesstoken, err := j.repo.CreateAccessToken(r.Context(), user.ID)
 	if err != nil {
 		http.Error(w, "Failed to generate access token", http.StatusInternalServerError)
 		return
 	}
+
+	remoteAddress, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		remoteAddress = r.RemoteAddr
+	}
+
+	session := j.makeJFSessionInfo(&model.AccessToken{
+		UserID:   user.ID,
+		Token:    accesstoken,
+		LastUsed: time.Now().UTC(),
+	}, user.Username, remoteAddress)
 
 	response := JFAuthenticateByNameResponse{
 		AccessToken: accesstoken,
@@ -90,6 +94,24 @@ func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http
 		User:        j.makeJFUser(user),
 	}
 	serveJSON(response, w)
+}
+
+// createUser creates a new user in the database
+func (j *Jellyfin) createUser(context context.Context, username, password string) (*model.User, error) {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+	modelUser := &model.User{
+		ID:       idhash.IdHash(username),
+		Username: username,
+		Password: string(hashedPassword),
+	}
+	err = j.repo.UpsertUser(context, modelUser)
+	if err != nil {
+		return nil, err
+	}
+	return modelUser, nil
 }
 
 // parseAuthHeader parses emby authorization header
@@ -171,7 +193,7 @@ func (j *Jellyfin) authmiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		tokendetails, err := j.db.AccessTokenRepo.Get(r.Context(), token)
+		tokendetails, err := j.repo.GetAccessToken(r.Context(), token)
 		if err != nil {
 			log.Printf("invalid access token: %s", err)
 			http.Error(w, "invalid access token", http.StatusUnauthorized)
@@ -187,9 +209,9 @@ func (j *Jellyfin) authmiddleware(next http.Handler) http.Handler {
 // request context populated by authmiddleware()
 //
 // if not found sends an HTTP unauthorized error
-func (j *Jellyfin) getAccessTokenDetails(w http.ResponseWriter, r *http.Request) *database.AccessToken {
+func (j *Jellyfin) getAccessTokenDetails(w http.ResponseWriter, r *http.Request) *model.AccessToken {
 	// Ctx should have been populated by authmiddleware()
-	details, ok := r.Context().Value(contextAccessTokenDetails).(*database.AccessToken)
+	details, ok := r.Context().Value(contextAccessTokenDetails).(*model.AccessToken)
 	if ok {
 		return details
 	}

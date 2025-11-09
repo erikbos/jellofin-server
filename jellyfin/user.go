@@ -6,7 +6,7 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/erikbos/jellofin-server/database"
+	"github.com/erikbos/jellofin-server/database/model"
 )
 
 const (
@@ -22,7 +22,7 @@ func (j *Jellyfin) usersAllHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dbuser, err := j.db.UserRepo.GetByID(r.Context(), accessToken.UserID)
+	dbuser, err := j.repo.GetUserByID(r.Context(), accessToken.UserID)
 	if err != nil {
 		http.Error(w, ErrUserIDNotFound, http.StatusNotFound)
 		return
@@ -42,7 +42,7 @@ func (j *Jellyfin) usersMeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dbuser, err := j.db.UserRepo.GetByID(r.Context(), accessToken.UserID)
+	dbuser, err := j.repo.GetUserByID(r.Context(), accessToken.UserID)
 	if err != nil {
 		http.Error(w, ErrUserIDNotFound, http.StatusNotFound)
 		return
@@ -66,7 +66,7 @@ func (j *Jellyfin) usersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dbuser, err := j.db.UserRepo.GetByID(r.Context(), accessToken.UserID)
+	dbuser, err := j.repo.GetUserByID(r.Context(), accessToken.UserID)
 	if err != nil {
 		http.Error(w, ErrUserIDNotFound, http.StatusNotFound)
 		return
@@ -83,7 +83,7 @@ func (j *Jellyfin) usersPublicHandler(w http.ResponseWriter, r *http.Request) {
 	serveJSON(response, w)
 }
 
-func (j *Jellyfin) makeJFUser(user *database.User) JFUser {
+func (j *Jellyfin) makeJFUser(user *model.User) JFUser {
 	return JFUser{
 		Id:                        user.ID,
 		Name:                      user.Username,
@@ -95,11 +95,14 @@ func (j *Jellyfin) makeJFUser(user *database.User) JFUser {
 		LastLoginDate:             time.Now().UTC(),
 		LastActivityDate:          time.Now().UTC(),
 		Configuration: JFUserConfiguration{
-			GroupedFolders:      []string{},
-			LatestItemsExcludes: []string{},
-			MyMediaExcludes:     []string{},
-			OrderedViews:        []string{},
-			SubtitleMode:        "Default",
+			GroupedFolders:             []string{},
+			LatestItemsExcludes:        []string{},
+			MyMediaExcludes:            []string{},
+			OrderedViews:               []string{},
+			SubtitleMode:               "Default",
+			PlayDefaultAudioTrack:      true,
+			RememberAudioSelections:    true,
+			RememberSubtitleSelections: true,
 		},
 		Policy: JFUserPolicy{
 			// Needs to be true to allow Streamyfin to Cast
@@ -118,7 +121,10 @@ func (j *Jellyfin) makeJFUser(user *database.User) JFUser {
 			EnableContentDeletionFromFolders: []string{},
 			EnableMediaPlayback:              true,
 			EnableRemoteAccess:               true,
-			PasswordResetProviderID:          "Jellyfin.Server.Implementations.Users.DefaultPasswordResetProvider",
+			EnableAllDevices:                 true,
+			EnableAllFolders:                 true,
+			AuthenticationProviderID:         "DefaultAuthenticationProvider",
+			PasswordResetProviderID:          "DefaultPasswordResetProvider",
 			SyncPlayAccess:                   "CreateAndJoinGroups",
 		},
 	}

@@ -8,7 +8,7 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/erikbos/jellofin-server/database"
+	"github.com/erikbos/jellofin-server/database/model"
 	"github.com/erikbos/jellofin-server/idhash"
 )
 
@@ -55,7 +55,7 @@ func (j *Jellyfin) createPlaylistHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	newPlaylist := database.Playlist{
+	newPlaylist := model.Playlist{
 		Name:   req.Name,
 		UserID: req.UserID,
 	}
@@ -68,7 +68,7 @@ func (j *Jellyfin) createPlaylistHandler(w http.ResponseWriter, r *http.Request)
 	}
 	// log.Printf("newPlaylist: %+v", newPlaylist)
 
-	playlistID, err := j.db.PlaylistRepo.CreatePlaylist(r.Context(), newPlaylist)
+	playlistID, err := j.repo.CreatePlaylist(r.Context(), newPlaylist)
 	log.Printf("playlistID: %s, err: %v", playlistID, err)
 	if err != nil {
 		http.Error(w, "Failed to create playlist", http.StatusInternalServerError)
@@ -98,7 +98,7 @@ func (j *Jellyfin) updatePlaylistHandler(w http.ResponseWriter, r *http.Request)
 
 	// // Note: Since Jellyfin API typically creates new playlists rather than updating,
 	// // this endpoint might be used for updating playlist metadata
-	// _, err := j.db.PlaylistRepo.GetPlaylist(playlistID)
+	// _, err := j.db..GetPlaylist(playlistID)
 	// if err != nil {
 	// 	http.Error(w, "Playlist not found", http.StatusNotFound)
 	// 	return
@@ -119,7 +119,7 @@ func (j *Jellyfin) getPlaylistHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	playlistID := vars["playlist"]
 
-	playlist, err := j.db.PlaylistRepo.GetPlaylist(r.Context(), accessToken.UserID, trimPrefix(playlistID))
+	playlist, err := j.repo.GetPlaylist(r.Context(), accessToken.UserID, trimPrefix(playlistID))
 	// log.Printf("querying playlist: %+v, %+v\n", playlist, err)
 	if err != nil {
 		http.Error(w, "Playlist not found", http.StatusNotFound)
@@ -146,7 +146,7 @@ func (j *Jellyfin) getPlaylistItemsHandler(w http.ResponseWriter, r *http.Reques
 	vars := mux.Vars(r)
 	playlistID := vars["playlist"]
 
-	playlist, err := j.db.PlaylistRepo.GetPlaylist(r.Context(), accessToken.UserID, trimPrefix(playlistID))
+	playlist, err := j.repo.GetPlaylist(r.Context(), accessToken.UserID, trimPrefix(playlistID))
 	if err != nil {
 		http.Error(w, "Playlist not found", http.StatusNotFound)
 		return
@@ -190,7 +190,7 @@ func (j *Jellyfin) addPlaylistItemsHandler(w http.ResponseWriter, r *http.Reques
 		itemIDs = append(itemIDs, trimPrefix(ID))
 	}
 
-	if err := j.db.PlaylistRepo.AddItemsToPlaylist(r.Context(), accessToken.UserID, trimPrefix(playlistID), itemIDs); err != nil {
+	if err := j.repo.AddItemsToPlaylist(r.Context(), accessToken.UserID, trimPrefix(playlistID), itemIDs); err != nil {
 		http.Error(w, "Failed to add items", http.StatusInternalServerError)
 		return
 	}
@@ -211,7 +211,7 @@ func (j *Jellyfin) movePlaylistItemHandler(w http.ResponseWriter, r *http.Reques
 	// 	return
 	// }
 
-	// if err := j.db.PlaylistRepo.MovePlaylistItem(playlistID, itemID, newIndex); err != nil {
+	// if err := j.db..MovePlaylistItem(playlistID, itemID, newIndex); err != nil {
 	// 	http.Error(w, "Failed to move item", http.StatusInternalServerError)
 	// 	return
 	// }
@@ -232,7 +232,7 @@ func (j *Jellyfin) deletePlaylistItemsHandler(w http.ResponseWriter, r *http.Req
 	// 	return
 	// }
 
-	// if err := j.db.PlaylistRepo.DeleteItemsFromPlaylist(playlistID, itemIDs); err != nil {
+	// if err := j.db..DeleteItemsFromPlaylist(playlistID, itemIDs); err != nil {
 	// 	http.Error(w, "Failed to delete items", http.StatusInternalServerError)
 	// 	return
 	// }

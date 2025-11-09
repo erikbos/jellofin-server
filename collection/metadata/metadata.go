@@ -25,8 +25,8 @@ type Metadata interface {
 	OfficialRating() string
 	// ProviderIDs returns a map of provider IDs (e.g. {"imdb": "tt1234567", "tmdb": "12345"}).
 	ProviderIDs() map[string]string
-	// Duration returns the item duration in seconds.
-	Duration() int
+	// Duration returns the item duration.
+	Duration() time.Duration
 
 	VideoMetadata
 	AudioMetadata

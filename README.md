@@ -16,6 +16,7 @@ The following clients can connect to Jellofin:
 | Client                                           | Status | Notes                     |
 | :----------------------------------------------: | :----: | :-----------------------: |
 | [Infuse](https://firecore.com/infuse)            | ✅      | Full player functionality |
+| [Senplayer](https://apps.apple.com/ca/app/senplayer-video-media-player/id6443975850) | ✅      | Full player functionality |
 | [Streamyfin](https://streamyfin.app/)            | ✅      | Full player functionality |
 | [VidHub](https://okaapps.com/product/1659622164) | ✅      | Full player functionality |
 
@@ -39,15 +40,16 @@ The server uses a YAML configuration file (default: `jellofin-server.yaml`). Bel
 
 ## Top-level keys
 
-| Key         | Type    | Description                                                                 |
-|-------------|---------|-----------------------------------------------------------------------------|
-| `listen`    | object  | Network settings for the server.                                            |
-| `appdir`    | string  | Path to the directory containing the web UI/static files.                   |
-| `cachedir`  | string  | Path to the directory for image cache storage.                              |
-| `dbdir`     | string  | Path to the directory for the database files.                               |
-| `logfile`   | string  | Log output: file path, `stdout`, `syslog`, or `none`.                      |
-| `collections` | array | List of media collections served by the server.                             |
-| `jellyfin`  | object  | Jellyfin API-specific settings.                                          |
+| Key           | Type    | Description                                                                 |
+|---------------|---------|-----------------------------------------------------------------------------|
+| `listen`      | object  | Network settings for the server.                                            |
+| `appdir`      | string  | Path to the directory containing the web UI/static files.                   |
+| `cachedir`    | string  | Path to the directory for image cache storage.                              |
+| `dbdir`       | string  | Legacy: directory where a DB file may be stored (kept for backwards compat).|
+| `database`    | object  | Database backend configuration.                                             |
+| `logfile`     | string  | Log output: file path, `stdout`, `syslog`, or `none`.                       |
+| `collections` | array   | List of media collections served by the server.                             |
+| `jellyfin`    | object  | Jellyfin API-specific settings.                                             |
 
 ---
 
@@ -56,9 +58,20 @@ The server uses a YAML configuration file (default: `jellofin-server.yaml`). Bel
 | Key       | Type   | Description                                  |
 |-----------|--------|----------------------------------------------|
 | `address` | string | Address to bind the server (e.g., `0.0.0.0`).|
-| `port`    | string | Port to listen on (e.g., `8096`).            |
+| `port`    | int    | Port to listen on (e.g., `8096`).            |
 | `tlscert` | string | Path to TLS certificate file (optional).     |
 | `tlskey`  | string | Path to TLS private key file (optional).     |
+
+---
+
+### `database` section
+
+The current default database driver is for SQLite. Configure the sqlite backend *under* the `database` key.
+
+| Key               | Type   | Description                                                                   |
+| ----------------- | ------ | ----------------------------------------------------------------------------- |
+| `sqlite`          | object | SQLite-specific configuration.                                                |
+| `sqlite.filename` | string | Full path to the sqlite database file (e.g. `/var/lib/jellofin/jellofin.db`). |
 
 ---
 
@@ -68,12 +81,12 @@ Each entry defines a media collection:
 
 | Key         | Type   | Description                                                     |
 | ----------- | ------ | --------------------------------------------------------------- |
+| `id`        | string | Optional override for collection ID (expert use!).              |
 | `name`      | string | Display name of the collection.                                 |
 | `type`      | string | Type of collection: `movies`, `shows`.                          |
 | `directory` | string | Filesystem path to the media files.                             |
 | `baseurl`   | string | Base URL for accessing the collection (optional).               |
 | `hlsserver` | string | URL of the HLS server for streaming (optional).                 |
-| `id`        | string | Can be used to override ID of collection (optional, expert use!) |
 
 ---
 
@@ -84,21 +97,24 @@ Each entry defines a media collection:
 | `servername`         | string  | Name of the server as shown to clients.                      |
 | `autoregister`       | boolean | If set to true, unknown users will be auto registered        |
 | `imagequalityposter` | int     | Poster image quality (1-100, lower = smaller).               |
-| `serverid`           | string  | Can be used to set unique server identifier (optional). |
+| `serverid`           | string  | Optional override for server ID (expert use!).               |
 
 ---
 
-## Example
+## Example configuration file
 
 ```yaml
 listen:
   address: 0.0.0.0
-  port: "8096"
+  port: 8096
 
 appdir: /srv/jellofin/ui
 cachedir: /srv/jellofin/cache
-dbdir: /srv/jellofin/db
 logfile: stdout
+
+database:
+  sqlite:
+    filename: /usr/local/jellofin/db/jellofin.db
 
 collections:
   - id: movies
@@ -121,11 +137,11 @@ jellyfin:
 
 ## Collection format
 
-Every collection has a type, either ``movies` or `tvshows`.
+Every collection has a type, either `movies` or `tvshows`.
 
 For type `movies` the expected directory format and file naming is:
 
-```
+```text
 movies/
 ├── Movie 1 (1984)/
 │   └── movie.mp4
@@ -135,7 +151,7 @@ movies/
 
 For type `tvshows` the expected directory format and file naming is:
 
-```
+```text
 tvshows/
 └── ShowName/
     ├── Season 1/

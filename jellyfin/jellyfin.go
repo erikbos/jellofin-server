@@ -20,7 +20,7 @@ import (
 
 type Options struct {
 	Collections  *collection.CollectionRepo
-	Db           *database.DatabaseRepo
+	Repo         database.Repository
 	Imageresizer *imageresize.Resizer
 	// Unique ID of this server, used in API responses
 	ServerID string
@@ -36,7 +36,7 @@ type Options struct {
 
 type Jellyfin struct {
 	collections  *collection.CollectionRepo
-	db           *database.DatabaseRepo
+	repo         database.Repository
 	imageresizer *imageresize.Resizer
 	// Unique ID of this server, used in API responses
 	serverID string
@@ -54,7 +54,7 @@ type Jellyfin struct {
 func New(o *Options) *Jellyfin {
 	j := &Jellyfin{
 		collections:        o.Collections,
-		db:                 o.Db,
+		repo:               o.Repo,
 		serverID:           o.ServerID,
 		serverName:         o.ServerName,
 		imageresizer:       o.Imageresizer,
@@ -78,7 +78,8 @@ func New(o *Options) *Jellyfin {
 func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r := s.UseEncodedPath()
 
-	r.Use(normalizeRequest)
+	r.Use(normalizeJellyfinRequest)
+
 	// middleware for endpoints to check valid auth token
 	middleware := func(handler http.HandlerFunc) http.Handler {
 		return handlers.CompressHandler(j.authmiddleware(http.HandlerFunc(handler)))
@@ -125,6 +126,7 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/Shows/{show}/Episodes", middleware(j.showsEpisodesHandler))
 
 	r.Handle("/Items", middleware(j.usersItemsHandler))
+	r.Handle("/Items/Counts", middleware(j.usersItemsCountsHandler))
 	r.Handle("/Items/Filters", middleware(j.usersItemsFiltersHandler))
 	r.Handle("/Items/Filters2", middleware(j.usersItemsFilters2Handler))
 	r.Handle("/Items/Latest", middleware(j.usersItemsLatestHandler))
@@ -197,15 +199,13 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/Localization/ParentalRatings", middleware(j.localizationParentalRatingsHandler))
 }
 
-// normalizeRequest is a middleware that normalizes the request:
-//  1. Removes double slashes in path.
+// normalizeJellyfinRequest is a middleware that normalizes the request:
 //  2. Lowercase query parameter names.
-func normalizeRequest(next http.Handler) http.Handler {
+func normalizeJellyfinRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Remove double slashes in path.
-		for strings.Contains(r.URL.Path, "//") {
-			r.URL.Path = strings.ReplaceAll(r.URL.Path, "//", "/")
-		}
+		// r.URL.Path normalization is handled in jellyfin/jellyfin.go:normalizeRequest
+		// as this middleware runs too late for that.
+		//
 		// Lowercase query parameter names.
 		// This is to handle Infuse's < 8.x incorrect naming of query parameters,
 		// E.g. ParentId should have been parentId, SeasonId -> seasonId

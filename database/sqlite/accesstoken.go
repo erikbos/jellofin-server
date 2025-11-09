@@ -1,55 +1,21 @@
-package database
+package sqlite
 
 import (
 	"context"
 	"crypto/rand"
-	"errors"
 	"log"
-	"sync"
 	"time"
 
-	"github.com/jmoiron/sqlx"
+	"github.com/erikbos/jellofin-server/database/model"
 )
 
-// in-memory access token store,
-// access tokens are stored in memory and written to the database every 3 seconds.
-
-type AccessTokenStorage struct {
-	dbHandle         *sqlx.DB
-	lastDBSyncTime   time.Time
-	mu               sync.Mutex
-	accessTokenCache map[string]*AccessToken
-}
-
-var (
-	ErrAccessTokenNotFound = errors.New("access token not found")
-)
-
-// NewAccessTokenStorage initializes access token issuer
-func NewAccessTokenStorage(d *sqlx.DB) *AccessTokenStorage {
-	return &AccessTokenStorage{
-		dbHandle:         d,
-		accessTokenCache: make(map[string]*AccessToken),
-	}
-}
-
-// AccessToken holds token and userid of a authenticated user
-type AccessToken struct {
-	// Token is the access token
-	Token string
-	// UserID of the user
-	UserID string
-	// LastUsed of last use
-	LastUsed time.Time
-}
-
-// Generate generates new token
-func (s *AccessTokenStorage) Generate(ctx context.Context, userID string) (string, error) {
+// CreateAccessToken creates new token.
+func (s *SqliteRepo) CreateAccessToken(ctx context.Context, userID string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	token := rand.Text()
-	t := &AccessToken{
+	t := &model.AccessToken{
 		Token:    token,
 		UserID:   userID,
 		LastUsed: time.Now().UTC(),
@@ -65,8 +31,8 @@ func (s *AccessTokenStorage) Generate(ctx context.Context, userID string) (strin
 	return token, nil
 }
 
-// Get accesstoken details by tokenid
-func (s *AccessTokenStorage) Get(ctx context.Context, token string) (*AccessToken, error) {
+// GetAccessToken returns accesstoken details based upon tokenid.
+func (s *SqliteRepo) GetAccessToken(ctx context.Context, token string) (*model.AccessToken, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -79,7 +45,7 @@ func (s *AccessTokenStorage) Get(ctx context.Context, token string) (*AccessToke
 	}
 
 	// try database
-	var t AccessToken
+	var t model.AccessToken
 	sqlerr := s.dbHandle.Get(&t, "SELECT * FROM accesstokens WHERE token=? LIMIT 1", token)
 	if sqlerr == nil {
 		t.LastUsed = time.Now().UTC()
@@ -88,16 +54,16 @@ func (s *AccessTokenStorage) Get(ctx context.Context, token string) (*AccessToke
 		return &t, nil
 	}
 
-	return nil, ErrAccessTokenNotFound
+	return nil, model.ErrNotFound
 }
 
 // BackgroundJobs writes changed accesstokens to database.
-func (s *AccessTokenStorage) BackgroundJobs() {
+func (s *SqliteRepo) AccessTokenBackgroundJobs() {
 	if s.dbHandle == nil {
-		log.Fatal(ErrNoDbHandle)
+		log.Fatal(model.ErrNoDbHandle)
 	}
 
-	s.lastDBSyncTime = time.Now().UTC()
+	s.accessTokenCacheSyncTime = time.Now().UTC()
 	for {
 		if err := s.writeChangedAccessTokensToDB(); err != nil {
 			log.Printf("Error writing access tokens to db: %s\n", err)
@@ -107,25 +73,25 @@ func (s *AccessTokenStorage) BackgroundJobs() {
 }
 
 // writeChangedAccessTokensToDB writes updated access tokens to db to persist last use date.
-func (s *AccessTokenStorage) writeChangedAccessTokensToDB() error {
+func (s *SqliteRepo) writeChangedAccessTokensToDB() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	for _, value := range s.accessTokenCache {
-		if value.LastUsed.After(s.lastDBSyncTime) {
+		if value.LastUsed.After(s.accessTokenCacheSyncTime) {
 			if err := s.storeToken(*value); err != nil {
 				return err
 			}
 		}
 	}
-	s.lastDBSyncTime = time.Now().UTC()
+	s.accessTokenCacheSyncTime = time.Now().UTC()
 	return nil
 }
 
 // storeToken stores an access token in the database
-func (s *AccessTokenStorage) storeToken(t AccessToken) error {
+func (s *SqliteRepo) storeToken(t model.AccessToken) error {
 	if s.dbHandle == nil {
-		return ErrNoDbHandle
+		return model.ErrNoDbHandle
 	}
 	tx, err := s.dbHandle.Beginx()
 	if err != nil {

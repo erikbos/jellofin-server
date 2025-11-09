@@ -67,7 +67,7 @@ func (n *MetadataFilename) parseFilename() {
 }
 
 // Duration returns the duration of the video in seconds.
-func (n *MetadataFilename) Duration() int {
+func (n *MetadataFilename) Duration() time.Duration {
 	return 0
 }
 

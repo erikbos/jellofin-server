@@ -3,6 +3,8 @@ package jellyfin
 import (
 	"net/http"
 	"strings"
+
+	"github.com/erikbos/jellofin-server/database/model"
 )
 
 // /Sessions
@@ -13,21 +15,27 @@ func (j *Jellyfin) sessionsHandler(w http.ResponseWriter, r *http.Request) {
 	if accessToken == nil {
 		return
 	}
-	dbuser, err := j.db.UserRepo.GetByID(r.Context(), accessToken.UserID)
+	dbuser, err := j.repo.GetUserByID(r.Context(), accessToken.UserID)
 	if err != nil {
 		http.Error(w, ErrUserIDNotFound, http.StatusNotFound)
 		return
 	}
 
-	remoteAdress := strings.Split(r.RemoteAddr, ":")
+	remoteAdress := strings.Split(r.RemoteAddr, ":")[0]
 
 	// Every connected client gets to see the same session details ;-)
-	response := JFSessionResponse{
+	response := j.makeJFSessionInfo(accessToken, dbuser.Username, remoteAdress)
+
+	serveJSON(response, w)
+}
+
+func (j *Jellyfin) makeJFSessionInfo(accessToken *model.AccessToken, username, remoteAdress string) *JFSessionInfo {
+	s := &JFSessionInfo{
 		ID:                    sessionID,
 		UserID:                accessToken.UserID,
-		UserName:              dbuser.Username,
+		UserName:              username,
 		LastActivityDate:      accessToken.LastUsed,
-		RemoteEndPoint:        remoteAdress[0],
+		RemoteEndPoint:        remoteAdress,
 		DeviceName:            "Client",
 		DeviceID:              "Client",
 		Client:                "curl",
@@ -52,7 +60,7 @@ func (j *Jellyfin) sessionsHandler(w http.ResponseWriter, r *http.Request) {
 		SupportedCommands:        []string{},
 		PlayableMediaTypes:       []string{},
 	}
-	serveJSON(response, w)
+	return s
 }
 
 // /Sessions/Capabilities

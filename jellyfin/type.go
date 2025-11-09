@@ -75,21 +75,23 @@ type JFUser struct {
 }
 
 type JFUserConfiguration struct {
-	PlayDefaultAudioTrack      bool     `json:"PlayDefaultAudioTrack"`
+	GroupedFolders []string `json:"GroupedFolders"`
+	SubtitleMode   string   `json:"SubtitleMode"`
+	// OrderedViews is a list of collection displayPreference IDs indicating in which order to collections should be shown.
+	OrderedViews []string `json:"OrderedViews"`
+	// MyMediaExcludes is a list of collection displayPreference IDs to exclude from the collection overview.
+	MyMediaExcludes            []string `json:"MyMediaExcludes"`
+	LatestItemsExcludes        []string `json:"LatestItemsExcludes"`
 	SubtitleLanguagePreference string   `json:"SubtitleLanguagePreference"`
+	CastReceiverId             string   `json:"CastReceiverId"`
+	PlayDefaultAudioTrack      bool     `json:"PlayDefaultAudioTrack"`
 	DisplayMissingEpisodes     bool     `json:"DisplayMissingEpisodes"`
-	GroupedFolders             []string `json:"GroupedFolders"`
-	SubtitleMode               string   `json:"SubtitleMode"`
 	DisplayCollectionsView     bool     `json:"DisplayCollectionsView"`
 	EnableLocalPassword        bool     `json:"EnableLocalPassword"`
-	OrderedViews               []string `json:"OrderedViews"`
-	LatestItemsExcludes        []string `json:"LatestItemsExcludes"`
-	MyMediaExcludes            []string `json:"MyMediaExcludes"`
 	HidePlayedInLatest         bool     `json:"HidePlayedInLatest"`
 	RememberAudioSelections    bool     `json:"RememberAudioSelections"`
 	RememberSubtitleSelections bool     `json:"RememberSubtitleSelections"`
 	EnableNextEpisodeAutoPlay  bool     `json:"EnableNextEpisodeAutoPlay"`
-	CastReceiverId             string   `json:"CastReceiverId"`
 }
 
 type JFUserPolicy struct {
@@ -166,20 +168,6 @@ type JFUsersItemsSuggestionsResponse struct {
 	StartIndex       int      `json:"StartIndex"`
 }
 
-type JFSessionInfo struct {
-	PlayState          *JFPlayState `json:"PlayState,omitempty"`
-	RemoteEndPoint     string       `json:"RemoteEndPoint,omitempty"`
-	Id                 string       `json:"Id,omitempty"`
-	UserId             string       `json:"UserId,omitempty"`
-	UserName           string       `json:"UserName,omitempty"`
-	Client             string       `json:"Client,omitempty"`
-	LastActivityDate   time.Time    `json:"LastActivityDate,omitempty"`
-	DeviceName         string       `json:"DeviceName,omitempty"`
-	DeviceId           string       `json:"DeviceId,omitempty"`
-	ApplicationVersion string       `json:"ApplicationVersion,omitempty"`
-	IsActive           bool         `json:"IsActive"`
-}
-
 type DisplayPreferencesCustomPrefs struct {
 	ChromecastVersion          string `json:"chromecastVersion"`
 	SkipForwardLength          string `json:"skipForwardLength"`
@@ -239,7 +227,7 @@ type JFItem struct {
 	SeasonName               string             `json:"SeasonName,omitempty"`
 	OriginalTitle            string             `json:"OriginalTitle,omitempty"`
 	Etag                     string             `json:"Etag"`
-	DateCreated              time.Time          `json:"DateCreated,omitempty"`
+	DateCreated              time.Time          `json:"DateCreated,omitempty"` // When item was added to the library.
 	CanDelete                bool               `json:"CanDelete"`
 	CanDownload              bool               `json:"CanDownload"`
 	Container                string             `json:"Container,omitempty"`
@@ -251,7 +239,7 @@ type JFItem struct {
 	Path                     string             `json:"Path,omitempty"`
 	EnableMediaSourceDisplay bool               `json:"EnableMediaSourceDisplay"`
 	OfficialRating           string             `json:"OfficialRating,omitempty"`
-	ChannelID                []string           `json:"ChannelId,omitempty"`
+	ChannelID                []string           `json:"ChannelId"`
 	ChildCount               int                `json:"ChildCount,omitempty"`
 	CollectionType           string             `json:"CollectionType,omitempty"`
 	MediaStreams             []JFMediaStreams   `json:"MediaStreams,omitempty"`
@@ -288,7 +276,7 @@ type JFItem struct {
 	DisplayPreferencesID     string             `json:"DisplayPreferencesId,omitempty"`
 	PrimaryImageAspectRatio  float64            `json:"PrimaryImageAspectRatio,omitempty"`
 	VideoType                string             `json:"VideoType,omitempty"`
-	Chapters                 []string           `json:"Chapters,omitempty"`
+	Chapters                 []JFChapter        `json:"Chapters,omitempty"`
 	ParentLogoItemId         string             `json:"ParentLogoItemId,omitempty"`
 	RecursiveItemCount       int                `json:"RecursiveItemCount,omitempty"`
 }
@@ -297,6 +285,13 @@ type JFExternalUrls struct {
 	Name string `json:"Name"`
 	URL  string `json:"Url"`
 }
+
+type JFChapter struct {
+	Name               string    `json:"Name"`
+	ImageDateModified  time.Time `json:"ImageDateModified"`
+	StartPositionTicks int64     `json:"StartPositionTicks"`
+}
+
 type JFMediaStreams struct {
 	Title                  string  `json:"Title"`
 	Codec                  string  `json:"Codec"`
@@ -429,7 +424,7 @@ type JFGenreItem struct {
 }
 
 type JFUserData struct {
-	PlaybackPositionTicks int       `json:"PlaybackPositionTicks"`
+	PlaybackPositionTicks int64     `json:"PlaybackPositionTicks"`
 	PlayedPercentage      int       `json:"PlayedPercentage"`
 	PlayCount             int       `json:"PlayCount"`
 	IsFavorite            bool      `json:"IsFavorite"`
@@ -569,7 +564,7 @@ type JFMediaLibrary struct {
 type JFPlayState struct {
 	CanSeek         bool   `json:"CanSeek"`
 	RepeatMode      string `json:"RepeatMode"`
-	PositionTicks   int    `json:"PositionTicks"`
+	PositionTicks   int64  `json:"PositionTicks"`
 	PlaySessionID   string `json:"PlaySessionId"`
 	MediaSourceID   string `json:"MediaSourceId"`
 	ItemId          string `json:"ItemId"`
@@ -611,6 +606,21 @@ type JFLocalizationParentalRatings struct {
 	Value int    `json:"Value"`
 }
 
+type JFItemCountResponse struct {
+	MovieCount      int `json:"MovieCount"`
+	SeriesCount     int `json:"SeriesCount"`
+	EpisodeCount    int `json:"EpisodeCount"`
+	ArtistCount     int `json:"ArtistCount"`
+	ProgramCount    int `json:"ProgramCount"`
+	TrailerCount    int `json:"TrailerCount"`
+	SongCount       int `json:"SongCount"`
+	AlbumCount      int `json:"AlbumCount"`
+	MusicVideoCount int `json:"MusicVideoCount"`
+	BoxSetCount     int `json:"BoxSetCount"`
+	BookCount       int `json:"BookCount"`
+	ItemCount       int `json:"ItemCount"`
+}
+
 type JFItemFilterResponse struct {
 	Genres          []string `json:"Genres"`
 	Tags            []string `json:"Tags"`
@@ -629,7 +639,7 @@ type JFBrandingConfigurationResponse struct {
 	SplashscreenEnabled bool   `json:"SplashscreenEnabled"`
 }
 
-type JFSessionResponse struct {
+type JFSessionInfo struct {
 	PlayState                JFSessionResponsePlayState    `json:"PlayState"`
 	AdditionalUsers          []string                      `json:"AdditionalUsers"`
 	Capabilities             JFSessionResponseCapabilities `json:"Capabilities"`

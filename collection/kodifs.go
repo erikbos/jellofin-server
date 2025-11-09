@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/erikbos/jellofin-server/collection/metadata"
-	"github.com/erikbos/jellofin-server/database"
+	"github.com/erikbos/jellofin-server/database/model"
 	"github.com/erikbos/jellofin-server/idhash"
 )
 
@@ -77,12 +77,12 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Movie
 
 	var base, video string
 	var filesize int64
-	var created int64
+	var created time.Time
 	for _, f := range fi {
 		s := isVideo.FindStringSubmatch(f.Name())
 		if len(s) > 0 {
-			ts := f.CreatetimeMS()
-			if ts > 0 {
+			ts := f.Createtime()
+			if !ts.IsZero() {
 				video = s[0]
 				base = s[1]
 				filesize = f.Size()
@@ -100,9 +100,8 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Movie
 	if len(s) > 0 {
 		year = parseInt(s[1])
 	}
-	if year == 0 && created > 0 {
-		t := time.Unix(created/1000, 0)
-		year = t.Year()
+	if year == 0 && !created.IsZero() {
+		year = created.Year()
 	}
 	if year == 0 {
 		year = time.Now().Year()
@@ -113,10 +112,10 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Movie
 		name:     mname,
 		sortName: makeSortName(mname),
 		// BaseUrl:    coll.BaseUrl,
-		path:       dir,
-		fileName:   video,
-		fileSize:   filesize,
-		firstVideo: created,
+		path:     dir,
+		fileName: video,
+		fileSize: filesize,
+		created:  created,
 	}
 
 	for _, f := range fi {
@@ -195,14 +194,14 @@ func (cr *CollectionRepo) buildMovie(coll *Collection, dir string) (movie *Movie
 
 	cr.copySrtVttSubs(movie.SrtSubs, &movie.VttSubs)
 
-	dbItemMovie := &database.Item{
+	dbItemMovie := &model.Item{
 		ID:    movie.id,
 		Name:  movie.name,
 		Year:  movie.Year(),
 		Genre: strings.Join(movie.Genres(), ","),
 	}
 
-	cr.db.DbLoadItem(dbItemMovie)
+	cr.repo.DbLoadItem(dbItemMovie)
 
 	return
 }
@@ -401,7 +400,7 @@ func (cr *CollectionRepo) showScanDir(showDir, baseDir, seasonDir string, season
 				fileSize: f.Size(),
 				baseName: s[1],
 				Metadata: metadata.NewFilename(s[1], 0),
-				VideoTS:  f.CreatetimeMS(),
+				created:  f.Createtime(),
 			}
 			if parseEpisodeName(s[1], seasonHint, &ep) {
 				season := cr.getSeason(show, ep.SeasonNo)
@@ -513,8 +512,8 @@ func (cr *CollectionRepo) buildShow(coll *Collection, dir string) (show *Show) {
 	if len(item.Seasons) > 0 {
 		fs := item.Seasons[0]
 		ls := item.Seasons[len(item.Seasons)-1]
-		item.firstVideo = fs.Episodes[0].VideoTS
-		item.lastVideo = ls.Episodes[len(ls.Episodes)-1].VideoTS
+		item.firstVideo = fs.Episodes[0].created
+		item.lastVideo = ls.Episodes[len(ls.Episodes)-1].created
 	}
 
 	// If we have an NFO and at least one image, accept it.
@@ -536,9 +535,8 @@ func (cr *CollectionRepo) buildShow(coll *Collection, dir string) (show *Show) {
 
 	// guess the year in case it's not in the NFO file.
 	year := 0
-	if item.firstVideo > 0 {
-		t := time.Unix(item.firstVideo/1000, 0)
-		year = t.Year()
+	if !item.firstVideo.IsZero() {
+		year = item.firstVideo.Year()
 	}
 	if year == 0 {
 		year = time.Now().Year()
@@ -550,13 +548,13 @@ func (cr *CollectionRepo) buildShow(coll *Collection, dir string) (show *Show) {
 	}
 	item.Metadata.SetYear(year)
 
-	dbItemShow := &database.Item{
+	dbItemShow := &model.Item{
 		ID:    item.id,
 		Name:  item.name,
 		Year:  item.Metadata.Year(),
 		Genre: strings.Join(item.Metadata.Genres(), ","),
 	}
-	cr.db.DbLoadItem(dbItemShow)
+	cr.repo.DbLoadItem(dbItemShow)
 	return
 }
 

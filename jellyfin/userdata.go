@@ -9,7 +9,7 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/erikbos/jellofin-server/database"
+	"github.com/erikbos/jellofin-server/database/model"
 )
 
 const (
@@ -122,10 +122,10 @@ func (j *Jellyfin) sessionsPlayingStoppedHandler(w http.ResponseWriter, r *http.
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (j *Jellyfin) userDataUpdate(ctx context.Context, userID, itemID string, positionTicks int, markAsWatched bool) (err error) {
-	var duration int
+func (j *Jellyfin) userDataUpdate(ctx context.Context, userID, itemID string, positionTicks int64, markAsWatched bool) (err error) {
+	var duration int64
 	if _, item := j.collections.GetItemByID(trimPrefix(itemID)); item != nil {
-		duration = item.Duration()
+		duration = int64(item.Duration().Seconds())
 	}
 	// log.Printf("userDataUpdate userID: %s, itemID: %s, Progress: %d sec, Duration: %d sec\n",
 	// 	userID, itemID, positionTicks/TicsToSeconds, duration)
@@ -135,15 +135,15 @@ func (j *Jellyfin) userDataUpdate(ctx context.Context, userID, itemID string, po
 		duration = 60 * 60
 	}
 
-	playstate, err := j.db.UserDataRepo.Get(ctx, userID, trimPrefix(itemID))
+	playstate, err := j.repo.GetUserData(ctx, userID, trimPrefix(itemID))
 	if err != nil {
-		playstate = database.UserData{
+		playstate = &model.UserData{
 			Timestamp: time.Now().UTC(),
 		}
 	}
 
 	position := positionTicks / TicsToSeconds
-	playedPercentage := 100 * position / duration
+	playedPercentage := int(100 * position / duration)
 
 	// Mark as watched in case > 98% of the item is played
 	if markAsWatched || playedPercentage >= 98 {
@@ -156,7 +156,7 @@ func (j *Jellyfin) userDataUpdate(ctx context.Context, userID, itemID string, po
 		playstate.Played = false
 	}
 
-	return j.db.UserDataRepo.Update(ctx, userID, trimPrefix(itemID), playstate)
+	return j.repo.UpdateUserData(ctx, userID, trimPrefix(itemID), playstate)
 }
 
 // POST /UserFavoriteItems/{item}
@@ -173,18 +173,18 @@ func (j *Jellyfin) userFavoriteItemsPostHandler(w http.ResponseWriter, r *http.R
 	vars := mux.Vars(r)
 	itemID := vars["item"]
 
-	playstate, err := j.db.UserDataRepo.Get(r.Context(), accessToken.UserID, trimPrefix(itemID))
+	playstate, err := j.repo.GetUserData(r.Context(), accessToken.UserID, trimPrefix(itemID))
 	if err != nil {
-		playstate = database.UserData{}
+		playstate = &model.UserData{}
 	}
 
 	playstate.Favorite = true
 
-	if err := j.db.UserDataRepo.Update(r.Context(), accessToken.UserID, itemID, playstate); err != nil {
+	if err := j.repo.UpdateUserData(r.Context(), accessToken.UserID, itemID, playstate); err != nil {
 		http.Error(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
 		return
 	}
-	userData := j.makeJFUserData(accessToken.UserID, itemID, &playstate)
+	userData := j.makeJFUserData(accessToken.UserID, itemID, playstate)
 	serveJSON(userData, w)
 }
 
@@ -200,17 +200,17 @@ func (j *Jellyfin) userFavoriteItemsDeleteHandler(w http.ResponseWriter, r *http
 	vars := mux.Vars(r)
 	itemID := vars["item"]
 
-	playstate, err := j.db.UserDataRepo.Get(r.Context(), accessToken.UserID, trimPrefix(itemID))
+	playstate, err := j.repo.GetUserData(r.Context(), accessToken.UserID, trimPrefix(itemID))
 	if err != nil {
-		playstate = database.UserData{}
+		playstate = &model.UserData{}
 	}
 
 	playstate.Favorite = false
 
-	if err := j.db.UserDataRepo.Update(r.Context(), accessToken.UserID, itemID, playstate); err != nil {
+	if err := j.repo.UpdateUserData(r.Context(), accessToken.UserID, itemID, playstate); err != nil {
 		http.Error(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
 		return
 	}
-	userData := j.makeJFUserData(accessToken.UserID, itemID, &playstate)
+	userData := j.makeJFUserData(accessToken.UserID, itemID, playstate)
 	serveJSON(userData, w)
 }

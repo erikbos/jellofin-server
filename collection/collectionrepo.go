@@ -19,20 +19,20 @@ import (
 // CollectionRepo is a repository holding content collections.
 type CollectionRepo struct {
 	collections Collections
-	db          *database.DatabaseRepo
+	repo        database.Repository
 	bleveIndex  *search.Search
 }
 
 type Options struct {
 	Collections []Collection
-	Db          *database.DatabaseRepo
+	Repo        database.Repository
 }
 
 // New creates a new CollectionRepo with the provided options.
 func New(options *Options) *CollectionRepo {
 	c := &CollectionRepo{
 		collections: options.Collections,
-		db:          options.Db,
+		repo:        options.Repo,
 	}
 	return c
 }
@@ -290,30 +290,40 @@ func (cr *CollectionRepo) NextUp(watchedEpisodeIDs []string) (nextUpEpisodeIDs [
 
 // Details returns collection details such as genres, tags, ratings, etc.
 func (c *CollectionRepo) Details() CollectionDetails {
+	var movieCount, showCount, episodeCount int
 	genres := make([]string, 0)
 	tags := make([]string, 0)
 	official := make([]string, 0)
 	years := make([]int, 0)
 
 	for _, collection := range c.collections {
-		for _, i := range collection.Items {
-			for _, g := range i.Genres() {
-				if !slices.Contains(genres, g) {
-					genres = append(genres, g)
-				}
+		details := collection.Details()
+
+		movieCount += details.MovieCount
+		showCount += details.ShowCount
+		episodeCount += details.EpisodeCount
+
+		for _, g := range details.Genres {
+			if !slices.Contains(genres, g) {
+				genres = append(genres, g)
 			}
-			itemOfficialRating := i.OfficialRating()
-			if itemOfficialRating != "" && !slices.Contains(official, itemOfficialRating) {
-				official = append(official, itemOfficialRating)
+		}
+		for _, t := range details.Tags {
+			if !slices.Contains(tags, t) {
+				tags = append(tags, t)
 			}
-			itemYear := i.Year()
-			if itemYear != 0 && !slices.Contains(years, itemYear) {
-				years = append(years, itemYear)
+		}
+		for _, r := range details.OfficialRatings {
+			if !slices.Contains(official, r) {
+				official = append(official, r)
 			}
 		}
 	}
 
 	details := CollectionDetails{
+		MovieCount:      movieCount,
+		ShowCount:       showCount,
+		EpisodeCount:    episodeCount,
 		Genres:          genres,
 		Tags:            tags,
 		OfficialRatings: official,

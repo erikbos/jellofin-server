@@ -19,6 +19,7 @@ import (
 
 	"github.com/erikbos/jellofin-server/collection"
 	"github.com/erikbos/jellofin-server/database"
+	"github.com/erikbos/jellofin-server/database/sqlite"
 	"github.com/erikbos/jellofin-server/imageresize"
 	"github.com/erikbos/jellofin-server/jellyfin"
 	"github.com/erikbos/jellofin-server/notflix"
@@ -31,9 +32,12 @@ type configFile struct {
 		TlsCert string
 		TlsKey  string
 	}
-	Appdir      string
-	Cachedir    string
-	Dbdir       string
+	Appdir   string
+	Cachedir string
+	Dbdir    string
+	Database struct {
+		Sqlite sqlite.ConfigFile `yaml:"sqlite"`
+	} `yaml:"database"`
 	Logfile     string
 	Collections []struct {
 		ID        string
@@ -91,18 +95,25 @@ func main() {
 	}
 
 	log.Printf("dbinit")
-	database, err := database.New(&database.Options{
-		Filename: path.Join(config.Dbdir, "tink-items.db"),
-	})
+	var err error
+	var repo database.Repository
+	// Legacy support for Dbdir
+	if config.Dbdir != "" {
+		repo, err = database.New("sqlite", &sqlite.ConfigFile{
+			Filename: path.Join(config.Dbdir, "tink-items.db"),
+		})
+	} else {
+		repo, err = database.New("sqlite", config.Database.Sqlite)
+	}
 	if err != nil {
 		log.Fatalf("database.New: %s", err.Error())
 	}
-	go database.AccessTokenRepo.BackgroundJobs()
-	go database.UserDataRepo.BackgroundJobs()
+	go repo.AccessTokenBackgroundJobs()
+	go repo.UserDataBackgroundJobs()
 
 	// Initialize collection and add them to the collection manager
 	collection := collection.New(&collection.Options{
-		Db: database,
+		Repo: repo,
 	})
 	for _, coll := range config.Collections {
 		collection.AddCollection(
@@ -129,7 +140,7 @@ func main() {
 
 	n := notflix.New(&notflix.Options{
 		Collections:  collection,
-		Db:           database,
+		Repo:         repo,
 		Imageresizer: resizer,
 		Appdir:       config.Appdir,
 	})
@@ -137,7 +148,7 @@ func main() {
 
 	j := jellyfin.New(&jellyfin.Options{
 		Collections:        collection,
-		Db:                 database,
+		Repo:               repo,
 		Imageresizer:       resizer,
 		ServerPort:         config.Listen.Port,
 		ServerID:           config.Jellyfin.ServerID,
@@ -147,6 +158,11 @@ func main() {
 	})
 	j.RegisterHandlers(r)
 
+	r.Path("/robots.txt").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("User-agent: *\nDisallow: /\n"))
+	})
+
 	r.PathPrefix("/").Handler(http.FileServer(http.Dir(config.Appdir)))
 
 	collection.Init()
@@ -154,7 +170,7 @@ func main() {
 
 	addr := net.JoinHostPort(config.Listen.Address, config.Listen.Port)
 
-	server := stripEmbyPath(HttpLog(r))
+	server := normalizeRequest(HttpLog(r))
 
 	if config.Listen.TlsCert != "" && config.Listen.TlsKey != "" {
 		kpr, err := NewKeypairReloader(config.Listen.TlsCert, config.Listen.TlsKey)
@@ -230,9 +246,16 @@ func (kpr *keypairReloader) maybeReload() error {
 	return nil
 }
 
-// stripEmbyPath is a middleware that strips the "/emby" prefix from the request URL path.
-func stripEmbyPath(next http.Handler) http.Handler {
+// normalizeRequest is a middleware that:
+// 1. normalizes the request URL path by removing redundant slashes.
+// 2. strips the "/emby" prefix from the request URL path.
+func normalizeRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Remove double slashes in path.
+		for strings.Contains(r.URL.Path, "//") {
+			r.URL.Path = strings.ReplaceAll(r.URL.Path, "//", "/")
+		}
+		// Strip "/emby" prefix.
 		if strings.HasPrefix(r.URL.Path, "/emby/") {
 			r.URL.Path = strings.TrimPrefix(r.URL.Path, "/emby")
 		}

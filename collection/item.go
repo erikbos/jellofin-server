@@ -2,6 +2,7 @@ package collection
 
 import (
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/erikbos/jellofin-server/collection/metadata"
@@ -32,8 +33,8 @@ type Item interface {
 	FileName() string
 	// FileSize returns the size of the video file in bytes.
 	FileSize() int64
-	// Duration returns the duration of the video in seconds.
-	Duration() int
+	// Duration returns the duration of the video.
+	Duration() time.Duration
 	// Genres returns the genres.
 
 	metadata.VideoMetadata
@@ -57,8 +58,8 @@ type Movie struct {
 	path string
 	// baseUrl is the base URL for accessing the movie.
 	baseUrl string
-	// firstVideo is the timestamp of the first video in the movie.
-	firstVideo int64
+	// created is the create timestamp of the movie.
+	created time.Time
 	// banner is the movie's banner image, often "banner.jpg", TV shows only.
 	banner string
 	// fanart is this movie's fanart image, often "fanart.jpg"
@@ -83,7 +84,7 @@ func (m *Movie) Name() string            { return m.name }
 func (m *Movie) SortName() string        { return m.sortName }
 func (m *Movie) Path() string            { return m.path }
 func (m *Movie) BaseUrl() string         { return m.baseUrl }
-func (m *Movie) FirstVideo() int64       { return m.firstVideo }
+func (m *Movie) Created() time.Time      { return m.created }
 func (m *Movie) Banner() string          { return m.banner }
 func (m *Movie) Fanart() string          { return m.fanart }
 func (m *Movie) Folder() string          { return m.folder }
@@ -92,7 +93,7 @@ func (m *Movie) Logo() string            { return "" }
 func (m *Movie) FileName() string        { return m.fileName }
 func (m *Movie) FilePath() string        { return m.path + "/" + m.fileName }
 func (m *Movie) FileSize() int64         { return m.fileSize }
-func (m *Movie) Duration() int           { return m.Metadata.Duration() }
+func (m *Movie) Duration() time.Duration { return m.Metadata.Duration() }
 func (m *Movie) VideoCodec() string      { return m.Metadata.VideoCodec() }
 func (m *Movie) VideoBitrate() int       { return m.Metadata.VideoBitrate() }
 func (m *Movie) VideoFrameRate() float64 { return m.Metadata.VideoFrameRate() }
@@ -119,10 +120,10 @@ type Show struct {
 	path string
 	// baseUrl is the base URL for accessing the m.
 	baseUrl string
-	// firstVideo is the timestamp of the first video in the m.
-	firstVideo int64
-	// lastVideo is the timestamp of the last video in the m.
-	lastVideo int64
+	// firstVideo is the timestamp of the first video in the show.
+	firstVideo time.Time
+	// lastVideo is the timestamp of the last video in the show.
+	lastVideo time.Time
 	// banner is the show's banner image, often "banner.jpg".
 	banner string
 	// fanart is this show's fanart image, often "fanart.jpg"
@@ -155,8 +156,8 @@ func (s *Show) Name() string            { return s.name }
 func (s *Show) SortName() string        { return s.sortName }
 func (s *Show) Path() string            { return s.path }
 func (s *Show) BaseUrl() string         { return s.baseUrl }
-func (s *Show) FirstVideo() int64       { return s.firstVideo }
-func (s *Show) LastVideo() int64        { return s.lastVideo }
+func (s *Show) FirstVideo() time.Time   { return s.firstVideo }
+func (s *Show) LastVideo() time.Time    { return s.lastVideo }
 func (s *Show) Banner() string          { return s.banner }
 func (s *Show) Fanart() string          { return s.fanart }
 func (s *Show) Folder() string          { return s.folder }
@@ -166,8 +167,8 @@ func (s *Show) SeasonAllBanner() string { return s.seasonAllBanner }
 func (s *Show) SeasonAllPoster() string { return s.seasonAllPoster }
 func (s *Show) FileName() string        { return s.fileName }
 func (s *Show) FileSize() int64         { return s.fileSize }
-func (s *Show) Duration() int {
-	var duration int
+func (s *Show) Duration() time.Duration {
+	var duration time.Duration
 	for _, season := range s.Seasons {
 		duration += season.Duration()
 	}
@@ -211,17 +212,15 @@ type Season struct {
 	Episodes Episodes
 }
 
-func (season *Season) ID() string        { return season.id }
-func (season *Season) Name() string      { return season.name }
-func (season *Season) SortName() string  { return season.name }
-func (season *Season) Path() string      { return season.path }
-func (season *Season) BaseUrl() string   { return "" }
-func (season *Season) Number() int       { return season.seasonno }
-func (season *Season) FirstVideo() int64 { return 0 }
-func (season *Season) LastVideo() int64  { return 0 }
-func (season *Season) Banner() string    { return season.banner }
-func (season *Season) Fanart() string    { return season.fanart }
-func (season *Season) Folder() string    { return "" }
+func (season *Season) ID() string       { return season.id }
+func (season *Season) Name() string     { return season.name }
+func (season *Season) SortName() string { return season.name }
+func (season *Season) Path() string     { return season.path }
+func (season *Season) BaseUrl() string  { return "" }
+func (season *Season) Number() int      { return season.seasonno }
+func (season *Season) Banner() string   { return season.banner }
+func (season *Season) Fanart() string   { return season.fanart }
+func (season *Season) Folder() string   { return "" }
 func (season *Season) Poster() string {
 	if season.poster != "" {
 		return season.poster
@@ -234,8 +233,8 @@ func (season *Season) Poster() string {
 func (season *Season) Logo() string     { return "" }
 func (season *Season) FileName() string { return "" }
 func (season *Season) FileSize() int64  { return 0 }
-func (season *Season) Duration() int {
-	var duration int
+func (season *Season) Duration() time.Duration {
+	var duration time.Duration
 	for _, ep := range season.Episodes {
 		duration += ep.Duration()
 	}
@@ -288,8 +287,8 @@ type Episode struct {
 	Double bool
 	// baseName is the base name of the episode, e.g., "casablanca.s01e01"
 	baseName string
-	// VideoTS is the timestamp of the episode.
-	VideoTS int64
+	// created is the timestamp of the episode.
+	created time.Time
 	// FileName is the filename relative to show directory, e.g. "S01/casablanca.s01e01.mp4"
 	fileName string
 	// fileSize is the size of the video file in bytes.
@@ -307,8 +306,7 @@ func (e *Episode) Name() string            { return e.name }
 func (e *Episode) SortName() string        { return e.sortName }
 func (e *Episode) Path() string            { return e.path }
 func (e *Episode) BaseUrl() string         { return "" }
-func (e *Episode) FirstVideo() int64       { return e.VideoTS }
-func (e *Episode) LastVideo() int64        { return e.VideoTS }
+func (e *Episode) Created() time.Time      { return e.created }
 func (e *Episode) Banner() string          { return "" }
 func (e *Episode) Fanart() string          { return "" }
 func (e *Episode) Folder() string          { return "" }
@@ -317,7 +315,7 @@ func (e *Episode) Logo() string            { return "" }
 func (e *Episode) FileName() string        { return e.fileName }
 func (e *Episode) FileSize() int64         { return e.fileSize }
 func (e *Episode) Number() int             { return e.EpisodeNo }
-func (e *Episode) Duration() int           { return e.Metadata.Duration() }
+func (e *Episode) Duration() time.Duration { return e.Metadata.Duration() }
 func (e *Episode) VideoCodec() string      { return e.Metadata.VideoCodec() }
 func (e *Episode) VideoBitrate() int       { return e.Metadata.VideoBitrate() }
 func (e *Episode) VideoFrameRate() float64 { return e.Metadata.VideoFrameRate() }

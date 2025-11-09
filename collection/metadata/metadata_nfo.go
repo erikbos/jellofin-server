@@ -29,13 +29,13 @@ func NewNfo(filename string) *MetadataNfo {
 	}
 }
 
-// Duration returns the duration of the video in seconds.
-func (n *MetadataNfo) Duration() int {
+// Duration returns the duration of the video.
+func (n *MetadataNfo) Duration() time.Duration {
 	n.loadNfo()
 	if n.nfo.Runtime != 0 {
-		return n.nfo.Runtime * 60
+		return time.Duration(n.nfo.Runtime*60) * time.Second
 	}
-	return n.nfo.FileInfo.StreamDetails.Video.DurationInSeconds
+	return time.Duration(n.nfo.FileInfo.StreamDetails.Video.DurationInSeconds) * time.Second
 }
 
 // Title returns the title.

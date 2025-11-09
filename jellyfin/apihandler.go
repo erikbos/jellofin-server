@@ -15,7 +15,7 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/erikbos/jellofin-server/collection"
-	"github.com/erikbos/jellofin-server/database"
+	"github.com/erikbos/jellofin-server/database/model"
 )
 
 type contextKey string
@@ -168,13 +168,13 @@ func (j *Jellyfin) usersItemUserDataHandler(w http.ResponseWriter, r *http.Reque
 	vars := mux.Vars(r)
 	itemID := vars["item"]
 
-	playstate, err := j.db.UserDataRepo.Get(r.Context(), accessToken.UserID, trimPrefix(itemID))
+	playstate, err := j.repo.GetUserData(r.Context(), accessToken.UserID, trimPrefix(itemID))
 	if err != nil {
 		// TODO: should we return an empty object or a 404?
-		playstate = database.UserData{}
+		playstate = &model.UserData{}
 	}
 
-	userData := j.makeJFUserData(accessToken.UserID, itemID, &playstate)
+	userData := j.makeJFUserData(accessToken.UserID, itemID, playstate)
 	serveJSON(userData, w)
 }
 
@@ -326,6 +326,24 @@ func (j *Jellyfin) usersItemsAncestorsHandler(w http.ResponseWriter, r *http.Req
 	serveJSON(response, w)
 }
 
+// /Items/Counts
+//
+// usersItemsCountsHandler returns counts of movies, series and episodes
+func (j *Jellyfin) usersItemsCountsHandler(w http.ResponseWriter, r *http.Request) {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
+		return
+	}
+
+	details := j.collections.Details()
+	response := JFItemCountResponse{
+		MovieCount:   details.MovieCount,
+		SeriesCount:  details.ShowCount,
+		EpisodeCount: details.EpisodeCount,
+	}
+	serveJSON(response, w)
+}
+
 // /Users/2b1ec0a52b09456c9823a367d84ac9e5/Items/Latest?Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount&ParentId=f137a2dd21bbc1b99aa5c0f6bf02a805&StartIndex=0&Limit=20
 //
 // /Items/Latest
@@ -450,7 +468,7 @@ func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 
 	queryparams := r.URL.Query()
 
-	recentlyWatchedIDs, err := j.db.UserDataRepo.GetRecentlyWatched(r.Context(), accessToken.UserID, true)
+	recentlyWatchedIDs, err := j.repo.GetRecentlyWatched(r.Context(), accessToken.UserID, true)
 	if err != nil {
 		apierror(w, "Could not get recently watched items list", http.StatusInternalServerError)
 		return
@@ -499,7 +517,7 @@ func (j *Jellyfin) usersItemsResumeHandler(w http.ResponseWriter, r *http.Reques
 
 	queryparams := r.URL.Query()
 
-	resumeItemIDs, err := j.db.UserDataRepo.GetRecentlyWatched(r.Context(), accessToken.UserID, false)
+	resumeItemIDs, err := j.repo.GetRecentlyWatched(r.Context(), accessToken.UserID, false)
 	if err != nil {
 		apierror(w, "Could not get resume items list", http.StatusInternalServerError)
 		return

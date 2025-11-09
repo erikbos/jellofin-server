@@ -5,6 +5,11 @@ cachedir: /var/tmp/jellofin-img-cache
 appdir: /usr/local/jellofin/ui
 dbdir: /usr/local/jellofin/db
 
+database:
+  sqlite:
+    filename: /usr/local/jellofin/db/jellofin.db
+
+
 jellyfin:
   servername: jellofin
   autoregister: yes

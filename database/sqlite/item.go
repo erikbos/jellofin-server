@@ -1,4 +1,4 @@
-package database
+package sqlite
 
 import (
 	"database/sql"
@@ -8,53 +8,32 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
 
+	"github.com/erikbos/jellofin-server/database/model"
 	"github.com/erikbos/jellofin-server/idhash"
 )
 
-type ItemStorage struct {
-	dbHandle *sqlx.DB
-}
-
-func NewItemStorage(d *sqlx.DB) *ItemStorage {
-	return &ItemStorage{
-		dbHandle: d,
-	}
-}
-
-type Item struct {
-	ID         string
-	Name       string
-	Votes      int
-	Genre      string
-	Rating     float32
-	Year       int
-	NfoTime    int64
-	FirstVideo int64
-	LastVideo  int64
-}
-
-func (i *ItemStorage) dbInsertItem(tx *sqlx.Tx, item *Item) (err error) {
+func (i *SqliteRepo) dbInsertItem(tx *sqlx.Tx, item *model.Item) error {
 	// item.Genrestring = strings.Join(item.Genre, ",")
-	_, err = tx.NamedExec(
+	_, err := tx.NamedExec(
 		`INSERT INTO items(id, name, votes, genre, rating, year, nfotime, `+
 			`		firstvideo, lastvideo)`+
 			`VALUES (:id, :name, :votes, :genre, :rating, :year, :nfotime, `+
 			`		:firstvideo, :lastvideo)`, item)
-	return
+	return err
 }
 
-func (i *ItemStorage) dbUpdateItem(tx *sqlx.Tx, item *Item) (err error) {
+func (i *SqliteRepo) dbUpdateItem(tx *sqlx.Tx, item *model.Item) error {
 	// item.Genrestring = strings.Join(item.Genre, ",")
-	_, err = tx.NamedExec(
+	_, err := tx.NamedExec(
 		`UPDATE items SET votes = :votes, genre = :genre, rating = :rating, `+
 			`		year = :year, nfotime = :nfotime, `+
 			`		firstvideo = :firstvideo, lastvideo = :lastvideo `+
 			`		WHERE name = :name`, item)
-	return
+	return err
 }
 
-func (i *ItemStorage) DbLoadItem(item *Item) {
-	var data Item
+func (i *SqliteRepo) DbLoadItem(item *model.Item) {
+	var data model.Item
 
 	// Find this item by name in the database.
 	tx, _ := i.dbHandle.Beginx()

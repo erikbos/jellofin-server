@@ -37,22 +37,43 @@ func (c *Collection) GetDataDir() string {
 	return c.Directory
 }
 
-// CollectionDetails contains details about a collection.
+// CollectionDetails contains aggregate details about a collection.
 type CollectionDetails struct {
-	Genres          []string
-	Tags            []string
+	// Number of movies.
+	MovieCount int
+	// Number of shows.
+	ShowCount int
+	// Number of episodes.
+	EpisodeCount int
+	// List of genres.
+	Genres []string
+	// List of tags.
+	Tags []string
+	// List of official ratings.
 	OfficialRatings []string
-	Years           []int
+	// List of years.
+	Years []int
 }
 
 // Details returns collection details such as genres, tags, ratings, etc.
 func (c *Collection) Details() CollectionDetails {
+	var movieCount, showCount, episodeCount int
 	genres := make([]string, 0)
 	tags := make([]string, 0)
 	official := make([]string, 0)
 	years := make([]int, 0)
 
 	for _, i := range c.Items {
+		switch t := i.(type) {
+		case *Movie:
+			movieCount++
+		case *Show:
+			showCount++
+			for _, e := range t.Seasons {
+				episodeCount += len(e.Episodes)
+			}
+		}
+
 		for _, g := range i.Genres() {
 			if !slices.Contains(genres, g) {
 				genres = append(genres, g)
@@ -68,9 +89,10 @@ func (c *Collection) Details() CollectionDetails {
 		}
 	}
 
-	slices.Sort(years)
-
 	details := CollectionDetails{
+		MovieCount:      movieCount,
+		ShowCount:       showCount,
+		EpisodeCount:    episodeCount,
 		Genres:          genres,
 		Tags:            tags,
 		OfficialRatings: official,

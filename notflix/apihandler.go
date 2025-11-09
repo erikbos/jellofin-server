@@ -20,14 +20,14 @@ import (
 
 type Options struct {
 	Collections  *collection.CollectionRepo
-	Db           *database.DatabaseRepo
+	Repo         database.Repository
 	Imageresizer *imageresize.Resizer
 	Appdir       string
 }
 
 type Notflix struct {
 	collections  *collection.CollectionRepo
-	db           *database.DatabaseRepo
+	repo         *database.Repository
 	imageresizer *imageresize.Resizer
 	Appdir       string
 }
@@ -131,16 +131,16 @@ func (n *Notflix) itemsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var lastVideo int64
+	var lastVideo time.Time
 	for i := range c.Items {
 		switch s := c.Items[i].(type) {
 		case *collection.Show:
-			if s.LastVideo() > lastVideo {
+			if s.LastVideo().After(lastVideo) {
 				lastVideo = s.LastVideo()
 			}
 		}
 	}
-	if lastVideo > 0 && checkEtagObj(w, r, time.UnixMilli(lastVideo)) {
+	if !lastVideo.IsZero() && checkEtagObj(w, r, lastVideo) {
 		return
 	}
 	if r.Method == "HEAD" {
@@ -162,11 +162,11 @@ func (n *Notflix) itemHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch s := i.(type) {
 	case *collection.Movie:
-		if s.FirstVideo() > 0 && checkEtagObj(w, r, time.UnixMilli(s.FirstVideo())) {
+		if !s.Created().IsZero() && checkEtagObj(w, r, s.Created()) {
 			return
 		}
 	case *collection.Show:
-		if s.LastVideo() > 0 && checkEtagObj(w, r, time.UnixMilli(s.LastVideo())) {
+		if !s.LastVideo().IsZero() && checkEtagObj(w, r, s.LastVideo()) {
 			return
 		}
 	}
@@ -303,24 +303,30 @@ func copyItem(item collection.Item) Item {
 	switch v := item.(type) {
 	case *collection.Movie:
 		ci.Type = "movie"
-		ci.FirstVideo = v.FirstVideo()
-		ci.LastVideo = v.FirstVideo()
+		ci.FirstVideo = v.Created().UnixMilli()
+		ci.LastVideo = v.Created().UnixMilli()
 		ci.Nfo.Title = v.Metadata.Title()
 		ci.Nfo.Plot = v.Metadata.Plot()
 		ci.Nfo.Premiered = v.Metadata.Premiered().Format("2006-01-02")
 		ci.Nfo.MPAA = v.Metadata.OfficialRating()
 		ci.Nfo.Aired = v.Metadata.Premiered().Format("2006-01-02")
-		ci.Nfo.Studio = v.Metadata.Studios()[0]
+		if len(v.Metadata.Studios()) > 0 {
+			ci.Nfo.Studio = v.Metadata.Studios()[0]
+		}
+		ci.Nfo.Rating = v.Rating()
 	case *collection.Show:
 		ci.Type = "show"
-		ci.FirstVideo = v.FirstVideo()
-		ci.LastVideo = v.LastVideo()
+		ci.FirstVideo = v.FirstVideo().UnixMilli()
+		ci.LastVideo = v.LastVideo().UnixMilli()
 		ci.Nfo.Title = v.Metadata.Title()
 		ci.Nfo.Plot = v.Metadata.Plot()
 		ci.Nfo.Premiered = v.Metadata.Premiered().Format("2006-01-02")
 		ci.Nfo.MPAA = v.Metadata.OfficialRating()
 		ci.Nfo.Aired = v.Metadata.Premiered().Format("2006-01-02")
-		ci.Nfo.Studio = v.Metadata.Studios()[0]
+		if len(v.Metadata.Studios()) > 0 {
+			ci.Nfo.Studio = v.Metadata.Studios()[0]
+		}
+		ci.Nfo.Rating = v.Rating()
 		ci.SeasonAllBanner = v.SeasonAllBanner()
 		ci.SeasonAllPoster = v.SeasonAllPoster()
 	}
