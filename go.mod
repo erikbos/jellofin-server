@@ -3,7 +3,7 @@ module github.com/erikbos/jellofin-server
 go 1.24.0
 
 require (
-	github.com/blevesearch/bleve/v2 v2.5.4
+	github.com/blevesearch/bleve/v2 v2.5.5
 	github.com/disintegration/imaging v1.6.2
 	github.com/djherbis/times v1.6.0
 	github.com/gorilla/handlers v1.5.2
@@ -12,12 +12,12 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.21.0
-	golang.org/x/crypto v0.43.0
+	golang.org/x/crypto v0.45.0
 )
 
 require (
-	github.com/RoaringBitmap/roaring/v2 v2.14.2 // indirect
-	github.com/bits-and-blooms/bitset v1.24.3 // indirect
+	github.com/RoaringBitmap/roaring/v2 v2.14.4 // indirect
+	github.com/bits-and-blooms/bitset v1.24.4 // indirect
 	github.com/blevesearch/bleve_index_api v1.2.11 // indirect
 	github.com/blevesearch/geo v0.2.4 // indirect
 	github.com/blevesearch/go-faiss v1.0.26 // indirect
@@ -50,9 +50,9 @@ require (
 	github.com/subosito/gotenv v1.6.0 // indirect
 	go.etcd.io/bbolt v1.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/image v0.32.0 // indirect
+	golang.org/x/image v0.33.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect
-	golang.org/x/text v0.30.0 // indirect
+	golang.org/x/text v0.31.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 )

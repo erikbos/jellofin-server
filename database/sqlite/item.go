@@ -37,7 +37,7 @@ func (i *SqliteRepo) DbLoadItem(item *model.Item) {
 
 	// Find this item by name in the database.
 	tx, _ := i.dbHandle.Beginx()
-	err := i.dbHandle.Get(&data, "SELECT * FROM items WHERE name=? LIMIT 1", item.Name)
+	err := i.dbHandle.Get(&data, "SELECT id, name, votes, genre, rating, year, nfotime, firstvideo, lastvideo FROM items WHERE name=? LIMIT 1", item.Name)
 
 	// Not in database yet, insert
 	if err == sql.ErrNoRows {

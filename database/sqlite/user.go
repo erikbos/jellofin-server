@@ -9,7 +9,7 @@ import (
 // GetUser retrieves a user.
 func (s *SqliteRepo) GetUser(ctx context.Context, username string) (user *model.User, err error) {
 	var data model.User
-	sqlerr := s.dbHandle.Get(&data, "SELECT * FROM users WHERE username=? LIMIT 1", username)
+	sqlerr := s.dbHandle.Get(&data, "SELECT id, username, password FROM users WHERE username=? LIMIT 1", username)
 	if sqlerr != nil {
 		return nil, model.ErrNotFound
 	}
@@ -19,7 +19,7 @@ func (s *SqliteRepo) GetUser(ctx context.Context, username string) (user *model.
 // GetByID retrieves a user from the database by their ID.
 func (s *SqliteRepo) GetUserByID(ctx context.Context, userID string) (user *model.User, err error) {
 	var data model.User
-	if err := s.dbHandle.Get(&data, "SELECT * FROM users WHERE id=? LIMIT 1", userID); err != nil {
+	if err := s.dbHandle.Get(&data, "SELECT id, username, password FROM users WHERE id=? LIMIT 1", userID); err != nil {
 		return nil, model.ErrNotFound
 	}
 	// No need to return hashed pw

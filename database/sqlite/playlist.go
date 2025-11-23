@@ -74,7 +74,7 @@ func (s *SqliteRepo) GetPlaylist(ctx context.Context, userID, playlistID string)
 		UserID    string    `db:"userid"`
 		Timestamp time.Time `db:"timestamp"`
 	}
-	if err := s.dbHandle.Get(&playlist, "SELECT * FROM playlist WHERE userid=? AND id=? LIMIT 1",
+	if err := s.dbHandle.Get(&playlist, "SELECT id, name, userid, timestamp FROM playlist WHERE userid=? AND id=? LIMIT 1",
 		userID, playlistID); err != nil {
 		return nil, err
 	}
@@ -91,7 +91,7 @@ func (s *SqliteRepo) GetPlaylist(ctx context.Context, userID, playlistID string)
 		ItemOrder  string    `db:"itemorder"`
 		Timestamp  time.Time `db:"timestamp"`
 	}
-	if err := s.dbHandle.Select(&playlistEntries, "SELECT * FROM playlist_item WHERE playlistid=?",
+	if err := s.dbHandle.Select(&playlistEntries, "SELECT playlistid, itemid, itemorder, timestamp FROM playlist_item WHERE playlistid=?",
 		playlistID); err != nil {
 		return nil, err
 	}

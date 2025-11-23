@@ -44,7 +44,7 @@ func (s *SqliteRepo) GetUserData2(ctx context.Context, userID, itemID string) (*
 		Timestamp        time.Time `db:"timestamp"`
 	}
 
-	err := s.dbHandle.Get(&UserData, "SELECT * FROM playstate WHERE userid = ? AND itemid = ?", userID, itemID)
+	err := s.dbHandle.Get(&UserData, "SELECT userid, itemid, position, playedPercentage, played, favorite, timestamp FROM playstate WHERE userid = ? AND itemid = ?", userID, itemID)
 	if err != nil {
 		// log.Printf("SqliteRepoGet: userID: %s, itemID: %s, %+v\n", userID, itemID, err)
 		return nil, err
@@ -143,7 +143,7 @@ func (s *SqliteRepo) LoadStateFromDB() error {
 		Timestamp        time.Time `db:"timestamp"`
 	}
 
-	err := s.dbHandle.Select(&UserDatas, "SELECT * FROM playstate")
+	err := s.dbHandle.Select(&UserDatas, "SELECT userid, itemid, position, playedPercentage, played, favorite, timestamp FROM playstate")
 	if err != nil {
 		return err
 	}

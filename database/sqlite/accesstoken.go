@@ -46,7 +46,7 @@ func (s *SqliteRepo) GetAccessToken(ctx context.Context, token string) (*model.A
 
 	// try database
 	var t model.AccessToken
-	sqlerr := s.dbHandle.Get(&t, "SELECT * FROM accesstokens WHERE token=? LIMIT 1", token)
+	sqlerr := s.dbHandle.Get(&t, "SELECT userid, token, lastused FROM accesstokens WHERE token=? LIMIT 1", token)
 	if sqlerr == nil {
 		t.LastUsed = time.Now().UTC()
 		// Store accesstoken in memory
