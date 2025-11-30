@@ -24,7 +24,7 @@ func (j *Jellyfin) usersAllHandler(w http.ResponseWriter, r *http.Request) {
 
 	dbuser, err := j.repo.GetUserByID(r.Context(), accessToken.UserID)
 	if err != nil {
-		http.Error(w, ErrUserIDNotFound, http.StatusNotFound)
+		apierror(w, ErrUserIDNotFound, http.StatusNotFound)
 		return
 	}
 	response := []JFUser{
@@ -44,7 +44,7 @@ func (j *Jellyfin) usersMeHandler(w http.ResponseWriter, r *http.Request) {
 
 	dbuser, err := j.repo.GetUserByID(r.Context(), accessToken.UserID)
 	if err != nil {
-		http.Error(w, ErrUserIDNotFound, http.StatusNotFound)
+		apierror(w, ErrUserIDNotFound, http.StatusNotFound)
 		return
 	}
 	response := j.makeJFUser(dbuser)
@@ -62,13 +62,13 @@ func (j *Jellyfin) usersHandler(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	if vars["user"] != accessToken.UserID {
-		http.Error(w, ErrUserIDNotFound, http.StatusNotFound)
+		apierror(w, ErrUserIDNotFound, http.StatusNotFound)
 		return
 	}
 
 	dbuser, err := j.repo.GetUserByID(r.Context(), accessToken.UserID)
 	if err != nil {
-		http.Error(w, ErrUserIDNotFound, http.StatusNotFound)
+		apierror(w, ErrUserIDNotFound, http.StatusNotFound)
 		return
 	}
 	response := j.makeJFUser(dbuser)

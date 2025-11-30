@@ -51,7 +51,7 @@ func (j *Jellyfin) createPlaylistHandler(w http.ResponseWriter, r *http.Request)
 		_ = json.NewDecoder(r.Body).Decode(&req)
 	}
 	if req.Name == "" || req.UserID == "" {
-		http.Error(w, "Name and UserId are required", http.StatusBadRequest)
+		apierror(w, "Name and UserId are required", http.StatusBadRequest)
 		return
 	}
 
@@ -71,7 +71,7 @@ func (j *Jellyfin) createPlaylistHandler(w http.ResponseWriter, r *http.Request)
 	playlistID, err := j.repo.CreatePlaylist(r.Context(), newPlaylist)
 	log.Printf("playlistID: %s, err: %v", playlistID, err)
 	if err != nil {
-		http.Error(w, "Failed to create playlist", http.StatusInternalServerError)
+		apierror(w, "Failed to create playlist", http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
@@ -122,7 +122,7 @@ func (j *Jellyfin) getPlaylistHandler(w http.ResponseWriter, r *http.Request) {
 	playlist, err := j.repo.GetPlaylist(r.Context(), accessToken.UserID, trimPrefix(playlistID))
 	// log.Printf("querying playlist: %+v, %+v\n", playlist, err)
 	if err != nil {
-		http.Error(w, "Playlist not found", http.StatusNotFound)
+		apierror(w, "Playlist not found", http.StatusNotFound)
 		return
 	}
 
@@ -148,7 +148,7 @@ func (j *Jellyfin) getPlaylistItemsHandler(w http.ResponseWriter, r *http.Reques
 
 	playlist, err := j.repo.GetPlaylist(r.Context(), accessToken.UserID, trimPrefix(playlistID))
 	if err != nil {
-		http.Error(w, "Playlist not found", http.StatusNotFound)
+		apierror(w, "Playlist not found", http.StatusNotFound)
 		return
 	}
 
@@ -191,7 +191,7 @@ func (j *Jellyfin) addPlaylistItemsHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err := j.repo.AddItemsToPlaylist(r.Context(), accessToken.UserID, trimPrefix(playlistID), itemIDs); err != nil {
-		http.Error(w, "Failed to add items", http.StatusInternalServerError)
+		apierror(w, "Failed to add items", http.StatusInternalServerError)
 		return
 	}
 

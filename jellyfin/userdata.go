@@ -33,7 +33,7 @@ func (j *Jellyfin) usersPlayedItemsPostHandler(w http.ResponseWriter, r *http.Re
 	itemID := vars["item"]
 
 	if err := j.userDataUpdate(r.Context(), accessToken.UserID, itemID, 0, true); err != nil {
-		http.Error(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
+		apierror(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -53,7 +53,7 @@ func (j *Jellyfin) usersPlayedItemsDeleteHandler(w http.ResponseWriter, r *http.
 	itemID := vars["item"]
 
 	if err := j.userDataUpdate(r.Context(), accessToken.UserID, itemID, 0, false); err != nil {
-		http.Error(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
+		apierror(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -68,13 +68,13 @@ func (j *Jellyfin) sessionsPlayingHandler(w http.ResponseWriter, r *http.Request
 
 	var request JFPlayState
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		http.Error(w, ErrInvalidJSONPayload, http.StatusBadRequest)
+		apierror(w, ErrInvalidJSONPayload, http.StatusBadRequest)
 		return
 	}
 	// log.Printf("\nsessionsPlayingHandler UserID: %s, ItemId: %s, Progress: %d seconds\n\n",
 	// 	accessToken.UserID, request.ItemId, request.PositionTicks/TicsToSeconds)
 	if err := j.userDataUpdate(r.Context(), accessToken.UserID, request.ItemId, request.PositionTicks, false); err != nil {
-		http.Error(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
+		apierror(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -89,13 +89,13 @@ func (j *Jellyfin) sessionsPlayingProgressHandler(w http.ResponseWriter, r *http
 
 	var request JFPlayState
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		http.Error(w, ErrInvalidJSONPayload, http.StatusBadRequest)
+		apierror(w, ErrInvalidJSONPayload, http.StatusBadRequest)
 		return
 	}
 	// log.Printf("\nsessionsPlayingProgressHandler UserID: %s, ItemId: %s, Progress: %d seconds\n\n",
 	// 	accessToken.UserID, request.ItemId, request.PositionTicks/TicsToSeconds)
 	if err := j.userDataUpdate(r.Context(), accessToken.UserID, request.ItemId, request.PositionTicks, false); err != nil {
-		http.Error(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
+		apierror(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -110,13 +110,13 @@ func (j *Jellyfin) sessionsPlayingStoppedHandler(w http.ResponseWriter, r *http.
 
 	var request JFPlayState
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		http.Error(w, ErrInvalidJSONPayload, http.StatusBadRequest)
+		apierror(w, ErrInvalidJSONPayload, http.StatusBadRequest)
 		return
 	}
 	// log.Printf("\nsessionsPlayingStoppedHandler UserID: %s, ItemId: %s, Progress: %d seconds, canSeek: %t\n\n",
 	// 	accessToken.UserID, request.ItemId, request.PositionTicks/TicsToSeconds, request.CanSeek)
 	if err := j.userDataUpdate(r.Context(), accessToken.UserID, request.ItemId, request.PositionTicks, false); err != nil {
-		http.Error(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
+		apierror(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -181,7 +181,7 @@ func (j *Jellyfin) userFavoriteItemsPostHandler(w http.ResponseWriter, r *http.R
 	playstate.Favorite = true
 
 	if err := j.repo.UpdateUserData(r.Context(), accessToken.UserID, itemID, playstate); err != nil {
-		http.Error(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
+		apierror(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
 		return
 	}
 	userData := j.makeJFUserData(accessToken.UserID, itemID, playstate)
@@ -208,7 +208,7 @@ func (j *Jellyfin) userFavoriteItemsDeleteHandler(w http.ResponseWriter, r *http
 	playstate.Favorite = false
 
 	if err := j.repo.UpdateUserData(r.Context(), accessToken.UserID, itemID, playstate); err != nil {
-		http.Error(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
+		apierror(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
 		return
 	}
 	userData := j.makeJFUserData(accessToken.UserID, itemID, playstate)

@@ -55,7 +55,7 @@ func (j *Jellyfin) genreHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	genreParam := vars["genre"]
 	if genreParam == "" {
-		http.Error(w, "Missing genre", http.StatusBadRequest)
+		apierror(w, "Missing genre", http.StatusBadRequest)
 		return
 	}
 
@@ -66,7 +66,7 @@ func (j *Jellyfin) genreHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	http.Error(w, "Genre not found", http.StatusNotFound)
+	apierror(w, "Genre not found", http.StatusNotFound)
 }
 
 // /Items/Filters?userId=XAOVnIQY8sd0&parentId=collection_1
