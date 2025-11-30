@@ -246,17 +246,17 @@ func (b *Search) Similar(ctx context.Context, doc Document, size int) ([]string,
 
 	boolQuery := bleve.NewBooleanQuery()
 
-	// 1) Restrict results to same collection.
+	// 1) Must exclude reference item from result set.
+	termSelf := bleve.NewTermQuery(doc.ID)
+	termSelf.SetField("id")
+	boolQuery.AddMustNot(termSelf)
+
+	// 2) Must restrict results to same collection if ParentID is set.
 	if doc.ParentID != "" {
 		cq := bleve.NewTermQuery(doc.ParentID)
 		cq.SetField("parent_id")
 		boolQuery.AddMust(cq)
 	}
-
-	// 2) Exclude reference item from result set.
-	termSelf := bleve.NewTermQuery(doc.ID)
-	termSelf.SetField("id")
-	boolQuery.AddMustNot(termSelf)
 
 	// 3) High-boost prefix for the first token (helps partial words)
 	tokens := strings.Fields(doc.Name)
@@ -332,11 +332,6 @@ func (b *Search) Similar(ctx context.Context, doc Document, size int) ([]string,
 		ov.SetBoost(boostOverview)
 		boolQuery.AddShould(ov)
 	}
-
-	// Require at least two query conditions to match (see first match conditions):
-	// - 1. Restrict results to same collection.
-	// - 2. Exclude reference item from result set.
-	boolQuery.SetMinShould(2)
 
 	req := bleve.NewSearchRequestOptions(boolQuery, size, 0, false)
 	// Specify fields to retrieve, we only need IDs for now
