@@ -101,6 +101,15 @@ func (n *MetadataNfo) Premiered() time.Time {
 	return time.Time{}
 }
 
+// Directors returns the directors.
+func (n *MetadataNfo) Directors() []string {
+	n.loadNfo()
+	if len(n.nfo.Directors) == 0 {
+		return nil
+	}
+	return n.nfo.Directors
+}
+
 // Studios returns the studios.
 func (n *MetadataNfo) Studios() []string {
 	n.loadNfo()
@@ -246,7 +255,7 @@ type nfo struct {
 	Votes        int          `xml:"-"`
 	Genre        []string     `xml:"genre,omitempty"`
 	Actor        []Actor      `xml:"actor,omitempty"`
-	Director     string       `xml:"director,omitempty"`
+	Directors    []string     `xml:"director,omitempty"`
 	Credits      string       `xml:"credits,omitempty"`
 	UniqueIDs    []UniqueID   `xml:"uniqueid,omitempty"`
 	Thumb        string       `xml:"thumb,omitempty"`

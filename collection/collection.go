@@ -47,6 +47,8 @@ type CollectionDetails struct {
 	EpisodeCount int
 	// List of genres.
 	Genres []string
+	// List of studios.
+	Studios []string
 	// List of tags.
 	Tags []string
 	// List of official ratings.
@@ -59,6 +61,7 @@ type CollectionDetails struct {
 func (c *Collection) Details() CollectionDetails {
 	var movieCount, showCount, episodeCount int
 	genres := make([]string, 0)
+	studios := make([]string, 0)
 	tags := make([]string, 0)
 	official := make([]string, 0)
 	years := make([]int, 0)
@@ -79,6 +82,13 @@ func (c *Collection) Details() CollectionDetails {
 				genres = append(genres, g)
 			}
 		}
+
+		for _, s := range i.Studios() {
+			if !slices.Contains(studios, s) {
+				studios = append(studios, s)
+			}
+		}
+
 		itemOfficialRating := i.OfficialRating()
 		if itemOfficialRating != "" && !slices.Contains(official, itemOfficialRating) {
 			official = append(official, itemOfficialRating)
@@ -94,6 +104,7 @@ func (c *Collection) Details() CollectionDetails {
 		ShowCount:       showCount,
 		EpisodeCount:    episodeCount,
 		Genres:          genres,
+		Studios:         studios,
 		Tags:            tags,
 		OfficialRatings: official,
 		Years:           years,

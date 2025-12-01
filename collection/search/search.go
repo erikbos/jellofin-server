@@ -246,7 +246,7 @@ func (b *Search) Similar(ctx context.Context, doc Document, size int) ([]string,
 
 	boolQuery := bleve.NewBooleanQuery()
 
-	// 1) Must exclude reference item from result set.
+	// 1) Must exclude similar reference item from result set.
 	termSelf := bleve.NewTermQuery(doc.ID)
 	termSelf.SetField("id")
 	boolQuery.AddMustNot(termSelf)

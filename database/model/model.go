@@ -20,12 +20,33 @@ type User struct {
 	Username string
 	// Password is the hashed password of the user.
 	Password string
+	// Created is the time the user was created.
+	Created time.Time
+	// LastLogin is the last time the user logged in.
+	LastLogin time.Time
+	// LastUsed is the last time the user was active.
+	LastUsed time.Time
 }
 
 // AccessToken represents an access token for a user.
 type AccessToken struct {
-	UserID   string
-	Token    string
+	// UserID is the ID of the user associated with the token.
+	UserID string
+	// Token is the access token string.
+	Token string
+	// DeviceId is the unique identifier for the device.
+	DeviceId string
+	// DeviceName is the name of the device.
+	DeviceName string
+	// ApplicationName is the name of the application.
+	ApplicationName string
+	// ApplicationVersion is the version of the application.
+	ApplicationVersion string
+	// RemoteAddress is the remote address of the client.
+	RemoteAddress string
+	// Created is the time the token was created.
+	Created time.Time
+	// LastUsed is the last time the token was used.
 	LastUsed time.Time
 }
 
@@ -48,6 +69,8 @@ type UserData struct {
 	Position int64
 	// Played playedPercentage
 	PlayedPercentage int
+	// Play count of the item
+	PlayCount int
 	// True if the item has been fully played
 	Played bool
 	// True if the item is favorite of user

@@ -292,6 +292,7 @@ func (cr *CollectionRepo) NextUp(watchedEpisodeIDs []string) (nextUpEpisodeIDs [
 func (c *CollectionRepo) Details() CollectionDetails {
 	var movieCount, showCount, episodeCount int
 	genres := make([]string, 0)
+	studios := make([]string, 0)
 	tags := make([]string, 0)
 	official := make([]string, 0)
 	years := make([]int, 0)
@@ -306,6 +307,11 @@ func (c *CollectionRepo) Details() CollectionDetails {
 		for _, g := range details.Genres {
 			if !slices.Contains(genres, g) {
 				genres = append(genres, g)
+			}
+		}
+		for _, s := range details.Studios {
+			if !slices.Contains(studios, s) {
+				studios = append(studios, s)
 			}
 		}
 		for _, t := range details.Tags {

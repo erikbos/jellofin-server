@@ -41,6 +41,7 @@ type Item interface {
 	metadata.AudioMetadata
 
 	Genres() []string
+	Studios() []string
 	Year() int
 	Rating() float32
 	OfficialRating() string
@@ -104,6 +105,7 @@ func (m *Movie) AudioBitrate() int       { return m.Metadata.AudioBitrate() }
 func (m *Movie) AudioChannels() int      { return m.Metadata.AudioChannels() }
 func (m *Movie) AudioLanguage() string   { return m.Metadata.AudioLanguage() }
 func (m *Movie) Genres() []string        { return m.Metadata.Genres() }
+func (m *Movie) Studios() []string       { return m.Metadata.Studios() }
 func (m *Movie) Year() int               { return m.Metadata.Year() }
 func (m *Movie) Rating() float32         { return m.Metadata.Rating() }
 func (m *Movie) OfficialRating() string  { return m.Metadata.OfficialRating() }
@@ -184,6 +186,7 @@ func (s *Show) AudioBitrate() int       { return s.Metadata.AudioBitrate() }
 func (s *Show) AudioChannels() int      { return s.Metadata.AudioChannels() }
 func (s *Show) AudioLanguage() string   { return s.Metadata.AudioLanguage() }
 func (s *Show) Genres() []string        { return s.Metadata.Genres() }
+func (s *Show) Studios() []string       { return s.Metadata.Studios() }
 func (s *Show) Year() int               { return s.Metadata.Year() }
 func (s *Show) Rating() float32         { return s.Metadata.Rating() }
 func (s *Show) OfficialRating() string  { return s.Metadata.OfficialRating() }
@@ -251,6 +254,7 @@ func (season *Season) AudioBitrate() int       { return 0 }
 func (season *Season) AudioChannels() int      { return 0 }
 func (season *Season) AudioLanguage() string   { return "eng" }
 func (season *Season) Genres() []string        { return []string{} }
+func (season *Season) Studios() []string       { return []string{} }
 func (season *Season) Year() int               { return 0 }
 func (season *Season) Rating() float32         { return 0 }
 func (season *Season) OfficialRating() string  { return "" }
@@ -326,6 +330,7 @@ func (e *Episode) AudioBitrate() int       { return e.Metadata.AudioBitrate() }
 func (e *Episode) AudioChannels() int      { return e.Metadata.AudioChannels() }
 func (e *Episode) AudioLanguage() string   { return e.Metadata.AudioLanguage() }
 func (e *Episode) Genres() []string        { return e.Metadata.Genres() }
+func (e *Episode) Studios() []string       { return e.Metadata.Studios() }
 func (e *Episode) Year() int               { return e.Metadata.Year() }
 func (e *Episode) Rating() float32         { return e.Metadata.Rating() }
 func (e *Episode) OfficialRating() string  { return e.Metadata.OfficialRating() }

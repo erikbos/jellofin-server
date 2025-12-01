@@ -2,7 +2,6 @@ package jellyfin
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/erikbos/jellofin-server/database/model"
 )
@@ -15,31 +14,49 @@ func (j *Jellyfin) sessionsHandler(w http.ResponseWriter, r *http.Request) {
 	if accessToken == nil {
 		return
 	}
+
 	dbuser, err := j.repo.GetUserByID(r.Context(), accessToken.UserID)
 	if err != nil {
-		http.Error(w, ErrUserIDNotFound, http.StatusNotFound)
+		apierror(w, ErrUserIDNotFound, http.StatusNotFound)
 		return
 	}
 
-	remoteAdress := strings.Split(r.RemoteAddr, ":")[0]
+	// Get all access tokens for this user
+	accessTokens, err := j.repo.GetAccessTokens(r.Context(), accessToken.UserID)
+	if err != nil {
+		apierror(w, "error retrieving sessions", http.StatusInternalServerError)
+		return
+	}
 
-	// Every connected client gets to see the same session details ;-)
-	response := j.makeJFSessionInfo(accessToken, dbuser.Username, remoteAdress)
+	// Keep most recent access token per deviceid only, we assume older
+	// tokens for the same deviceid are stale.
+	uniqueAccessTokens := make(map[string]model.AccessToken)
+	for _, t := range accessTokens {
+		existing, found := uniqueAccessTokens[t.DeviceId]
+		if !found || t.LastUsed.After(existing.LastUsed) {
+			uniqueAccessTokens[t.DeviceId] = t
+		}
+	}
 
-	serveJSON(response, w)
+	// Build session list based upon access tokens
+	var sessions []JFSessionInfo
+	for _, t := range uniqueAccessTokens {
+		sessions = append(sessions, *j.makeJFSessionInfo(t, dbuser.Username))
+	}
+	serveJSON(sessions, w)
 }
 
-func (j *Jellyfin) makeJFSessionInfo(accessToken *model.AccessToken, username, remoteAdress string) *JFSessionInfo {
+func (j *Jellyfin) makeJFSessionInfo(accessToken model.AccessToken, username string) *JFSessionInfo {
 	s := &JFSessionInfo{
 		ID:                    sessionID,
 		UserID:                accessToken.UserID,
 		UserName:              username,
 		LastActivityDate:      accessToken.LastUsed,
-		RemoteEndPoint:        remoteAdress,
-		DeviceName:            "Client",
-		DeviceID:              "Client",
-		Client:                "curl",
-		ApplicationVersion:    "1.0",
+		RemoteEndPoint:        accessToken.RemoteAddress,
+		DeviceName:            accessToken.DeviceName,
+		DeviceID:              accessToken.DeviceId,
+		Client:                accessToken.ApplicationName,
+		ApplicationVersion:    accessToken.ApplicationVersion,
 		IsActive:              true,
 		SupportsMediaControl:  false,
 		SupportsRemoteControl: false,

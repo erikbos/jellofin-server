@@ -34,6 +34,7 @@ const (
 	itemTypeEpisode          = "Episode"
 	itemTypePlaylist         = "Playlist"
 	itemTypeGenre            = "Genre"
+	itemTypeStudio           = "Studio"
 
 	// imagetag prefix will get HTTP-redirected
 	tagprefix_redirect = "redirect_"
@@ -390,6 +391,8 @@ func (j *Jellyfin) makeJFItemMovie(ctx context.Context, userID string, movie *co
 		ChannelID:         nil,
 		Chapters:          []JFChapter{},
 		ExternalUrls:      []JFExternalUrls{},
+		People:            []JFPeople{},
+		RemoteTrailers:    []JFRemoteTrailers{},
 		Tags:              []string{},
 		Taglines:          []string{movie.Metadata.Tagline()},
 		Trickplay:         []string{},
@@ -461,6 +464,8 @@ func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, show *coll
 		ChannelID:       nil,
 		Chapters:        []JFChapter{},
 		ExternalUrls:    []JFExternalUrls{},
+		People:          []JFPeople{},
+		RemoteTrailers:  []JFRemoteTrailers{},
 		Tags:            []string{},
 		Taglines:        []string{show.Metadata.Tagline()},
 		Trickplay:       []string{},
@@ -514,8 +519,9 @@ func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, show *coll
 	for _, s := range show.Seasons {
 		for _, e := range s.Episodes {
 			totalEpisodes++
+			// Get playstate of episode
 			episodePlaystate, err := j.repo.GetUserData(ctx, userID, e.ID())
-			if err == nil {
+			if err == nil && episodePlaystate != nil {
 				if episodePlaystate.Played {
 					playedEpisodes++
 					if episodePlaystate.Timestamp.After(lastestPlayed) {
@@ -532,7 +538,8 @@ func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, show *coll
 		response.UserData.PlayedPercentage = 100 * playedEpisodes / totalEpisodes
 		response.UserData.LastPlayedDate = lastestPlayed
 		response.UserData.Key = response.ID
-		if playedEpisodes == response.ChildCount {
+		// Mark show as played when all episodes are played
+		if playedEpisodes == totalEpisodes {
 			response.UserData.Played = true
 		}
 	}
@@ -569,13 +576,15 @@ func (j *Jellyfin) makeJFItemSeason(ctx context.Context, userID string, season *
 		ImageTags: &JFImageTags{
 			Primary: makeJFSeasonID(season.ID()),
 		},
-		ChannelID:    nil,
-		Chapters:     []JFChapter{},
-		ExternalUrls: []JFExternalUrls{},
-		Tags:         []string{},
-		Taglines:     []string{},
-		Trickplay:    []string{},
-		LockedFields: []string{},
+		ChannelID:      nil,
+		Chapters:       []JFChapter{},
+		ExternalUrls:   []JFExternalUrls{},
+		People:         []JFPeople{},
+		RemoteTrailers: []JFRemoteTrailers{},
+		Tags:           []string{},
+		Taglines:       []string{},
+		Trickplay:      []string{},
+		LockedFields:   []string{},
 	}
 	// Regular season? (>0)
 	seasonNumber := season.Number()
@@ -684,6 +693,8 @@ func (j *Jellyfin) makeJFItemEpisode(ctx context.Context, userID string, episode
 		ChannelID:         nil,
 		Chapters:          []JFChapter{},
 		ExternalUrls:      []JFExternalUrls{},
+		People:            []JFPeople{},
+		RemoteTrailers:    []JFRemoteTrailers{},
 		Tags:              []string{},
 		Taglines:          []string{},
 		Trickplay:         []string{},
@@ -734,7 +745,6 @@ func (j *Jellyfin) makeJFItemEpisode(ctx context.Context, userID string, episode
 }
 
 func (j *Jellyfin) makeJFItemGenre(_ context.Context, genre string) (response JFItem) {
-
 	response = JFItem{
 		ID:           makeJFGenreID(genre),
 		ServerID:     j.serverID,
@@ -756,6 +766,25 @@ func (j *Jellyfin) makeJFItemGenre(_ context.Context, genre string) (response JF
 	}
 
 	return
+}
+
+func (j *Jellyfin) makeJFItemStudio(_ context.Context, studio string) JFItem {
+	response := JFItem{
+		ID:                makeJFStudioID(studio),
+		ServerID:          j.serverID,
+		Type:              itemTypeStudio,
+		Name:              studio,
+		Etag:              makeJFStudioID(studio),
+		DateCreated:       time.Now().UTC(),
+		PremiereDate:      time.Now().UTC(),
+		LocationType:      "FileSystem",
+		MediaType:         "Unknown",
+		ImageBlurHashes:   &JFImageBlurHashes{},
+		ImageTags:         &JFImageTags{},
+		BackdropImageTags: []string{},
+		UserData:          &JFUserData{},
+	}
+	return response
 }
 
 func makeJFStudios(studios []string) []JFStudios {
@@ -803,7 +832,7 @@ func (j *Jellyfin) makeJFUserData(UserID, itemID string, p *model.UserData) (res
 func (j *Jellyfin) makeMediaSource(item collection.Item) (mediasources []JFMediaSources) {
 	filename := item.FileName()
 	mediasource := JFMediaSources{
-		ID:                    idhash.IdHash(filename),
+		ID:                    item.ID(),
 		ETag:                  idhash.IdHash(filename),
 		Name:                  filename,
 		Path:                  filename,
@@ -834,6 +863,8 @@ func (j *Jellyfin) makeMediaSource(item collection.Item) (mediasources []JFMedia
 		// File bitrate/s is sum of audio and video bitrate
 		Bitrate:      item.VideoBitrate() + item.AudioBitrate(),
 		MediaStreams: j.makeJFMediaStreams(item),
+		// We assume audio stream is always at index 1 by makeJFMediaStreams()
+		DefaultAudioStreamIndex: 1,
 	}
 
 	return []JFMediaSources{mediasource}
@@ -1060,6 +1091,11 @@ func isJFCollectionPlaylistID(id string) bool {
 // isJFPlaylistID checks if the provided ID is a playlist ID.
 func isJFPlaylistID(id string) bool {
 	return strings.HasPrefix(id, itemprefix_playlist)
+}
+
+// isJFShowID checks if the provided ID is a show ID.
+func isJFShowID(id string) bool {
+	return strings.HasPrefix(id, itemprefix_show)
 }
 
 // isJFSeasonID checks if the provided ID is a season ID.

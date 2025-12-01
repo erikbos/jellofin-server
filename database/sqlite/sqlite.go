@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 	"sync"
@@ -14,7 +15,7 @@ import (
 
 type SqliteRepo struct {
 	// Read db handle
-	dbHandle *sqlx.DB
+	dbReadHandle *sqlx.DB
 	// Handle specfically for writes
 	dbWriteHandle *sqlx.DB
 	// in-memory access token store, entries written to the database every 3 seconds.
@@ -58,13 +59,22 @@ func New(o *ConfigFile) (*SqliteRepo, error) {
 	}
 
 	d := &SqliteRepo{
-		dbHandle:         dbHandle,
+		dbReadHandle:     dbHandle,
 		dbWriteHandle:    writeDB,
 		userDataEntries:  make(map[userDataKey]model.UserData),
 		accessTokenCache: make(map[string]*model.AccessToken),
 	}
 
-	d.LoadStateFromDB()
+	d.loadUserDataFromDB()
 
 	return d, nil
+}
+
+// StartBackgroundJobs starts background jobs for the database repository.
+// these jobs handle periodic syncing of in-memory caches to the database.
+func (s *SqliteRepo) StartBackgroundJobs(ctx context.Context) {
+	syncInterval := 10 * time.Second
+
+	go s.accessTokenBackgroundJob(ctx, syncInterval)
+	go s.userDataBackgroundJob(ctx, syncInterval)
 }

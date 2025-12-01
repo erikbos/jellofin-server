@@ -108,8 +108,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("database.New: %s", err.Error())
 	}
-	go repo.AccessTokenBackgroundJobs()
-	go repo.UserDataBackgroundJobs()
+	repo.StartBackgroundJobs(context.Background())
 
 	// Initialize collection and add them to the collection manager
 	collection := collection.New(&collection.Options{
@@ -182,7 +181,8 @@ func main() {
 			Addr:    addr,
 			Handler: server,
 			TLSConfig: &tls.Config{
-				MinVersion:     tls.VersionTLS13,
+				// Streamyfin's websocket connection still uses TLS1.2..
+				MinVersion:     tls.VersionTLS12,
 				GetCertificate: kpr.GetCertificateFunc(),
 			},
 		}

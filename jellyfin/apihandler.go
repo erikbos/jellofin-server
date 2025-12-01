@@ -1,6 +1,7 @@
 package jellyfin
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"math/rand"
@@ -229,6 +230,31 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			parentFound = true
+		// Check if parentID is a show or season to generate overviews
+		default:
+			if _, i := j.collections.GetItemByID(trimPrefix(parentID)); i != nil {
+				switch v := i.(type) {
+				case *collection.Show:
+					items, err = j.makeJFSeasonsOverview(r.Context(), accessToken.UserID, v, queryparams)
+					if err != nil {
+						apierror(w, "Could not find parent show", http.StatusNotFound)
+						return
+					}
+					parentFound = true
+				case *collection.Season:
+					items, err = j.makeJFEpisodesOverview(r.Context(), accessToken.UserID, v, queryparams)
+					if err != nil {
+						apierror(w, "Could not find season", http.StatusNotFound)
+						return
+					}
+					parentFound = true
+				// Other parentID types are not supported
+				default:
+					log.Printf("usersItemsHandler: unsupported parentID %s of type %T \n", i.ID(), i)
+					apierror(w, "unable to generate items for parentID", http.StatusNotImplemented)
+					return
+				}
+			}
 		}
 	}
 
@@ -601,6 +627,15 @@ func (j *Jellyfin) usersItemsSimilarHandler(w http.ResponseWriter, r *http.Reque
 	serveJSON(response, w)
 }
 
+// /Items/{item}/SpecialFeatures
+//
+// usersItemsSpecialFeaturesHandler returns a list of items that are specials
+func (j *Jellyfin) usersItemsSpecialFeaturesHandler(w http.ResponseWriter, r *http.Request) {
+	// Currently not implemented, return empty list
+	response := []JFItem{}
+	serveJSON(response, w)
+}
+
 // /Items/Suggestions
 //
 // usersItemsSuggestionsHandler returns a list of items that are suggested for the user
@@ -661,10 +696,45 @@ func (j *Jellyfin) showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	seasons, err := j.makeJFSeasonsOverview(r.Context(), accessToken.UserID, show, queryparams)
+	if err != nil {
+		apierror(w, "Could not generate seasons overview", http.StatusInternalServerError)
+		return
+	}
+
 	// Create API response
-	seasons := make([]JFItem, 0)
+	// seasons := make([]JFItem, 0)
+	// for _, s := range show.Seasons {
+	// 	jfitem, err := j.makeJFItemSeason(r.Context(), accessToken.UserID, &s, show.ID())
+	// 	if err != nil {
+	// 		log.Printf("makeJFItemSeason returned error %s", err)
+	// 		continue
+	// 	}
+	// 	if j.applyItemFilter(&jfitem, queryparams) {
+	// 		seasons = append(seasons, jfitem)
+	// 	}
+	// }
+
+	// Always sort seasons by number, no user provided sortBy option.
+	// This way season 99, Specials ends up last.
+	sort.SliceStable(seasons, func(i, j int) bool {
+		return seasons[i].IndexNumber < seasons[j].IndexNumber
+	})
+
+	response := UserItemsResponse{
+		Items:            seasons,
+		TotalRecordCount: len(seasons),
+		StartIndex:       0,
+	}
+	serveJSON(response, w)
+}
+
+// makeJFSeasonsOverview generates season overview for a show
+func (j *Jellyfin) makeJFSeasonsOverview(ctx context.Context, userID string, show *collection.Show, queryparams url.Values) ([]JFItem, error) {
+	// Create API response
+	seasons := make([]JFItem, 0, len(show.Seasons))
 	for _, s := range show.Seasons {
-		jfitem, err := j.makeJFItemSeason(r.Context(), accessToken.UserID, &s, show.ID())
+		jfitem, err := j.makeJFItemSeason(ctx, userID, &s, show.ID())
 		if err != nil {
 			log.Printf("makeJFItemSeason returned error %s", err)
 			continue
@@ -680,12 +750,7 @@ func (j *Jellyfin) showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
 		return seasons[i].IndexNumber < seasons[j].IndexNumber
 	})
 
-	response := UserItemsResponse{
-		Items:            seasons,
-		TotalRecordCount: len(seasons),
-		StartIndex:       0,
-	}
-	serveJSON(response, w)
+	return seasons, nil
 }
 
 // /Shows/rXlq4EHNxq4HIVQzw3o2/Episodes?UserId=2b1ec0a52b09456c9823a367d84ac9e5&ExcludeLocationTypes=Virtual&Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount&SeasonId=rXlq4EHNxq4HIVQzw3o2/1
@@ -750,6 +815,30 @@ func (j *Jellyfin) showsEpisodesHandler(w http.ResponseWriter, r *http.Request) 
 		StartIndex:       0,
 	}
 	serveJSON(response, w)
+}
+
+// makeJFEpisodesOverview generates episode overview for one season of a show
+func (j *Jellyfin) makeJFEpisodesOverview(ctx context.Context, userID string, season *collection.Season, queryparams url.Values) ([]JFItem, error) {
+	episodes := make([]JFItem, 0)
+	for _, e := range season.Episodes {
+		if episode, err := j.makeJFItemEpisode(ctx, userID, &e, season.ID()); err == nil {
+			episodes = append(episodes, episode)
+		}
+	}
+
+	// for _, e := range season.Episodes {
+	// 	episode, err := j.makeJFItemEpisode(ctx, userID, &e, season.ID())
+	// 	if err == nil {
+	// 		if jfitem, err := j.makeJFItem(ctx, userID, &e, season.ID()) ;
+	// 		if err != nil {
+	// 			return nil, err
+	// 		}
+	// 		if j.applyItemFilter(&jfitem, queryparams) {
+	// 		episodes = append(episodes, episode)
+	// 		}
+	// 	}
+	// }
+	return episodes, nil
 }
 
 // applyItemFilter checks if the item should be included in a result set or not.
@@ -838,11 +927,26 @@ func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
 	}
 
 	// filter on genre IDs
-	if includeGenresID := queryparams.Get("genreIds"); includeGenresID != "" {
+	if includeGenreIDs := queryparams.Get("genreIds"); includeGenreIDs != "" {
 		keepItem := false
-		for genreID := range strings.SplitSeq(includeGenresID, "|") {
+		for genreID := range strings.SplitSeq(includeGenreIDs, "|") {
 			for _, genre := range i.Genres {
 				if makeJFGenreID(genre) == genreID {
+					keepItem = true
+				}
+			}
+		}
+		if !keepItem {
+			return false
+		}
+	}
+
+	// filter on studio IDs
+	if includeStudioIDs := queryparams.Get("studioIds"); includeStudioIDs != "" {
+		keepItem := false
+		for studioID := range strings.SplitSeq(includeStudioIDs, "|") {
+			for _, studio := range i.Studios {
+				if studio.ID == studioID {
 					keepItem = true
 				}
 			}
@@ -904,6 +1008,21 @@ func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
 		for genre := range strings.SplitSeq(includeGenres, "|") {
 			if slices.Contains(i.Genres, genre) {
 				keepItem = true
+			}
+		}
+		if !keepItem {
+			return false
+		}
+	}
+
+	// filter on studio name
+	if includeStudios := queryparams.Get("studios"); includeStudios != "" {
+		keepItem := false
+		for studio := range strings.SplitSeq(includeStudios, "|") {
+			for _, s := range i.Studios {
+				if s.Name == studio {
+					keepItem = true
+				}
 			}
 		}
 		if !keepItem {

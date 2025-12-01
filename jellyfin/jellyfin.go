@@ -140,9 +140,13 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/Items/{item}/Images/{type}/{index}", http.HandlerFunc(j.itemsImagesHandler)).Methods("GET")
 	r.Handle("/Items/{item}/PlaybackInfo", middleware(j.itemsPlaybackInfoHandler))
 	r.Handle("/Items/{item}/Similar", middleware(j.usersItemsSimilarHandler))
+	r.Handle("/Items/{item}/SpecialFeatures", middleware(j.usersItemsSpecialFeaturesHandler))
 
 	r.Handle("/Genres", middleware(j.genresHandler))
 	r.Handle("/Genres/{genre}", middleware(j.genreHandler))
+
+	r.Handle("/Studios", middleware(j.studiosHandler))
+	r.Handle("/Studios/{studio}", middleware(j.studioHandler))
 
 	r.Handle("/Search/Hints", middleware(j.searchHintsHandler))
 

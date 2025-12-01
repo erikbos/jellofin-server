@@ -246,7 +246,7 @@ type JFItem struct {
 	Overview                 string             `json:"Overview,omitempty"`
 	Taglines                 []string           `json:"Taglines,omitempty"`
 	Trickplay                []string           `json:"Trickplay,omitempty"`
-	Genres                   []string           `json:"Genres,omitempty"`
+	Genres                   []string           `json:"Genres"`
 	CommunityRating          float32            `json:"CommunityRating,omitempty"`
 	RunTimeTicks             int64              `json:"RunTimeTicks,omitempty"`
 	PlayAccess               string             `json:"PlayAccess,omitempty"`
@@ -262,14 +262,14 @@ type JFItem struct {
 	Is4K                     bool               `json:"Is4K"`
 	LockData                 bool               `json:"LockData"`
 	HasSubtitles             bool               `json:"HasSubtitles,omitempty"`
-	People                   []JFPeople         `json:"People,omitempty"`
-	Studios                  []JFStudios        `json:"Studios,omitempty"`
-	GenreItems               []JFGenreItem      `json:"GenreItems,omitempty"`
+	People                   []JFPeople         `json:"People"`
+	Studios                  []JFStudios        `json:"Studios"`
+	GenreItems               []JFGenreItem      `json:"GenreItems"`
 	RemoteTrailers           []JFRemoteTrailers `json:"RemoteTrailers,omitempty"`
 	ImageBlurHashes          *JFImageBlurHashes `json:"ImageBlurHashes,omitempty"`
 	ProviderIds              JFProviderIds      `json:"ProviderIds,omitempty"`
 	ExternalUrls             []JFExternalUrls   `json:"ExternalUrls,omitempty"`
-	Tags                     []string           `json:"Tags,omitempty"`
+	Tags                     []string           `json:"Tags"`
 	LockedFields             []string           `json:"LockedFields"`
 	LocalTrailerCount        int                `json:"LocalTrailerCount,omitempty"`
 	SpecialFeatureCount      int                `json:"SpecialFeatureCount,omitempty"`

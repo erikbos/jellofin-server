@@ -16,13 +16,13 @@ func (s *SqliteRepo) CreatePlaylist(ctx context.Context, newPlaylist model.Playl
 	// every create playlist will have a unique id (=Jellyfin behaviour)
 	newPlaylist.ID = idhash.IdHash(newPlaylist.Name + time.Now().String())
 
-	tx, err := s.dbHandle.Beginx()
+	tx, err := s.dbWriteHandle.Beginx()
 	if err != nil {
 		return "", err
 	}
 	defer tx.Rollback()
 
-	if _, err = tx.NamedExec(`INSERT INTO playlist (id, name, userid, timestamp)
+	if _, err = tx.NamedExecContext(ctx, `INSERT INTO playlist (id, name, userid, timestamp)
 		VALUES (:id, :name, :userid, :timestamp)`,
 		map[string]any{
 			"id":        newPlaylist.ID,
@@ -35,7 +35,7 @@ func (s *SqliteRepo) CreatePlaylist(ctx context.Context, newPlaylist model.Playl
 
 	order := 1
 	for _, itemID := range newPlaylist.ItemIDs {
-		_, err := tx.NamedExec(`INSERT INTO playlist_item (playlistid, itemid, itemorder, timestamp)
+		_, err := tx.NamedExecContext(ctx, `INSERT INTO playlist_item (playlistid, itemid, itemorder, timestamp)
 	            VALUES (:playlist_id, :item_id, :item_order, :timestamp)`,
 			map[string]any{
 				"playlist_id": newPlaylist.ID,
@@ -55,7 +55,7 @@ func (s *SqliteRepo) GetPlaylists(ctx context.Context, userID string) (playlistI
 	var playlistIDEntries []struct {
 		ID string `db:"id"`
 	}
-	err = s.dbHandle.Select(&playlistIDEntries, "SELECT id FROM playlist WHERE userid=?", userID)
+	err = s.dbReadHandle.SelectContext(ctx, &playlistIDEntries, "SELECT id FROM playlist WHERE userid=?", userID)
 	if err != nil {
 		return
 	}
@@ -74,7 +74,7 @@ func (s *SqliteRepo) GetPlaylist(ctx context.Context, userID, playlistID string)
 		UserID    string    `db:"userid"`
 		Timestamp time.Time `db:"timestamp"`
 	}
-	if err := s.dbHandle.Get(&playlist, "SELECT id, name, userid, timestamp FROM playlist WHERE userid=? AND id=? LIMIT 1",
+	if err := s.dbReadHandle.GetContext(ctx, &playlist, "SELECT id, name, userid, timestamp FROM playlist WHERE userid=? AND id=? LIMIT 1",
 		userID, playlistID); err != nil {
 		return nil, err
 	}
@@ -91,7 +91,7 @@ func (s *SqliteRepo) GetPlaylist(ctx context.Context, userID, playlistID string)
 		ItemOrder  string    `db:"itemorder"`
 		Timestamp  time.Time `db:"timestamp"`
 	}
-	if err := s.dbHandle.Select(&playlistEntries, "SELECT playlistid, itemid, itemorder, timestamp FROM playlist_item WHERE playlistid=?",
+	if err := s.dbReadHandle.SelectContext(ctx, &playlistEntries, "SELECT playlistid, itemid, itemorder, timestamp FROM playlist_item WHERE playlistid=?",
 		playlistID); err != nil {
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func (s *SqliteRepo) GetPlaylist(ctx context.Context, userID, playlistID string)
 func (s *SqliteRepo) AddItemsToPlaylist(ctx context.Context, UserID, playlistID string, itemIDs []string) error {
 	log.Printf("AddItemsToPlaylist: %s, %s, %+v\n", UserID, playlistID, itemIDs)
 
-	tx, err := s.dbHandle.Beginx()
+	tx, err := s.dbWriteHandle.Beginx()
 	if err != nil {
 		return err
 	}
@@ -112,7 +112,7 @@ func (s *SqliteRepo) AddItemsToPlaylist(ctx context.Context, UserID, playlistID 
 
 	// get the highest order number of the playlist to determine the order of the new items
 	var maxOrder int
-	if err = tx.Get(&maxOrder,
+	if err = tx.GetContext(ctx, &maxOrder,
 		"SELECT COALESCE(MAX(itemorder), 0) FROM playlist_item WHERE playlistid = $1", playlistID); err != nil {
 		log.Printf("AddItemsToPlaylist: err: %+v\n", err)
 		return err
@@ -120,7 +120,7 @@ func (s *SqliteRepo) AddItemsToPlaylist(ctx context.Context, UserID, playlistID 
 
 	order := maxOrder + 1
 	for _, itemID := range itemIDs {
-		_, err := tx.NamedExec(`INSERT OR REPLACE INTO playlist_item (playlistid, itemid, itemorder, timestamp)
+		_, err := tx.NamedExecContext(ctx, `INSERT OR REPLACE INTO playlist_item (playlistid, itemid, itemorder, timestamp)
                 VALUES (:playlistid, :itemid, :itemorder, :timestamp)`,
 			map[string]any{
 				"playlistid": playlistID,

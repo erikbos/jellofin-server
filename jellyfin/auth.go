@@ -2,6 +2,7 @@ package jellyfin
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"log"
@@ -23,11 +24,11 @@ import (
 
 // authSchemeValues holds parsed emby authorization scheme values
 type authSchemeValues struct {
-	device   string
-	deviceID string
-	token    string
-	client   string
-	version  string
+	device        string
+	deviceID      string
+	token         string
+	client        string
+	clientVersion string
 }
 
 // POST /Users/AuthenticateByName
@@ -36,21 +37,24 @@ type authSchemeValues struct {
 func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http.Request) {
 	var request JFAuthenticateUserByNameRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		http.Error(w, "Invalid request", http.StatusUnauthorized)
+		apierror(w, "Invalid request", http.StatusUnauthorized)
 		return
 	}
 
 	if len(request.Username) == 0 || len(request.Pw) == 0 {
-		http.Error(w, "username and password required", http.StatusUnauthorized)
+		apierror(w, "username and password required", http.StatusUnauthorized)
 		return
 	}
+
+	// username is case insensitive
+	request.Username = strings.ToLower(request.Username)
 
 	// Get user from database
 	user, err := j.repo.GetUser(r.Context(), request.Username)
 	if err == nil {
 		// User found, verify password
 		if err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(request.Pw)); err != nil {
-			http.Error(w, "Invalid username/password", http.StatusUnauthorized)
+			apierror(w, "Invalid username/password", http.StatusUnauthorized)
 			return
 		}
 	}
@@ -59,41 +63,81 @@ func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http
 	if user == nil && j.autoRegister {
 		user, err = j.createUser(r.Context(), request.Username, request.Pw)
 		if err != nil || user == nil {
-			http.Error(w, "Failed to auto-register user", http.StatusInternalServerError)
+			apierror(w, "Failed to auto-register user", http.StatusInternalServerError)
 			return
 		}
+	}
+	// Update user's last login and last used time
+	user.LastLogin = time.Now().UTC()
+	user.LastUsed = time.Now().UTC()
+	if err = j.repo.UpsertUser(r.Context(), user); err != nil {
+		apierror(w, "Failed to update user last login & used time", http.StatusInternalServerError)
+		return
 	}
 
 	// Try to get a few client details from auth header
 	embyHeader, err := j.parseAuthHeader(r)
 	if err != nil || embyHeader == nil {
+		log.Printf("No valid emby auth header found in request: %+v", r.Header)
 		embyHeader = &authSchemeValues{}
 	}
 
-	accesstoken, err := j.repo.CreateAccessToken(r.Context(), user.ID)
+	// We always create a new access token on authentication
+	newToken := model.AccessToken{
+		Token:    rand.Text(),
+		UserID:   user.ID,
+		Created:  time.Now().UTC(),
+		LastUsed: time.Now().UTC(),
+	}
+	// Populate token details from auth header if available
+	updateTokenDetails(&newToken, r, embyHeader)
+
+	err = j.repo.UpsertAccessToken(r.Context(), newToken)
 	if err != nil {
-		http.Error(w, "Failed to generate access token", http.StatusInternalServerError)
+		apierror(w, "Failed to generate access token", http.StatusInternalServerError)
 		return
 	}
 
-	remoteAddress, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		remoteAddress = r.RemoteAddr
-	}
-
-	session := j.makeJFSessionInfo(&model.AccessToken{
-		UserID:   user.ID,
-		Token:    accesstoken,
-		LastUsed: time.Now().UTC(),
-	}, user.Username, remoteAddress)
-
 	response := JFAuthenticateByNameResponse{
-		AccessToken: accesstoken,
-		SessionInfo: session,
+		AccessToken: newToken.Token,
+		SessionInfo: j.makeJFSessionInfo(newToken, user.Username),
 		ServerId:    j.serverID,
 		User:        j.makeJFUser(user),
 	}
 	serveJSON(response, w)
+}
+
+// updateTokenDetails updates token details from request in case of any changed fields.
+func updateTokenDetails(tokendetails *model.AccessToken, r *http.Request, embyHeader *authSchemeValues) bool {
+	var changed bool
+
+	if embyHeader != nil {
+		if tokendetails.DeviceName != embyHeader.device {
+			tokendetails.DeviceName = embyHeader.device
+			changed = true
+		}
+		if tokendetails.DeviceId != embyHeader.deviceID {
+			tokendetails.DeviceId = embyHeader.deviceID
+			changed = true
+		}
+		if tokendetails.ApplicationName != embyHeader.client {
+			tokendetails.ApplicationName = embyHeader.client
+			changed = true
+		}
+		if tokendetails.ApplicationVersion != embyHeader.clientVersion {
+			tokendetails.ApplicationVersion = embyHeader.clientVersion
+			changed = true
+		}
+	}
+	remoteAddress, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		remoteAddress = r.RemoteAddr
+	}
+	if tokendetails.RemoteAddress != remoteAddress {
+		tokendetails.RemoteAddress = remoteAddress
+		changed = true
+	}
+	return changed
 }
 
 // createUser creates a new user in the database
@@ -106,9 +150,10 @@ func (j *Jellyfin) createUser(context context.Context, username, password string
 		ID:       idhash.IdHash(username),
 		Username: username,
 		Password: string(hashedPassword),
+		Created:  time.Now().UTC(),
+		LastUsed: time.Now().UTC(),
 	}
-	err = j.repo.UpsertUser(context, modelUser)
-	if err != nil {
+	if err = j.repo.UpsertUser(context, modelUser); err != nil {
 		return nil, err
 	}
 	return modelUser, nil
@@ -146,12 +191,12 @@ func (j *Jellyfin) parseAuthHeader(r *http.Request) (*authSchemeValues, error) {
 			switch match[1] {
 			case "Client":
 				result.client = match[2]
+			case "Version":
+				result.clientVersion = match[2]
 			case "Device":
 				result.device = match[2]
 			case "DeviceId":
 				result.deviceID = match[2]
-			case "Version":
-				result.version = match[2]
 			case "Token":
 				result.token = match[2]
 			}
@@ -166,7 +211,8 @@ func (j *Jellyfin) authmiddleware(next http.Handler) http.Handler {
 		var token string
 		found := false
 
-		if embyHeader, err := j.parseAuthHeader(r); err == nil && embyHeader.token != "" {
+		embyHeader, err := j.parseAuthHeader(r)
+		if err == nil && embyHeader.token != "" {
 			token = embyHeader.token
 			found = true
 		}
@@ -189,15 +235,23 @@ func (j *Jellyfin) authmiddleware(next http.Handler) http.Handler {
 		}
 		if !found {
 			// log.Printf("no token found in request headers: %+v", r.Header)
-			http.Error(w, "no token provided", http.StatusUnauthorized)
+			apierror(w, "no token provided", http.StatusUnauthorized)
 			return
 		}
 
 		tokendetails, err := j.repo.GetAccessToken(r.Context(), token)
 		if err != nil {
-			log.Printf("invalid access token: %s", err)
-			http.Error(w, "invalid access token", http.StatusUnauthorized)
+			log.Printf("invalid access token: %s, %s", token, err)
+			apierror(w, "invalid access token", http.StatusUnauthorized)
 			return
+		}
+
+		// Update token details from auth header if changed and store back to database
+		if updateTokenDetails(tokendetails, r, embyHeader) {
+			err = j.repo.UpsertAccessToken(r.Context(), *tokendetails)
+			if err != nil {
+				log.Printf("failed to update access token details: %s", err)
+			}
 		}
 
 		ctx := context.WithValue(r.Context(), contextAccessTokenDetails, tokendetails)
@@ -215,7 +269,7 @@ func (j *Jellyfin) getAccessTokenDetails(w http.ResponseWriter, r *http.Request)
 	if ok {
 		return details
 	}
-	http.Error(w, "access token not found", http.StatusUnauthorized)
+	apierror(w, "access token not found", http.StatusUnauthorized)
 	return nil
 }
 
@@ -240,18 +294,18 @@ func (j *Jellyfin) quickConnectAuthorizeHandler(w http.ResponseWriter, r *http.R
 	code := queryparams.Get("code")
 
 	if userID != accessToken.UserID {
-		http.Error(w, "userID does not match access token", http.StatusForbidden)
+		apierror(w, "userID does not match access token", http.StatusForbidden)
 		return
 	}
 	log.Printf("quickConnectAuthorizeHandler: user: %s, code: %s", userID, code)
-	http.Error(w, "quickconnect code not implemented", http.StatusUnauthorized)
+	apierror(w, "quickconnect code not implemented", http.StatusUnauthorized)
 }
 
 // GET /QuickConnect/Connect
 //
 // quickConnectConnectHandler returns info about a quick connect code.
 func (j *Jellyfin) quickConnectConnectHandler(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "quickconnect code not found", http.StatusNotFound)
+	apierror(w, "quickconnect code not found", http.StatusNotFound)
 }
 
 // POST /QuickConnect/Initiate
@@ -259,5 +313,5 @@ func (j *Jellyfin) quickConnectConnectHandler(w http.ResponseWriter, r *http.Req
 // usersAuthenticateByNameHandler authenticates a user by quick connect code.
 func (j *Jellyfin) quickConnectInitiateHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("quickConnectInitiateHandler: %+v", r)
-	http.Error(w, "quickconnect code not implemented", http.StatusUnauthorized)
+	apierror(w, "quickconnect code not implemented", http.StatusUnauthorized)
 }

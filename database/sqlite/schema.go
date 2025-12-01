@@ -29,13 +29,22 @@ lastvideo INTEGER NOT NULL);`,
 		`CREATE TABLE IF NOT EXISTS users (
 id TEXT NOT NULL PRIMARY KEY,
 username TEXT NOT NULL,
-password TEXT NOT NULL);`,
+password TEXT NOT NULL,
+created DATETIME,
+lastlogin DATETIME,
+lastused DATETIME);`,
 
 		`CREATE UNIQUE INDEX IF NOT EXISTS users_name_idx ON users (username);`,
 
 		`CREATE TABLE IF NOT EXISTS accesstokens (
 userid TEXT NOT NULL,
 token TEXT NOT NULL,
+deviceid TEXT,
+devicename TEXT,
+applicationname TEXT,
+applicationversion TEXT,
+remoteaddress TEXT,
+created DATETIME,
 lastused DATETIME);`,
 
 		`CREATE UNIQUE INDEX IF NOT EXISTS accesstokens_idx ON accesstokens (userid, token);`,
@@ -46,6 +55,7 @@ itemid TEXT NOT NULL,
 position INTEGER,
 playedpercentage INTEGER,
 played BOOLEAN,
+playcount INTEGER,
 favorite BOOLEAN,
 timestamp DATETIME);`,
 

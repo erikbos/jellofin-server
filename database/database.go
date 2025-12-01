@@ -15,6 +15,7 @@ type Repository interface {
 	ItemRepo
 	UserDataRepo
 	PlaylistRepo
+	StartBackgroundJobs(ctx context.Context)
 }
 
 // UserRepo defines the interface for user database operations
@@ -31,10 +32,10 @@ type UserRepo interface {
 type AccessTokenRepo interface {
 	// Get accesstoken details by tokenid.
 	GetAccessToken(ctx context.Context, token string) (*model.AccessToken, error)
-	// Create generates new access token.
-	CreateAccessToken(ctx context.Context, userID string) (string, error)
-	// BackgroundJobs syncs changed accesstokens periodically to database.
-	AccessTokenBackgroundJobs()
+	// Get all access tokens for a user.
+	GetAccessTokens(ctx context.Context, userID string) ([]model.AccessToken, error)
+	// UpsertAccessToken upserts an access token.
+	UpsertAccessToken(ctx context.Context, token model.AccessToken) error
 }
 
 // ItemRepo defines item operations
@@ -52,8 +53,6 @@ type UserDataRepo interface {
 	GetRecentlyWatched(ctx context.Context, userID string, includeFullyWatched bool) (resumeItemIDs []string, err error)
 	// Update stores the play state details for a user and item.
 	UpdateUserData(ctx context.Context, userID, itemID string, details *model.UserData) error
-	// BackgroundJobs syncs changed play state to periodically to database.
-	UserDataBackgroundJobs()
 }
 
 // PlaylistRepo defines playlist DB operations
