@@ -22,6 +22,13 @@ import (
 // Emby - https://dev.emby.media/doc/restapi/User-Authentication.html.
 // Jellyfin - https://gist.github.com/nielsvanvelzen/ea047d9028f676185832e51ffaf12a6f
 
+type contextKey string
+
+const (
+	// Context key holding access token details of an API request
+	contextAccessTokenDetails contextKey = "AccessTokenDetails"
+)
+
 // authSchemeValues holds parsed emby authorization scheme values
 type authSchemeValues struct {
 	device        string
@@ -37,7 +44,7 @@ type authSchemeValues struct {
 func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http.Request) {
 	var request JFAuthenticateUserByNameRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		apierror(w, "Invalid request", http.StatusUnauthorized)
+		apierror(w, ErrInvalidJSONPayload, http.StatusUnauthorized)
 		return
 	}
 
@@ -148,7 +155,7 @@ func (j *Jellyfin) createUser(context context.Context, username, password string
 	}
 	modelUser := &model.User{
 		ID:       idhash.IdHash(username),
-		Username: username,
+		Username: strings.ToLower(username),
 		Password: string(hashedPassword),
 		Created:  time.Now().UTC(),
 		LastUsed: time.Now().UTC(),
@@ -180,6 +187,7 @@ func (j *Jellyfin) parseAuthHeader(r *http.Request) (*authSchemeValues, error) {
 	// MediaBrowser Client="Jellyfin%20Media%20Player", Device="mbp", DeviceId="0dabe147-5d08-4e70-adde-d6b778b725aa", Version="1.11.1", Token="aea78abca5744378b2a2badf710e7307"
 	// MediaBrowser Device="Mac", DeviceId="0dabe147-5d08-4e70-adde-d6b778b725aa", Token="826c2aa3596b47f2a386dd2811248649", Client="Infuse-Direct", Version="8.0.9"
 	// MediaBrowser Client="Jellyflix", Device="MacBookPro18,1", DeviceId="11C750BF-4CE0-54C1-89B8-075C36A97A17", Version="1.0.0", Token="ba644327ee654ef5ac7116367da81fe3"]
+	// MediaBrowser Client="JellyWatch", Device="Android", DeviceId="3a9112ee-8a68-4bbb-89dc-2d1ac008f4c7", Version="1.6.REV-90"
 
 	kvMatch := `(\w+)="(.*?)"`
 	re := regexp.MustCompile(kvMatch)
@@ -277,6 +285,7 @@ func (j *Jellyfin) getAccessTokenDetails(w http.ResponseWriter, r *http.Request)
 //
 // quickConnectEnabledHandler returns boolean whether quickconnect is enabled.
 func (j *Jellyfin) quickConnectEnabledHandler(w http.ResponseWriter, r *http.Request) {
+	// For now always return false as quickconnect is not implemented
 	serveJSON(false, w)
 }
 

@@ -678,3 +678,20 @@ type JFSessionResponseCapabilities struct {
 	SupportsMediaControl         bool     `json:"SupportsMediaControl"`
 	SupportsPersistentIdentifier bool     `json:"SupportsPersistentIdentifier"`
 }
+
+type JFDeviceInfoResponse struct {
+	Items            []JFDeviceItem `json:"Items"`
+	TotalRecordCount int            `json:"TotalRecordCount"`
+	StartIndex       int            `json:"StartIndex"`
+}
+
+type JFDeviceItem struct {
+	ID               string                        `json:"Id"`
+	Name             string                        `json:"Name"`
+	AppName          string                        `json:"AppName"`
+	AppVersion       string                        `json:"AppVersion"`
+	DateLastActivity time.Time                     `json:"DateLastActivity"`
+	LastUserID       string                        `json:"LastUserId"`
+	LastUserName     string                        `json:"LastUserName"`
+	Capabilities     JFSessionResponseCapabilities `json:"Capabilities"`
+}

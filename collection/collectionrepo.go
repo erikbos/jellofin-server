@@ -65,7 +65,7 @@ func (cr *CollectionRepo) AddCollection(name string, ID string,
 		c.ID = idhash.IdHash(c.Name)
 	}
 
-	log.Printf("Adding collection %s (%s), type: %s, directory: %s\n", c.Name, c.ID, c.Type, c.Directory)
+	log.Printf("Adding collection %s, id: %s, type: %s, directory: %s\n", c.Name, c.ID, c.Type, c.Directory)
 
 	cr.collections = append(cr.collections, c)
 }

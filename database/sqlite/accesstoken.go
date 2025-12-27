@@ -115,6 +115,23 @@ func (s *SqliteRepo) UpsertAccessToken(ctx context.Context, t model.AccessToken)
 	return nil
 }
 
+// DeleteAccessToken deletes an access token from the database and cache.
+func (s *SqliteRepo) DeleteAccessToken(ctx context.Context, token string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	const query = `DELETE FROM accesstokens WHERE token = ?;`
+	_, err := s.dbWriteHandle.ExecContext(ctx, query, token)
+	if err != nil {
+		log.Printf("Error deleting access token from db for token: %s: %s\n", token, err)
+		return err
+	}
+
+	// Remove from cache
+	delete(s.accessTokenCache, token)
+	return nil
+}
+
 // accessTokenBackgroundJob writes changed accesstokens to database.
 func (s *SqliteRepo) accessTokenBackgroundJob(ctx context.Context, interval time.Duration) {
 	if s.dbReadHandle == nil || s.dbWriteHandle == nil {

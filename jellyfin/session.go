@@ -6,6 +6,12 @@ import (
 	"github.com/erikbos/jellofin-server/database/model"
 )
 
+const (
+	// sessionID is a unique ID for authenticated session, it's the same
+	// as we do not really track sessions per user
+	sessionID = "e3a869b7a901f8894de8ee65688db6c0"
+)
+
 // /Sessions
 //
 // sessionsHandler returns a list of active user sessions known to the server.
@@ -30,7 +36,7 @@ func (j *Jellyfin) sessionsHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Keep most recent access token per deviceid only, we assume older
 	// tokens for the same deviceid are stale.
-	uniqueAccessTokens := make(map[string]model.AccessToken)
+	uniqueAccessTokens := make(map[string]model.AccessToken, len(accessTokens))
 	for _, t := range accessTokens {
 		existing, found := uniqueAccessTokens[t.DeviceId]
 		if !found || t.LastUsed.After(existing.LastUsed) {

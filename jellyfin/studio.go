@@ -9,6 +9,8 @@ import (
 	"github.com/erikbos/jellofin-server/collection"
 )
 
+// /Studios
+//
 // studiosHandler returns a list of studios for one or all collections.
 func (j *Jellyfin) studiosHandler(w http.ResponseWriter, r *http.Request) {
 	accessToken := j.getAccessTokenDetails(w, r)
@@ -31,6 +33,8 @@ func (j *Jellyfin) studiosHandler(w http.ResponseWriter, r *http.Request) {
 		studios = append(studios, j.makeJFItemStudio(r.Context(), s))
 	}
 
+	studios = j.applyItemSorting(studios, r.URL.Query())
+
 	response := UserItemsResponse{
 		Items:            studios,
 		TotalRecordCount: len(studios),
@@ -39,6 +43,8 @@ func (j *Jellyfin) studiosHandler(w http.ResponseWriter, r *http.Request) {
 	serveJSON(response, w)
 }
 
+// /Studios/{studio}
+//
 // studioHandler returns details of a specific studio
 func (j *Jellyfin) studioHandler(w http.ResponseWriter, r *http.Request) {
 	accessToken := j.getAccessTokenDetails(w, r)
@@ -47,7 +53,7 @@ func (j *Jellyfin) studioHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vars := mux.Vars(r)
-	studio := vars["studio"]
+	studio := vars["name"]
 	if studio == "" {
 		apierror(w, "Missing studio", http.StatusBadRequest)
 		return

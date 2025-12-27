@@ -48,9 +48,6 @@ type Jellyfin struct {
 	imageQualityPoster int
 }
 
-// API definitions: https://swagger.emby.media/ & https://api.jellyfin.org/
-// Docs: https://github.com/mediabrowser/emby/wiki
-
 func New(o *Options) *Jellyfin {
 	j := &Jellyfin{
 		collections:        o.Collections,
@@ -92,6 +89,7 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/Plugins", http.HandlerFunc(j.pluginsHandler))
 
 	r.Handle("/Users/AuthenticateByName", http.HandlerFunc(j.usersAuthenticateByNameHandler)).Methods("POST")
+	r.Handle("/Users/authenticatebyname", http.HandlerFunc(j.usersAuthenticateByNameHandler)).Methods("POST")
 	r.Handle("/QuickConnect/Authorize", middleware(j.quickConnectAuthorizeHandler)).Methods("POST")
 	r.Handle("/QuickConnect/Connect", http.HandlerFunc(j.quickConnectConnectHandler))
 	r.Handle("/QuickConnect/Enabled", http.HandlerFunc(j.quickConnectEnabledHandler))
@@ -143,12 +141,13 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/Items/{item}/SpecialFeatures", middleware(j.usersItemsSpecialFeaturesHandler))
 
 	r.Handle("/Genres", middleware(j.genresHandler))
-	r.Handle("/Genres/{genre}", middleware(j.genreHandler))
+	r.Handle("/Genres/{name}", middleware(j.genreHandler))
 
 	r.Handle("/Studios", middleware(j.studiosHandler))
-	r.Handle("/Studios/{studio}", middleware(j.studioHandler))
+	r.Handle("/Studios/{name}", middleware(j.studioHandler))
 
 	r.Handle("/Search/Hints", middleware(j.searchHintsHandler))
+	r.Handle("/Movies/Recommendations", middleware(j.moviesRecommendationsHandler))
 
 	r.Handle("/MediaSegments/{item}", middleware(j.mediaSegmentsHandler))
 	r.Handle("/Videos/{item}/stream", middleware(j.videoStreamHandler))
@@ -159,10 +158,17 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 
 	r.Handle("/Persons", middleware(j.personsHandler))
 
-	// userdata
+	r.Handle("/Devices/Info", middleware(j.devicesInfoHandler)).Methods("GET")
+	r.Handle("/Devices/Options", middleware(j.devicesOptionsHandler)).Methods("GET")
+	r.Handle("/Devices", middleware(j.devicesGetHandler)).Methods("GET")
+	r.Handle("/Devices", middleware(j.devicesDeleteHandler)).Methods("DELETE")
+
+	r.Handle("/Sessions/Capabilities", middleware(j.sessionsCapabilitiesHandler))
+	r.Handle("/Sessions/Capabilities/Full", middleware(j.sessionsCapabilitiesFullHandler))
 	r.Handle("/Sessions/Playing", middleware(j.sessionsPlayingHandler)).Methods("POST")
 	r.Handle("/Sessions/Playing/Progress", middleware(j.sessionsPlayingProgressHandler)).Methods("POST")
 	r.Handle("/Sessions/Playing/Stopped", middleware(j.sessionsPlayingStoppedHandler)).Methods("POST")
+	r.Handle("/Sessions", middleware(j.sessionsHandler))
 	r.Handle("/UserPlayedItems/{item}", middleware(j.usersPlayedItemsPostHandler)).Methods("POST")
 	r.Handle("/UserPlayedItems/{item}", middleware(j.usersPlayedItemsDeleteHandler)).Methods("DELETE")
 	r.Handle("/UserFavoriteItems/{item}", middleware(j.userFavoriteItemsPostHandler)).Methods("POST")
@@ -172,11 +178,6 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/Users/{user}/PlayedItems/{item}", middleware(j.usersPlayedItemsDeleteHandler)).Methods("DELETE")
 	r.Handle("/Users/{user}/FavoriteItems/{item}", middleware(j.userFavoriteItemsPostHandler)).Methods("POST")
 	r.Handle("/Users/{user}/FavoriteItems/{item}", middleware(j.userFavoriteItemsDeleteHandler)).Methods("DELETE")
-
-	// sessions
-	r.Handle("/Sessions", middleware(j.sessionsHandler))
-	r.Handle("/Sessions/Capabilities", middleware(j.sessionsCapabilitiesHandler))
-	r.Handle("/Sessions/Capabilities/Full", middleware(j.sessionsCapabilitiesFullHandler))
 
 	// playlists
 	r.Handle("/Playlists", middleware(j.createPlaylistHandler)).Methods("POST")
@@ -192,26 +193,25 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/Playlists/{playlist}/Users/{user}", middleware(j.getPlaylistUsersHandler)).Methods("GET")
 
 	// Branding
-	r.Handle("/Branding/Configuration", middleware(j.brandingConfigurationHandler))
-	r.Handle("/Branding/Css", middleware(j.brandingCssHandler))
-	r.Handle("/Branding/Css.css", middleware(j.brandingCssHandler))
+	r.HandleFunc("/Branding/Configuration", j.brandingConfigurationHandler)
+	r.HandleFunc("/Branding/Css", j.brandingCssHandler)
+	r.HandleFunc("/Branding/Css.css", j.brandingCssHandler)
 
 	// Localization
-	r.Handle("/Localization/Countries", middleware(j.localizationCountriesHandler))
-	r.Handle("/Localization/Cultures", middleware(j.localizationCulturesHandler))
-	r.Handle("/Localization/Options", middleware(j.localizationOptionsHandler))
-	r.Handle("/Localization/ParentalRatings", middleware(j.localizationParentalRatingsHandler))
+	r.HandleFunc("/Localization/Countries", j.localizationCountriesHandler)
+	r.HandleFunc("/Localization/Cultures", j.localizationCulturesHandler)
+	r.HandleFunc("/Localization/Options", j.localizationOptionsHandler)
+	r.HandleFunc("/Localization/ParentalRatings", j.localizationParentalRatingsHandler)
 }
 
-// normalizeJellyfinRequest is a middleware that normalizes the request:
-//  2. Lowercase query parameter names.
+// normalizeJellyfinRequest is a middleware that normalizes requests:
+// it normalizes query parameter names by converting the first character.
+//
+// Note: this middleware runs too late to be able to fix path issues:
+// normalizing r.URL.Path is handled in server.go
 func normalizeJellyfinRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// r.URL.Path normalization is handled in jellyfin/jellyfin.go:normalizeRequest
-		// as this middleware runs too late for that.
-		//
-		// Lowercase query parameter names.
-		// This is to handle Infuse's < 8.x incorrect naming of query parameters,
+		// Lowercase query parameter names. This is to handle incorrect naming of query parameters.
 		// E.g. ParentId should have been parentId, SeasonId -> seasonId
 		newParams := url.Values{}
 		for key, values := range r.URL.Query() {

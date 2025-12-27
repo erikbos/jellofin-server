@@ -34,6 +34,8 @@ func (j *Jellyfin) genresHandler(w http.ResponseWriter, r *http.Request) {
 		genres = append(genres, j.makeJFItemGenre(r.Context(), g))
 	}
 
+	genres = j.applyItemSorting(genres, r.URL.Query())
+
 	response := UserItemsResponse{
 		Items:            genres,
 		TotalRecordCount: len(genres),
@@ -53,14 +55,14 @@ func (j *Jellyfin) genreHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vars := mux.Vars(r)
-	genreParam := vars["genre"]
-	if genreParam == "" {
+	genreName := vars["name"]
+	if genreName == "" {
 		apierror(w, "Missing genre", http.StatusBadRequest)
 		return
 	}
 
 	for _, genre := range j.collections.Details().Genres {
-		if genre == genreParam {
+		if genre == genreName {
 			response := j.makeJFItemGenre(r.Context(), genre)
 			serveJSON(response, w)
 			return

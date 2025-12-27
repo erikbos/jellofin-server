@@ -48,7 +48,10 @@ func (j *Jellyfin) createPlaylistHandler(w http.ResponseWriter, r *http.Request)
 	req.Name = queryparams.Get("Name")
 	req.UserID = queryparams.Get("userId")
 	if r.Body != nil {
-		_ = json.NewDecoder(r.Body).Decode(&req)
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			apierror(w, ErrInvalidJSONPayload, http.StatusBadRequest)
+			return
+		}
 	}
 	if req.Name == "" || req.UserID == "" {
 		apierror(w, "Name and UserId are required", http.StatusBadRequest)

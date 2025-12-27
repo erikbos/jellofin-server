@@ -36,6 +36,8 @@ type AccessTokenRepo interface {
 	GetAccessTokens(ctx context.Context, userID string) ([]model.AccessToken, error)
 	// UpsertAccessToken upserts an access token.
 	UpsertAccessToken(ctx context.Context, token model.AccessToken) error
+	// DeleteAccessToken upserts an access token.
+	DeleteAccessToken(ctx context.Context, token string) error
 }
 
 // ItemRepo defines item operations

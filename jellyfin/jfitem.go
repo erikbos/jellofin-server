@@ -1,3 +1,4 @@
+// contains all item related functions
 package jellyfin
 
 import (
@@ -5,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 	"time"
 
@@ -14,9 +16,7 @@ import (
 )
 
 const (
-	// sessionID is a unique ID for authenticated session
-	sessionID = "e3a869b7a901f8894de8ee65688db6c0"
-	// Top-level ID parent of all collections
+	// Top-level root ID, parent IDof all collections
 	collectionRootID = "e9d5075a555c1cbc394eec4cef295274"
 	// ID of dynamically generated Playlist collection
 	playlistCollectionID = "2f0340563593c4d98b97c9bfa21ce23c"
@@ -42,10 +42,134 @@ const (
 	tagprefix_file = "file_"
 )
 
-func (j *Jellyfin) makeJFItemRoot() (response JFItem, e error) {
-	childCount := len(j.collections.GetCollections())
-	// we add the favorites and playlist collections to the child count
-	childCount += 2
+// getJFItemsByParentID returns list of all items with a specific parentID
+func (j *Jellyfin) getJFItemsByParentID(ctx context.Context, userID, parentID string) ([]JFItem, error) {
+	switch {
+	// List favorites collection items requested?
+	case isJFCollectionFavoritesID(parentID):
+		items, err := j.makeJFItemFavoritesOverview(ctx, userID)
+		if err != nil {
+			return []JFItem{}, errors.New("could not find favorites collection")
+		}
+		return items, nil
+
+	// List of playlists requested?
+	case isJFCollectionPlaylistID(parentID):
+		items, err := j.makeJFItemPlaylistOverview(ctx, userID)
+		if err != nil {
+			return []JFItem{}, errors.New("could not find playlist collection")
+		}
+		return items, nil
+
+	// Specific playlist requests?
+	case isJFPlaylistID(parentID):
+		playlistID := trimPrefix(parentID)
+		items, err := j.makeJFItemPlaylistItemList(ctx, userID, playlistID)
+		if err != nil {
+			return []JFItem{}, errors.New("could not find playlist")
+		}
+		return items, nil
+
+	// List by genre requested?
+	case isJFGenreID(parentID):
+		items, err := j.getJFItemsAll(ctx, userID)
+		if err != nil {
+			return []JFItem{}, errors.New("could not get all items")
+		}
+		// Make a new list with only items where genreid matches provided parentID
+		genreItems := make([]JFItem, 0, len(items))
+		for _, item := range items {
+			for _, genre := range item.GenreItems {
+				if genre.ID == parentID {
+					genreItems = append(genreItems, item)
+				}
+			}
+		}
+		return genreItems, nil
+
+	// List by studio?
+	case isJFStudioID(parentID):
+		items, err := j.getJFItemsAll(ctx, userID)
+		if err != nil {
+			return []JFItem{}, errors.New("could not get all items")
+		}
+		// Make a new list with only items where studioid matches provided parentID
+		studioItems := make([]JFItem, 0, len(items))
+		for _, item := range items {
+			for _, studio := range item.Studios {
+				if studio.ID == parentID {
+					studioItems = append(studioItems, item)
+				}
+			}
+		}
+		return studioItems, nil
+
+	// List by person?
+	// case isJFPersonID(parentID):
+	// 	return []JFItem{}, nil
+
+	// Specific collection requested?
+	case isJFCollectionID(parentID):
+		c := j.collections.GetCollection(strings.TrimPrefix(parentID, itemprefix_collection))
+		if c == nil {
+			return []JFItem{}, errors.New("could not find collection")
+		}
+		items := make([]JFItem, 0, len(c.Items))
+		for _, i := range c.Items {
+			jfitem, err := j.makeJFItem(ctx, userID, i, c.ID)
+			if err != nil {
+				return []JFItem{}, err
+			}
+			items = append(items, jfitem)
+		}
+		return items, nil
+
+	// Check if parentID is a show or season to generate overviews
+	default:
+		if _, i := j.collections.GetItemByID(trimPrefix(parentID)); i != nil {
+			switch v := i.(type) {
+			case *collection.Show:
+				items, err := j.makeJFSeasonsOverview(ctx, userID, v)
+				if err != nil {
+					return []JFItem{}, errors.New("could not find parent show")
+				}
+				return items, nil
+			case *collection.Season:
+				items, err := j.makeJFEpisodesOverview(ctx, userID, v)
+				if err != nil {
+					return []JFItem{}, errors.New("could not find season")
+				}
+				return items, nil
+			// Other item types are not supported as parentID
+			default:
+				log.Printf("getJFItemsByParentID: unsupported parentID %s of type %T \n", i.ID(), i)
+				return []JFItem{}, errors.New("unable to generate items for parentID")
+			}
+		}
+	}
+	return []JFItem{}, errors.New("parentID not found")
+}
+
+// getJFItemsAll returns list of all items
+func (j *Jellyfin) getJFItemsAll(ctx context.Context, userID string) ([]JFItem, error) {
+	items := make([]JFItem, 0)
+	for _, c := range j.collections.GetCollections() {
+		for _, i := range c.Items {
+			jfitem, err := j.makeJFItem(ctx, userID, i, c.ID)
+			if err != nil {
+				return []JFItem{}, err
+			}
+			items = append(items, jfitem)
+		}
+	}
+	return items, nil
+}
+
+func (j *Jellyfin) makeJFItemRoot(ctx context.Context, userID string) (response JFItem, e error) {
+	var childCount int
+	if rootitems, err := j.makeJFCollectionRootOverview(ctx, userID); err == nil {
+		childCount = len(rootitems)
+	}
 
 	genres := j.collections.Details().Genres
 
@@ -85,6 +209,24 @@ func (j *Jellyfin) makeJFItemRoot() (response JFItem, e error) {
 		// },
 	}
 	return
+}
+
+// makeJFCollectionRootOverview creates a list of items representing the collections available to the user
+func (j *Jellyfin) makeJFCollectionRootOverview(ctx context.Context, userID string) ([]JFItem, error) {
+	items := make([]JFItem, 0)
+	for _, c := range j.collections.GetCollections() {
+		if item, err := j.makeJFItemCollection(c.ID); err == nil {
+			items = append(items, item)
+		}
+	}
+	// Add favorites and playlist collections
+	if favoriteCollection, err := j.makeJFItemCollectionFavorites(ctx, userID); err == nil {
+		items = append(items, favoriteCollection)
+	}
+	if playlistCollection, err := j.makeJFItemCollectionPlaylist(ctx, userID); err == nil {
+		items = append(items, playlistCollection)
+	}
+	return items, nil
 }
 
 func (j *Jellyfin) makeJFItemCollection(collectionID string) (response JFItem, e error) {
@@ -329,6 +471,31 @@ func (j *Jellyfin) makeJFItemPlaylistItemList(ctx context.Context, userID, playl
 	return items, nil
 }
 
+// makeJFItemByID creates a JFItem based on the provided itemID
+func (j *Jellyfin) makeJFItemByID(ctx context.Context, userID, itemID string) (JFItem, error) {
+	// Handle special items first
+	switch {
+	case isJFRootID(itemID):
+		return j.makeJFItemRoot(ctx, userID)
+	// Try special collection items first, as they have the same prefix as regular collections
+	case isJFCollectionFavoritesID(itemID):
+		return j.makeJFItemCollectionFavorites(ctx, userID)
+	case isJFCollectionPlaylistID(itemID):
+		return j.makeJFItemCollectionPlaylist(ctx, userID)
+	case isJFCollectionID(itemID):
+		return j.makeJFItemCollection(trimPrefix(itemID))
+	case isJFPlaylistID(itemID):
+		return j.makeJFItemPlaylist(ctx, userID, trimPrefix(itemID))
+	}
+
+	// Try to fetch individual item: movie, show, episode
+	c, i := j.collections.GetItemByID(trimPrefix(itemID))
+	if i == nil {
+		return JFItem{}, errors.New("item not found")
+	}
+	return j.makeJFItem(ctx, userID, i, c.ID)
+}
+
 // makeJFItem make movie or show from provided item
 func (j *Jellyfin) makeJFItem(ctx context.Context, userID string, item collection.Item, parentID string) (response JFItem, e error) {
 	switch i := item.(type) {
@@ -546,7 +713,25 @@ func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, show *coll
 	return response, nil
 }
 
-// makeJFItemSeason makes a season
+// makeJFSeasonsOverview generates all season items for a show
+func (j *Jellyfin) makeJFSeasonsOverview(ctx context.Context, userID string, show *collection.Show) ([]JFItem, error) {
+	seasons := make([]JFItem, 0, len(show.Seasons))
+	for _, s := range show.Seasons {
+		if jfitem, err := j.makeJFItemSeason(ctx, userID, &s, show.ID()); err == nil {
+			seasons = append(seasons, jfitem)
+		}
+	}
+
+	// Always sort seasons by number, no user provided sortBy option.
+	// This way season 99, Specials ends up last.
+	sort.SliceStable(seasons, func(i, j int) bool {
+		return seasons[i].IndexNumber < seasons[j].IndexNumber
+	})
+
+	return seasons, nil
+}
+
+// makeJFItemSeason makes a season item
 func (j *Jellyfin) makeJFItemSeason(ctx context.Context, userID string, season *collection.Season, _ string) (response JFItem, err error) {
 	_, show, season := j.collections.GetSeasonByID(season.ID())
 	if season == nil {
@@ -650,7 +835,18 @@ func makeSeasonName(seasonNo int) string {
 	}
 }
 
-// makeJFItemEpisode makes an episode
+// makeJFEpisodesOverview generates all episode items for one season of a show
+func (j *Jellyfin) makeJFEpisodesOverview(ctx context.Context, userID string, season *collection.Season) ([]JFItem, error) {
+	episodes := make([]JFItem, 0, len(season.Episodes))
+	for _, e := range season.Episodes {
+		if episode, err := j.makeJFItemEpisode(ctx, userID, &e, season.ID()); err == nil {
+			episodes = append(episodes, episode)
+		}
+	}
+	return episodes, nil
+}
+
+// makeJFItemEpisode makes an episode item
 func (j *Jellyfin) makeJFItemEpisode(ctx context.Context, userID string, episode *collection.Episode, parentID string) (response JFItem, err error) {
 	_, show, season, episode := j.collections.GetEpisodeByID(episode.ID())
 	if episode == nil {
@@ -774,6 +970,7 @@ func (j *Jellyfin) makeJFItemStudio(_ context.Context, studio string) JFItem {
 		ServerID:          j.serverID,
 		Type:              itemTypeStudio,
 		Name:              studio,
+		SortName:          studio,
 		Etag:              makeJFStudioID(studio),
 		DateCreated:       time.Now().UTC(),
 		PremiereDate:      time.Now().UTC(),
@@ -1006,6 +1203,8 @@ const (
 	itemprefix_season               = "season_"
 	itemprefix_episode              = "episode_"
 	itemprefix_playlist             = "playlist_"
+	itemprefix_genre                = "genre_"
+	itemprefix_studio               = "studio_"
 	itemprefix_displaypreferences   = "dp_"
 )
 
@@ -1051,12 +1250,12 @@ func makeJFDisplayPreferencesID(dpID string) string {
 
 // makeJFGenreID returns an external id for a genre name.
 func makeJFGenreID(genre string) string {
-	return idhash.IdHash(genre)
+	return itemprefix_genre + idhash.IdHash(genre)
 }
 
 // makeJFGenreID returns an external id for a studio.
 func makeJFStudioID(studio string) string {
-	return idhash.IdHash(studio)
+	return itemprefix_studio + idhash.IdHash(studio)
 }
 
 // trimPrefix removes the type prefix from an item id.
@@ -1106,6 +1305,16 @@ func isJFSeasonID(id string) bool {
 // isJFEpisodeID checks if the provided ID is an episode ID.
 func isJFEpisodeID(id string) bool {
 	return strings.HasPrefix(id, itemprefix_episode)
+}
+
+// isJFGenreID checks if the provided ID is a genre ID.
+func isJFGenreID(id string) bool {
+	return strings.HasPrefix(id, itemprefix_genre)
+}
+
+// isJFStudioID checks if the provided ID is a studio ID.
+func isJFStudioID(id string) bool {
+	return strings.HasPrefix(id, itemprefix_studio)
 }
 
 // itemIsHD checks if the provided item is HD (720p or higher)

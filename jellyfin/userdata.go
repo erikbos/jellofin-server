@@ -19,6 +19,28 @@ const (
 	ErrInvalidJSONPayload     = "Invalid JSON payload"
 )
 
+// /UserItems/1d57ee2251656c5fb9a05becdf0e62a3/Userdata
+//
+// usersItemUserDataHandler returns the user data for a specific item
+func (j *Jellyfin) usersItemUserDataHandler(w http.ResponseWriter, r *http.Request) {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
+		return
+	}
+
+	vars := mux.Vars(r)
+	itemID := vars["item"]
+
+	playstate, err := j.repo.GetUserData(r.Context(), accessToken.UserID, trimPrefix(itemID))
+	if err != nil {
+		// TODO: should we return an empty object or a 404?
+		playstate = &model.UserData{}
+	}
+
+	userData := j.makeJFUserData(accessToken.UserID, itemID, playstate)
+	serveJSON(userData, w)
+}
+
 // POST /UserPlayedItems/{item}
 // POST /Users/{user}/PlayedItems/{item}
 //
