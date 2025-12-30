@@ -2,6 +2,7 @@ package jellyfin
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 
@@ -474,6 +476,26 @@ func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
 		}
 	}
 
+	// isHd
+	if isHD := queryparams.Get("isHd"); isHD != "" {
+		switch strings.ToLower(isHD) {
+		case "true":
+			return i.IsHD
+		case "false":
+			return !i.IsHD
+		}
+	}
+
+	// is4K
+	if is4K := queryparams.Get("is4K"); is4K != "" {
+		switch strings.ToLower(is4K) {
+		case "true":
+			return i.Is4K
+		case "false":
+			return !i.Is4K
+		}
+	}
+
 	// ID filtering
 
 	// filter on item IDs
@@ -490,10 +512,10 @@ func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
 	}
 
 	// filter on item IDs to exclude
-	if IDs := queryparams.Get("excludeItemIds"); IDs != "" {
+	if excludeItemIDs := queryparams.Get("excludeItemIds"); excludeItemIDs != "" {
 		keepItem := true
-		for id := range strings.SplitSeq(IDs, ",") {
-			if i.ID == id {
+		for excludeID := range strings.SplitSeq(excludeItemIDs, ",") {
+			if i.ID == excludeID {
 				keepItem = false
 			}
 		}
@@ -517,6 +539,8 @@ func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
 		}
 	}
 
+	// todo personid filtering
+
 	// filter on studio IDs
 	if includeStudioIDs := queryparams.Get("studioIds"); includeStudioIDs != "" {
 		keepItem := false
@@ -532,12 +556,14 @@ func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
 		}
 	}
 
+	// handling of parentId is done in handler functions before calling applyItemFilter()
+	//
 	// filter on parentId
-	if parentID := queryparams.Get("parentId"); parentID != "" {
-		if i.ParentID != parentID {
-			return false
-		}
-	}
+	// if parentID := queryparams.Get("parentId"); parentID != "" {
+	// 	if i.ParentID != parentID {
+	// 		return false
+	// 	}
+	// }
 
 	// filter on seasonId
 	if seasonID := queryparams.Get("seasonId"); seasonID != "" {
@@ -644,7 +670,23 @@ func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
 		}
 	}
 
-	// todo: filter on minPremiereDate, maxPremiereDate
+	// Filter on minPremierDate
+	if minPremiereDateStr := queryparams.Get("minPremiereDate"); minPremiereDateStr != "" {
+		if minPremiereDate, err := parseISO8601date(minPremiereDateStr); err == nil {
+			if i.PremiereDate.Before(minPremiereDate) {
+				return false
+			}
+		}
+	}
+
+	// Filter on maxPremierDate
+	if maxPremiereDateStr := queryparams.Get("maxPremiereDate"); maxPremiereDateStr != "" {
+		if maxPremiereDate, err := parseISO8601date(maxPremiereDateStr); err == nil {
+			if i.PremiereDate.After(maxPremiereDate) {
+				return false
+			}
+		}
+	}
 
 	// Filter on year(s)
 	if filterYears := queryparams.Get("years"); filterYears != "" {
@@ -708,24 +750,36 @@ func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
 func (j *Jellyfin) applyItemSorting(items []JFItem, queryparams url.Values) []JFItem {
 	sortBy := queryparams.Get("sortBy")
 	if sortBy == "" {
+		// No sorting fields provided, no sorting
 		return items
 	}
 	sortFields := strings.Split(sortBy, ",")
 
-	sortOrder := queryparams.Get("sortOrder")
+	sortFieldsLowered := make([]string, len(sortFields))
+	for i, field := range sortFields {
+		sortFieldsLowered[i] = strings.ToLower(field)
+	}
+
 	var sortDescending bool
-	if sortOrder == "Descending" {
+	if strings.ToLower(queryparams.Get("sortOrder")) == "descending" {
 		sortDescending = true
 	}
 
 	sort.SliceStable(items, func(i, j int) bool {
-		for _, field := range sortFields {
-			// Set sortname if not set so we can sort on it
-			if items[i].SortName == "" {
-				items[i].SortName = items[i].Name
-			}
+		// Set sortname if not set so we can sort on it
+		if items[i].SortName == "" {
+			items[i].SortName = items[i].Name
+		}
 
-			switch strings.ToLower(field) {
+		for _, field := range sortFieldsLowered {
+			switch field {
+			case "communityrating":
+				if items[i].CommunityRating != items[j].CommunityRating {
+					if sortDescending {
+						return items[i].CommunityRating > items[j].CommunityRating
+					}
+					return items[i].CommunityRating < items[j].CommunityRating
+				}
 			case "criticrating":
 				if items[i].CriticRating != items[j].CriticRating {
 					if sortDescending {
@@ -763,12 +817,45 @@ func (j *Jellyfin) applyItemSorting(items []JFItem, queryparams url.Values) []JF
 					}
 					return items[i].IndexNumber < items[j].IndexNumber
 				}
+			case "isfavoriteorliked":
+				if items[i].UserData != nil && items[j].UserData != nil &&
+					items[i].UserData.IsFavorite != items[j].UserData.IsFavorite {
+					log.Printf("applyItemSorting: comparing isfavoriteorliked for items %s (%v) and %s (%v)\n",
+						items[i].Name, items[i].UserData.IsFavorite, items[j].Name, items[j].UserData.IsFavorite)
+					if sortDescending {
+						return items[i].UserData.IsFavorite
+					}
+					return items[j].UserData.IsFavorite
+				}
 			case "isfolder":
 				if items[i].IsFolder != items[j].IsFolder {
 					if sortDescending {
 						return items[i].IsFolder
 					}
 					return items[j].IsFolder
+				}
+			case "isplayed":
+				if items[i].UserData != nil && items[j].UserData != nil &&
+					items[i].UserData.Played != items[j].UserData.Played {
+					if sortDescending {
+						return items[i].UserData.Played
+					}
+					return items[j].UserData.Played
+				}
+			case "isunplayed":
+				if items[i].UserData != nil && items[j].UserData != nil &&
+					items[i].UserData.Played != items[j].UserData.Played {
+					if sortDescending {
+						return !items[i].UserData.Played
+					}
+					return !items[j].UserData.Played
+				}
+			case "officialrating":
+				if items[i].OfficialRating != items[j].OfficialRating {
+					if sortDescending {
+						return items[i].OfficialRating > items[j].OfficialRating
+					}
+					return items[i].OfficialRating < items[j].OfficialRating
 				}
 			case "parentindexnumber":
 				if items[i].ParentIndexNumber != items[j].ParentIndexNumber {
@@ -798,6 +885,15 @@ func (j *Jellyfin) applyItemSorting(items []JFItem, queryparams url.Values) []JF
 					}
 					return items[i].SortName < items[j].SortName
 				}
+			case "runtime":
+				if items[i].RunTimeTicks != items[j].RunTimeTicks {
+					if sortDescending {
+						return items[i].RunTimeTicks > items[j].RunTimeTicks
+					}
+					return items[i].RunTimeTicks < items[j].RunTimeTicks
+				}
+			case "name":
+				fallthrough
 			case "seriessortname":
 				fallthrough
 			case "sortname":
@@ -810,7 +906,7 @@ func (j *Jellyfin) applyItemSorting(items []JFItem, queryparams url.Values) []JF
 					return items[i].SortName < items[j].SortName
 				}
 			default:
-				log.Printf("applyItemSorting: unknown sortorder %s\n", sortBy)
+				log.Printf("applyItemSorting: unknown sortorder field %s\n", field)
 			}
 		}
 		return false
@@ -1002,12 +1098,22 @@ func (j *Jellyfin) serveImage(w http.ResponseWriter, r *http.Request, filename s
 
 func serveJSON(obj any, w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
-	// _ = json.NewEncoder(w).Encode(obj)
+	_ = json.NewEncoder(w).Encode(obj)
+}
 
-	b, err := json.Marshal(obj)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+// parseISO8601date tries to parse a date string in various ISO 8601 formats
+func parseISO8601date(input string) (time.Time, error) {
+	timeFormats := []string{
+		time.DateTime,
+		time.DateOnly,
+		time.RFC3339,
+		"2006-01",
+		"2006",
 	}
-	w.Write(b)
+	for _, format := range timeFormats {
+		if parsedTime, err := time.Parse(format, input); err == nil {
+			return parsedTime, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("unable to parse time %s", input)
 }
