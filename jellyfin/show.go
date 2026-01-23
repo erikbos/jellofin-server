@@ -4,7 +4,6 @@ import (
 	"log"
 	"net/http"
 	"sort"
-	"strings"
 
 	"github.com/gorilla/mux"
 
@@ -32,17 +31,6 @@ func (j *Jellyfin) showsEpisodesHandler(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		apierror(w, "Item is not a show", http.StatusInternalServerError)
 		return
-	}
-
-	// Do we need to filter down overview by a particular season?
-	// requestedSeasonID := queryparams.Get("seasonId")
-	// if requestedSeasonID != "" {
-	// 	requestedSeasonID = trimPrefix(requestedSeasonID)
-	// }
-
-	// FIXME/HACK: vidhub provides wrong season ids, so we cannot use them
-	if strings.Contains(r.Header.Get("User-Agent"), "VidHub") {
-		queryparams.Del("seasonId")
 	}
 
 	// Create API response for all episodes of the show
@@ -152,7 +140,9 @@ func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("usersItemsResumeHandler: item %s not found\n", id)
 	}
 
-	// Apply user provided sorting
+	items = j.applyItemsFilter(items, queryparams)
+
+	// Apply user provided filters & sorting
 	items = j.applyItemSorting(items, queryparams)
 
 	totalItemCount := len(items)

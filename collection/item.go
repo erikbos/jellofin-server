@@ -35,11 +35,11 @@ type Item interface {
 	FileSize() int64
 	// Duration returns the duration of the video.
 	Duration() time.Duration
-	// Genres returns the genres.
 
 	metadata.VideoMetadata
 	metadata.AudioMetadata
 
+	// Genres returns the genres.
 	Genres() []string
 	Studios() []string
 	Year() int
@@ -47,7 +47,7 @@ type Item interface {
 	OfficialRating() string
 }
 
-// Movie represents a movie m in a collection.
+// Movie represents a movie in a collection.
 type Movie struct {
 	// id is the unique identifier for the movie. Typically Idhash() of name.
 	id string

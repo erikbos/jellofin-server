@@ -565,6 +565,13 @@ func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
 	// 	}
 	// }
 
+	// filter on seriesId
+	if seriesID := queryparams.Get("seriesId"); seriesID != "" {
+		if i.SeriesID != seriesID {
+			return false
+		}
+	}
+
 	// filter on seasonId
 	if seasonID := queryparams.Get("seasonId"); seasonID != "" {
 		if i.SeasonID != seasonID {
@@ -572,7 +579,7 @@ func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
 		}
 	}
 
-	// filter on parentIndexNumber
+	// filter on parentIndexNumber, this usually refers to season number for episodes
 	if parentIndexNumberStr := queryparams.Get("parentIndexNumber"); parentIndexNumberStr != "" {
 		if parentIndexNumber, err := strconv.ParseInt(parentIndexNumberStr, 10, 64); err == nil {
 			if i.ParentIndexNumber != int(parentIndexNumber) {
@@ -581,7 +588,7 @@ func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
 		}
 	}
 
-	// filter on indexNumber
+	// filter on indexNumber, this usually refers to episode number for episodes
 	if indexNumberStr := queryparams.Get("indexNumber"); indexNumberStr != "" {
 		if indexNumber, err := strconv.ParseInt(indexNumberStr, 10, 64); err == nil {
 			if i.IndexNumber != int(indexNumber) {

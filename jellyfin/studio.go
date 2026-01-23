@@ -43,7 +43,7 @@ func (j *Jellyfin) studiosHandler(w http.ResponseWriter, r *http.Request) {
 	serveJSON(response, w)
 }
 
-// /Studios/{studio}
+// /Studios/{name}
 //
 // studioHandler returns details of a specific studio
 func (j *Jellyfin) studioHandler(w http.ResponseWriter, r *http.Request) {
