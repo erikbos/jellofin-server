@@ -108,6 +108,9 @@ func (j *Jellyfin) showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
 //	enableResumable=false&
 //	fields=MediaSourceCount&limit=20&
 //
+// /Shows/NextUp?seriesId=NR1sUDwF4p5e7TbxcYGY&userId=K5EIX2NC
+// /Shows/NextUp?disableFirstEpisode=true&enableResumable=true&enableRewatching=false&enableTotalRecordCount=false&userId=jack
+//
 // showsNextUpHandler returns a list of next up items for the user
 func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 	accessToken := j.getAccessTokenDetails(w, r)
@@ -117,6 +120,7 @@ func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 
 	queryparams := r.URL.Query()
 
+	// todo: pass seriesId/seasonId to filter next up items to a specific series/season
 	recentlyWatchedIDs, err := j.repo.GetRecentlyWatched(r.Context(), accessToken.UserID, true)
 	if err != nil {
 		apierror(w, "Could not get recently watched items list", http.StatusInternalServerError)

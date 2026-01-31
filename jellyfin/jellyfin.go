@@ -157,6 +157,7 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/videos/{item}/stream.{container}", middleware(j.videoStreamHandler))
 
 	r.Handle("/Persons", middleware(j.personsHandler))
+	r.Handle("/Persons/{name}", middleware(j.personHandler))
 
 	r.Handle("/Devices/Info", middleware(j.devicesInfoHandler)).Methods("GET")
 	r.Handle("/Devices/Options", middleware(j.devicesOptionsHandler)).Methods("GET")

@@ -3,10 +3,11 @@ package jellyfin
 import (
 	"fmt"
 	"net/http"
+	"runtime"
 )
 
 const (
-	serverVersion = "10.10.7"
+	serverVersion = "10.10.11"
 )
 
 // /System/Info
@@ -15,7 +16,6 @@ const (
 func (j *Jellyfin) systemInfoHandler(w http.ResponseWriter, r *http.Request) {
 	response := JFSystemInfoResponse{
 		Id:                         j.serverID,
-		OperatingSystemDisplayName: "",
 		HasPendingRestart:          false,
 		IsShuttingDown:             false,
 		SupportsLibraryMonitor:     true,
@@ -24,12 +24,20 @@ func (j *Jellyfin) systemInfoHandler(w http.ResponseWriter, r *http.Request) {
 		CanSelfRestart:             true,
 		CanLaunchWebBrowser:        false,
 		ProgramDataPath:            "/jellyfin",
-		WebPath:                    "/jellyfin-web",
+		WebPath:                    "/jellyfin/web",
 		ItemsByNamePath:            "/jellyfin/metadata",
 		CachePath:                  "/jellyfin/cache",
 		LogPath:                    "/jellyfin/log",
 		InternalMetadataPath:       "/jellyfin/metadata",
 		TranscodingTempPath:        "/jellyfin/cache/transcodes",
+		EncoderLocation:            "System",
+		HasUpdateAvailable:         false,
+		LocalAddress:               localAddress(r),
+		OperatingSystem:            runtime.GOOS,
+		OperatingSystemDisplayName: runtime.GOOS,
+		ServerName:                 j.serverName,
+		SystemArchitecture:         runtime.GOARCH,
+		Version:                    serverVersion,
 		CastReceiverApplications: []CastReceiverApplication{
 			{
 				Id:   "F007D354",
@@ -40,13 +48,6 @@ func (j *Jellyfin) systemInfoHandler(w http.ResponseWriter, r *http.Request) {
 				Name: "Unstable",
 			},
 		},
-		HasUpdateAvailable: false,
-		EncoderLocation:    "System",
-		SystemArchitecture: "X64",
-		LocalAddress:       localAddress(r),
-		ServerName:         j.serverName,
-		Version:            serverVersion,
-		OperatingSystem:    "",
 	}
 	serveJSON(response, w)
 }

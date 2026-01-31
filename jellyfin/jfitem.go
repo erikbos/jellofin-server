@@ -6,11 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/erikbos/jellofin-server/collection"
+	"github.com/erikbos/jellofin-server/collection/metadata"
 	"github.com/erikbos/jellofin-server/database/model"
 	"github.com/erikbos/jellofin-server/idhash"
 )
@@ -35,11 +37,10 @@ const (
 	itemTypePlaylist         = "Playlist"
 	itemTypeGenre            = "Genre"
 	itemTypeStudio           = "Studio"
+	itemTypePerson           = "Person"
 
 	// imagetag prefix will get HTTP-redirected
 	tagprefix_redirect = "redirect_"
-	// imagetag prefix means we will serve the filename from local disk
-	tagprefix_file = "file_"
 )
 
 // getJFItemsByParentID returns list of all items with a specific parentID
@@ -558,7 +559,7 @@ func (j *Jellyfin) makeJFItemMovie(ctx context.Context, userID string, movie *co
 		ChannelID:         nil,
 		Chapters:          []JFChapter{},
 		ExternalUrls:      []JFExternalUrls{},
-		People:            []JFPeople{},
+		People:            j.makeJFPeople(ctx, movie.Metadata, userID),
 		RemoteTrailers:    []JFRemoteTrailers{},
 		Tags:              []string{},
 		Taglines:          []string{movie.Metadata.Tagline()},
@@ -631,7 +632,7 @@ func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, show *coll
 		ChannelID:       nil,
 		Chapters:        []JFChapter{},
 		ExternalUrls:    []JFExternalUrls{},
-		People:          []JFPeople{},
+		People:          j.makeJFPeople(ctx, show.Metadata, userID),
 		RemoteTrailers:  []JFRemoteTrailers{},
 		Tags:            []string{},
 		Taglines:        []string{show.Metadata.Tagline()},
@@ -889,7 +890,7 @@ func (j *Jellyfin) makeJFItemEpisode(ctx context.Context, userID string, episode
 		ChannelID:         nil,
 		Chapters:          []JFChapter{},
 		ExternalUrls:      []JFExternalUrls{},
-		People:            []JFPeople{},
+		People:            j.makeJFPeople(ctx, episode.Metadata, userID),
 		RemoteTrailers:    []JFRemoteTrailers{},
 		Tags:              []string{},
 		Taglines:          []string{},
@@ -962,6 +963,28 @@ func (j *Jellyfin) makeJFItemGenre(_ context.Context, genre string) (response JF
 	}
 
 	return
+}
+
+// makeJFPeople creates a list of people (actors, directors, writers) for the item
+func (j *Jellyfin) makeJFPeople(_ context.Context, m metadata.Metadata, userID string) []JFPeople {
+	if userID != "XAOVn7iqiBujnIQY8sd0" {
+		return []JFPeople{}
+	}
+
+	var people []JFPeople
+	for name, role := range m.Actors() {
+		id := makeJFPersonID(name)
+		people = append(people, JFPeople{ID: id, Name: name, Role: role, Type: "Actor", PrimaryImageTag: id})
+	}
+	for _, name := range m.Directors() {
+		id := makeJFPersonID(name)
+		people = append(people, JFPeople{ID: id, Name: name, Role: "Director", Type: "Director", PrimaryImageTag: id})
+	}
+	for _, name := range m.Writers() {
+		id := makeJFPersonID(name)
+		people = append(people, JFPeople{ID: id, Name: name, Role: "Screenplay", Type: "Writer", PrimaryImageTag: id})
+	}
+	return people
 }
 
 func (j *Jellyfin) makeJFItemStudio(_ context.Context, studio string) JFItem {
@@ -1205,6 +1228,7 @@ const (
 	itemprefix_playlist             = "playlist_"
 	itemprefix_genre                = "genre_"
 	itemprefix_studio               = "studio_"
+	itemprefix_person               = "person_"
 	itemprefix_displaypreferences   = "dp_"
 )
 
@@ -1253,9 +1277,14 @@ func makeJFGenreID(genre string) string {
 	return itemprefix_genre + idhash.IdHash(genre)
 }
 
-// makeJFGenreID returns an external id for a studio.
+// makeJFStudioID returns an external id for a studio.
 func makeJFStudioID(studio string) string {
 	return itemprefix_studio + idhash.IdHash(studio)
+}
+
+// makeJFPersonID returns an external id for a person.
+func makeJFPersonID(name string) string {
+	return itemprefix_person + url.PathEscape(strings.ToLower(name))
 }
 
 // trimPrefix removes the type prefix from an item id.
@@ -1315,6 +1344,11 @@ func isJFGenreID(id string) bool {
 // isJFStudioID checks if the provided ID is a studio ID.
 func isJFStudioID(id string) bool {
 	return strings.HasPrefix(id, itemprefix_studio)
+}
+
+// isJFPersonID checks if the provided ID is a person ID.
+func isJFPersonID(id string) bool {
+	return strings.HasPrefix(id, itemprefix_person)
 }
 
 // itemIsHD checks if the provided item is HD (720p or higher)

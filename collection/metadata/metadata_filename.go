@@ -114,6 +114,21 @@ func (n *MetadataFilename) Premiered() time.Time {
 	return time.Date(n.year, time.January, 1, 0, 0, 0, 0, time.UTC)
 }
 
+// Actors returns map with actors and their role (e.g. Anthony Hopkins as Hannibal Lector).
+func (n *MetadataFilename) Actors() map[string]string {
+	return map[string]string{}
+}
+
+// Directors returns the directors.
+func (n *MetadataFilename) Directors() []string {
+	return []string{}
+}
+
+// Writers returns the writers.
+func (n *MetadataFilename) Writers() []string {
+	return []string{}
+}
+
 // Studios returns the studios.
 func (n *MetadataFilename) Studios() []string {
 	return []string{}

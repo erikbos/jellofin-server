@@ -76,6 +76,17 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 		queryparams.Del("parentId")
 	} else {
 		// No parentID provided
+
+		// Streamyfin uses "ids" filter param to fetch items without setting recursive=true..
+		// Let's do recursive when an id-based filter is requested.
+		if queryparams.Has("ids") ||
+			queryparams.Has("excludeItemIds") ||
+			queryparams.Has("genreIds") ||
+			queryparams.Has("studioIds") ||
+			queryparams.Has("personIds") {
+			recursive = true
+		}
+
 		if !recursive {
 			// Just items in the root
 			items, err = j.makeJFCollectionRootOverview(r.Context(), accessToken.UserID)
@@ -498,10 +509,10 @@ func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
 
 	// ID filtering
 
-	// filter on item IDs
-	if IDs := queryparams.Get("ids"); IDs != "" {
+	// filter on item includeItemIDs
+	if includeItemIDs := queryparams.Get("ids"); includeItemIDs != "" {
 		keepItem := false
-		for id := range strings.SplitSeq(IDs, ",") {
+		for id := range strings.SplitSeq(includeItemIDs, ",") {
 			if i.ID == id {
 				keepItem = true
 			}
@@ -575,6 +586,21 @@ func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
 	// filter on seasonId
 	if seasonID := queryparams.Get("seasonId"); seasonID != "" {
 		if i.SeasonID != seasonID {
+			return false
+		}
+	}
+
+	// filter on personIds
+	if personIDs := queryparams.Get("personIds"); personIDs != "" {
+		keepItem := false
+		for personID := range strings.SplitSeq(personIDs, ",") {
+			for _, person := range i.People {
+				if person.ID == personID {
+					keepItem = true
+				}
+			}
+		}
+		if !keepItem {
 			return false
 		}
 	}
@@ -958,11 +984,6 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, strings.TrimPrefix(tag, tagprefix_redirect), http.StatusFound)
 		return
 	}
-	if strings.HasPrefix(tag, tagprefix_file) {
-		w.Header().Set("cache-control", "max-age=2592000")
-		j.serveFile(w, r, strings.TrimPrefix(tag, tagprefix_file))
-		return
-	}
 
 	vars := mux.Vars(r)
 	itemID := vars["item"]
@@ -976,6 +997,15 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 	case isJFCollectionPlaylistID(itemID):
 		log.Printf("Image request for collection %s!", itemID)
 		apierror(w, "Image request for collection not yet supported", http.StatusNotFound)
+		return
+	case isJFPersonID(itemID):
+		name, _ := url.PathUnescape(trimPrefix(itemID))
+		dbperson, err := j.repo.GetPersonByName(r.Context(), name, "")
+		if err == nil && dbperson.PosterURL != "" {
+			http.Redirect(w, r, dbperson.PosterURL, http.StatusFound)
+			return
+		}
+		apierror(w, ErrUserIDNotFound, http.StatusNotFound)
 		return
 	}
 

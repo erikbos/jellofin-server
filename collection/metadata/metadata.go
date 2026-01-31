@@ -9,6 +9,12 @@ type Metadata interface {
 	Plot() string
 	// Tagline returns the tagline.
 	Tagline() string
+	// Actors returns map with actors and their role (e.g. Anthony Hopkins as Hannibal Lector).
+	Actors() map[string]string
+	// Directors returns the directors.
+	Directors() []string
+	// Writers returns the writers.
+	Writers() []string
 	// Studios returns the studios.
 	Studios() []string
 	// GetGenres returns the genres.

@@ -90,3 +90,22 @@ type Playlist struct {
 	// ItemIDs is a list of item IDs contained in the playlist.
 	ItemIDs []string
 }
+
+type Person struct {
+	// ID is the unique identifier for the person.
+	ID string
+	// Name is the name of the person.
+	Name string
+	// DateOfBirth is the birth date of the person.
+	DateOfBirth time.Time
+	// PlaceOfBirth is the birthplace of the person.
+	PlaceOfBirth string
+	// PosterURL is the URL to the person's poster image.
+	PosterURL string
+	// Bio is a short biography of the person.
+	Bio string
+	// Created is the time the person was created.
+	Created time.Time
+	// LastUpdated is the last time the person was updated.
+	LastUpdated time.Time
+}

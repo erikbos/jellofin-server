@@ -15,6 +15,7 @@ type Repository interface {
 	ItemRepo
 	UserDataRepo
 	PlaylistRepo
+	PersonRepo
 	StartBackgroundJobs(ctx context.Context)
 }
 
@@ -65,6 +66,12 @@ type PlaylistRepo interface {
 	AddItemsToPlaylist(ctx context.Context, userID, playlistID string, itemIDs []string) error
 	DeleteItemsFromPlaylist(ctx context.Context, playlistID string, itemIDs []string) error
 	MovePlaylistItem(ctx context.Context, playlistID string, itemID string, newIndex int) error
+}
+
+// PersonRepo defines person DB operations
+type PersonRepo interface {
+	// GetPerson retrieves a person by name.
+	GetPersonByName(ctx context.Context, name, userID string) (person *model.Person, err error)
 }
 
 // New creates a new database repository based on the type and options provided.

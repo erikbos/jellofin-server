@@ -101,22 +101,32 @@ func (n *MetadataNfo) Premiered() time.Time {
 	return time.Time{}
 }
 
+// Actors returns map with actors and their role (e.g. Anthony Hopkins as Hannibal Lector).
+func (n *MetadataNfo) Actors() map[string]string {
+	n.loadNfo()
+	actors := make(map[string]string, len(n.nfo.Actor))
+	for _, actor := range n.nfo.Actor {
+		actors[actor.Name] = actor.Role
+	}
+	return actors
+}
+
 // Directors returns the directors.
 func (n *MetadataNfo) Directors() []string {
 	n.loadNfo()
-	if len(n.nfo.Directors) == 0 {
-		return nil
-	}
 	return n.nfo.Directors
+}
+
+// Writers returns the writers.
+func (n *MetadataNfo) Writers() []string {
+	n.loadNfo()
+	return n.nfo.Credits
 }
 
 // Studios returns the studios.
 func (n *MetadataNfo) Studios() []string {
 	n.loadNfo()
-	if len(n.nfo.Studio) == 0 {
-		return nil
-	}
-	return []string{n.nfo.Studio}
+	return n.nfo.Studios
 }
 
 // Tagline returns the tagline.
@@ -248,7 +258,7 @@ type nfo struct {
 	Season       string       `xml:"season,omitempty"`
 	Episode      string       `xml:"episode,omitempty"`
 	Aired        string       `xml:"aired,omitempty"`
-	Studio       string       `xml:"studio,omitempty"`
+	Studios      []string     `xml:"studio,omitempty"`
 	RatingString string       `xml:"rating,omitempty"`
 	Rating       float64      `xml:"-"`
 	VotesString  string       `xml:"votes,omitempty"`
@@ -256,7 +266,7 @@ type nfo struct {
 	Genre        []string     `xml:"genre,omitempty"`
 	Actor        []Actor      `xml:"actor,omitempty"`
 	Directors    []string     `xml:"director,omitempty"`
-	Credits      string       `xml:"credits,omitempty"`
+	Credits      []string     `xml:"credits,omitempty"`
 	UniqueIDs    []UniqueID   `xml:"uniqueid,omitempty"`
 	Thumb        string       `xml:"thumb,omitempty"`
 	Fanart       []Thumb      `xml:"fanart,omitempty"`
