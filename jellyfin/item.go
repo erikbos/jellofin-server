@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"slices"
 	"sort"
 	"strconv"
@@ -1097,6 +1098,7 @@ func (j *Jellyfin) videoStreamHandler(w http.ResponseWriter, r *http.Request) {
 		apierror(w, "Item not found", http.StatusNotFound)
 		return
 	}
+	w.Header().Set("content-type", mimeTypeByExtension(i.FileName()))
 	j.serveFile(w, r, c.Directory+"/"+i.Path()+"/"+i.FileName())
 }
 
@@ -1130,12 +1132,52 @@ func (j *Jellyfin) serveImage(w http.ResponseWriter, r *http.Request, filename s
 		return
 	}
 	w.Header().Set("cache-control", "max-age=2592000")
+	w.Header().Set("content-type", mimeTypeByExtension(filename))
 	http.ServeContent(w, r, fileStat.Name(), fileStat.ModTime(), file)
 }
 
 func serveJSON(obj any, w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(obj)
+}
+
+// mimeTypeByExtension returns the mime type based on the file extension
+func mimeTypeByExtension(filename string) string {
+	switch strings.ToLower(path.Ext(filename)) {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".gif":
+		return "image/gif"
+
+	case ".mp4":
+		return "video/mp4"
+	case ".m4v":
+		return "video/x-m4v"
+	case ".mov":
+		return "video/quicktime"
+	case ".wmv":
+		return "video/x-ms-wmv"
+	case ".avi":
+		return "video/x-msvideo"
+	case ".mkv":
+		return "video/x-matroska"
+	case ".webm":
+		return "video/webm"
+
+	case ".mp3":
+		return "audio/mpeg"
+	case ".aac":
+		return "audio/aac"
+	case ".flac":
+		return "audio/flac"
+	case ".wav":
+		return "audio/wav"
+
+	default:
+		return "application/octet-stream"
+	}
 }
 
 // parseISO8601date tries to parse a date string in various ISO 8601 formats
