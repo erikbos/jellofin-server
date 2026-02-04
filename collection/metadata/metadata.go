@@ -17,7 +17,7 @@ type Metadata interface {
 	Writers() []string
 	// Studios returns the studios.
 	Studios() []string
-	// GetGenres returns the genres.
+	// Genres returns the genres.
 	Genres() []string
 	// Year returns the release year.
 	Year() int

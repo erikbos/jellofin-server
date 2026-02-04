@@ -110,7 +110,7 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 	if searchTerm != "" {
 		// If searchTerm is provided we search in whole collection,
 		// applyItemFilter() will take care of parentID filtering
-		foundItemIDs, err := j.collections.Search(r.Context(), searchTerm)
+		foundItemIDs, err := j.collections.SearchItem(r.Context(), searchTerm)
 		if foundItemIDs == nil || err != nil {
 			apierror(w, "Search index not available", http.StatusInternalServerError)
 			return
@@ -550,8 +550,6 @@ func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
 			return false
 		}
 	}
-
-	// todo personid filtering
 
 	// filter on studio IDs
 	if includeStudioIDs := queryparams.Get("studioIds"); includeStudioIDs != "" {
@@ -1000,7 +998,11 @@ func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 		apierror(w, "Image request for collection not yet supported", http.StatusNotFound)
 		return
 	case isJFPersonID(itemID):
-		name, _ := url.PathUnescape(trimPrefix(itemID))
+		name, err := decodeJFPersonID(itemID)
+		if err != nil {
+			apierror(w, "Invalid person ID", http.StatusBadRequest)
+			return
+		}
 		dbperson, err := j.repo.GetPersonByName(r.Context(), name, "")
 		if err == nil && dbperson.PosterURL != "" {
 			http.Redirect(w, r, dbperson.PosterURL, http.StatusFound)

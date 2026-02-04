@@ -39,8 +39,19 @@ type Item interface {
 	metadata.VideoMetadata
 	metadata.AudioMetadata
 
+	// Title returns the title.
+	Title() string
+	// Plot returns the plot/summary/description.
+	Plot() string
 	// Genres returns the genres.
 	Genres() []string
+	// Actors returns map with actors and their role (e.g. Anthony Hopkins as Hannibal Lector).
+	Actors() map[string]string
+	// Writers returns the writers.
+	Writers() []string
+	// Directors returns the directors.
+	Directors() []string
+	// Studios returns the studios.
 	Studios() []string
 	Year() int
 	Rating() float32
@@ -80,35 +91,40 @@ type Movie struct {
 	VttSubs Subtitles
 }
 
-func (m *Movie) ID() string              { return m.id }
-func (m *Movie) Name() string            { return m.name }
-func (m *Movie) SortName() string        { return m.sortName }
-func (m *Movie) Path() string            { return m.path }
-func (m *Movie) BaseUrl() string         { return m.baseUrl }
-func (m *Movie) Created() time.Time      { return m.created }
-func (m *Movie) Banner() string          { return m.banner }
-func (m *Movie) Fanart() string          { return m.fanart }
-func (m *Movie) Folder() string          { return m.folder }
-func (m *Movie) Poster() string          { return m.poster }
-func (m *Movie) Logo() string            { return "" }
-func (m *Movie) FileName() string        { return m.fileName }
-func (m *Movie) FilePath() string        { return m.path + "/" + m.fileName }
-func (m *Movie) FileSize() int64         { return m.fileSize }
-func (m *Movie) Duration() time.Duration { return m.Metadata.Duration() }
-func (m *Movie) VideoCodec() string      { return m.Metadata.VideoCodec() }
-func (m *Movie) VideoBitrate() int       { return m.Metadata.VideoBitrate() }
-func (m *Movie) VideoFrameRate() float64 { return m.Metadata.VideoFrameRate() }
-func (m *Movie) VideoHeight() int        { return m.Metadata.VideoHeight() }
-func (m *Movie) VideoWidth() int         { return m.Metadata.VideoWidth() }
-func (m *Movie) AudioCodec() string      { return m.Metadata.AudioCodec() }
-func (m *Movie) AudioBitrate() int       { return m.Metadata.AudioBitrate() }
-func (m *Movie) AudioChannels() int      { return m.Metadata.AudioChannels() }
-func (m *Movie) AudioLanguage() string   { return m.Metadata.AudioLanguage() }
-func (m *Movie) Genres() []string        { return m.Metadata.Genres() }
-func (m *Movie) Studios() []string       { return m.Metadata.Studios() }
-func (m *Movie) Year() int               { return m.Metadata.Year() }
-func (m *Movie) Rating() float32         { return m.Metadata.Rating() }
-func (m *Movie) OfficialRating() string  { return m.Metadata.OfficialRating() }
+func (m *Movie) ID() string                { return m.id }
+func (m *Movie) Name() string              { return m.name }
+func (m *Movie) SortName() string          { return m.sortName }
+func (m *Movie) Path() string              { return m.path }
+func (m *Movie) BaseUrl() string           { return m.baseUrl }
+func (m *Movie) Created() time.Time        { return m.created }
+func (m *Movie) Banner() string            { return m.banner }
+func (m *Movie) Fanart() string            { return m.fanart }
+func (m *Movie) Folder() string            { return m.folder }
+func (m *Movie) Poster() string            { return m.poster }
+func (m *Movie) Logo() string              { return "" }
+func (m *Movie) FileName() string          { return m.fileName }
+func (m *Movie) FilePath() string          { return m.path + "/" + m.fileName }
+func (m *Movie) FileSize() int64           { return m.fileSize }
+func (m *Movie) Duration() time.Duration   { return m.Metadata.Duration() }
+func (m *Movie) VideoCodec() string        { return m.Metadata.VideoCodec() }
+func (m *Movie) VideoBitrate() int         { return m.Metadata.VideoBitrate() }
+func (m *Movie) VideoFrameRate() float64   { return m.Metadata.VideoFrameRate() }
+func (m *Movie) VideoHeight() int          { return m.Metadata.VideoHeight() }
+func (m *Movie) VideoWidth() int           { return m.Metadata.VideoWidth() }
+func (m *Movie) AudioCodec() string        { return m.Metadata.AudioCodec() }
+func (m *Movie) AudioBitrate() int         { return m.Metadata.AudioBitrate() }
+func (m *Movie) AudioChannels() int        { return m.Metadata.AudioChannels() }
+func (m *Movie) AudioLanguage() string     { return m.Metadata.AudioLanguage() }
+func (m *Movie) Title() string             { return m.Metadata.Title() }
+func (m *Movie) Plot() string              { return m.Metadata.Plot() }
+func (m *Movie) Genres() []string          { return m.Metadata.Genres() }
+func (m *Movie) Actors() map[string]string { return m.Metadata.Actors() }
+func (m *Movie) Writers() []string         { return m.Metadata.Writers() }
+func (m *Movie) Directors() []string       { return m.Metadata.Directors() }
+func (m *Movie) Studios() []string         { return m.Metadata.Studios() }
+func (m *Movie) Year() int                 { return m.Metadata.Year() }
+func (m *Movie) Rating() float32           { return m.Metadata.Rating() }
+func (m *Movie) OfficialRating() string    { return m.Metadata.OfficialRating() }
 
 // Show represents a TV show with multiple seasons and episodes.
 type Show struct {
@@ -176,20 +192,25 @@ func (s *Show) Duration() time.Duration {
 	}
 	return duration
 }
-func (s *Show) VideoCodec() string      { return s.Metadata.VideoCodec() }
-func (s *Show) VideoBitrate() int       { return s.Metadata.VideoBitrate() }
-func (s *Show) VideoFrameRate() float64 { return s.Metadata.VideoFrameRate() }
-func (s *Show) VideoHeight() int        { return s.Metadata.VideoHeight() }
-func (s *Show) VideoWidth() int         { return s.Metadata.VideoWidth() }
-func (s *Show) AudioCodec() string      { return s.Metadata.AudioCodec() }
-func (s *Show) AudioBitrate() int       { return s.Metadata.AudioBitrate() }
-func (s *Show) AudioChannels() int      { return s.Metadata.AudioChannels() }
-func (s *Show) AudioLanguage() string   { return s.Metadata.AudioLanguage() }
-func (s *Show) Genres() []string        { return s.Metadata.Genres() }
-func (s *Show) Studios() []string       { return s.Metadata.Studios() }
-func (s *Show) Year() int               { return s.Metadata.Year() }
-func (s *Show) Rating() float32         { return s.Metadata.Rating() }
-func (s *Show) OfficialRating() string  { return s.Metadata.OfficialRating() }
+func (s *Show) VideoCodec() string        { return s.Metadata.VideoCodec() }
+func (s *Show) VideoBitrate() int         { return s.Metadata.VideoBitrate() }
+func (s *Show) VideoFrameRate() float64   { return s.Metadata.VideoFrameRate() }
+func (s *Show) VideoHeight() int          { return s.Metadata.VideoHeight() }
+func (s *Show) VideoWidth() int           { return s.Metadata.VideoWidth() }
+func (s *Show) AudioCodec() string        { return s.Metadata.AudioCodec() }
+func (s *Show) AudioBitrate() int         { return s.Metadata.AudioBitrate() }
+func (s *Show) AudioChannels() int        { return s.Metadata.AudioChannels() }
+func (s *Show) AudioLanguage() string     { return s.Metadata.AudioLanguage() }
+func (s *Show) Title() string             { return s.Metadata.Title() }
+func (s *Show) Plot() string              { return s.Metadata.Plot() }
+func (s *Show) Genres() []string          { return s.Metadata.Genres() }
+func (s *Show) Actors() map[string]string { return s.Metadata.Actors() }
+func (s *Show) Writers() []string         { return s.Metadata.Writers() }
+func (s *Show) Directors() []string       { return s.Metadata.Directors() }
+func (s *Show) Studios() []string         { return s.Metadata.Studios() }
+func (s *Show) Year() int                 { return s.Metadata.Year() }
+func (s *Show) Rating() float32           { return s.Metadata.Rating() }
+func (s *Show) OfficialRating() string    { return s.Metadata.OfficialRating() }
 
 // Season represents a season of a TV show, containing multiple episodes.
 type Season struct {
@@ -244,20 +265,25 @@ func (season *Season) Duration() time.Duration {
 	return duration
 }
 
-func (season *Season) VideoCodec() string      { return "" }
-func (season *Season) VideoBitrate() int       { return 0 }
-func (season *Season) VideoFrameRate() float64 { return 0 }
-func (season *Season) VideoHeight() int        { return 0 }
-func (season *Season) VideoWidth() int         { return 0 }
-func (season *Season) AudioCodec() string      { return "" }
-func (season *Season) AudioBitrate() int       { return 0 }
-func (season *Season) AudioChannels() int      { return 0 }
-func (season *Season) AudioLanguage() string   { return "eng" }
-func (season *Season) Genres() []string        { return []string{} }
-func (season *Season) Studios() []string       { return []string{} }
-func (season *Season) Year() int               { return 0 }
-func (season *Season) Rating() float32         { return 0 }
-func (season *Season) OfficialRating() string  { return "" }
+func (season *Season) VideoCodec() string        { return "" }
+func (season *Season) VideoBitrate() int         { return 0 }
+func (season *Season) VideoFrameRate() float64   { return 0 }
+func (season *Season) VideoHeight() int          { return 0 }
+func (season *Season) VideoWidth() int           { return 0 }
+func (season *Season) AudioCodec() string        { return "" }
+func (season *Season) AudioBitrate() int         { return 0 }
+func (season *Season) AudioChannels() int        { return 0 }
+func (season *Season) AudioLanguage() string     { return "eng" }
+func (season *Season) Title() string             { return "" }
+func (season *Season) Plot() string              { return "" }
+func (season *Season) Genres() []string          { return []string{} }
+func (season *Season) Actors() map[string]string { return map[string]string{} }
+func (season *Season) Writers() []string         { return []string{} }
+func (season *Season) Directors() []string       { return []string{} }
+func (season *Season) Studios() []string         { return []string{} }
+func (season *Season) Year() int                 { return 0 }
+func (season *Season) Rating() float32           { return 0 }
+func (season *Season) OfficialRating() string    { return "" }
 
 type Seasons []Season
 
@@ -305,35 +331,40 @@ type Episode struct {
 	VttSubs  Subtitles
 }
 
-func (e *Episode) ID() string              { return e.id }
-func (e *Episode) Name() string            { return e.name }
-func (e *Episode) SortName() string        { return e.sortName }
-func (e *Episode) Path() string            { return e.path }
-func (e *Episode) BaseUrl() string         { return "" }
-func (e *Episode) Created() time.Time      { return e.created }
-func (e *Episode) Banner() string          { return "" }
-func (e *Episode) Fanart() string          { return "" }
-func (e *Episode) Folder() string          { return "" }
-func (e *Episode) Poster() string          { return e.thumb }
-func (e *Episode) Logo() string            { return "" }
-func (e *Episode) FileName() string        { return e.fileName }
-func (e *Episode) FileSize() int64         { return e.fileSize }
-func (e *Episode) Number() int             { return e.EpisodeNo }
-func (e *Episode) Duration() time.Duration { return e.Metadata.Duration() }
-func (e *Episode) VideoCodec() string      { return e.Metadata.VideoCodec() }
-func (e *Episode) VideoBitrate() int       { return e.Metadata.VideoBitrate() }
-func (e *Episode) VideoFrameRate() float64 { return e.Metadata.VideoFrameRate() }
-func (e *Episode) VideoHeight() int        { return e.Metadata.VideoHeight() }
-func (e *Episode) VideoWidth() int         { return e.Metadata.VideoWidth() }
-func (e *Episode) AudioCodec() string      { return e.Metadata.AudioCodec() }
-func (e *Episode) AudioBitrate() int       { return e.Metadata.AudioBitrate() }
-func (e *Episode) AudioChannels() int      { return e.Metadata.AudioChannels() }
-func (e *Episode) AudioLanguage() string   { return e.Metadata.AudioLanguage() }
-func (e *Episode) Genres() []string        { return e.Metadata.Genres() }
-func (e *Episode) Studios() []string       { return e.Metadata.Studios() }
-func (e *Episode) Year() int               { return e.Metadata.Year() }
-func (e *Episode) Rating() float32         { return e.Metadata.Rating() }
-func (e *Episode) OfficialRating() string  { return e.Metadata.OfficialRating() }
+func (e *Episode) ID() string                { return e.id }
+func (e *Episode) Name() string              { return e.name }
+func (e *Episode) SortName() string          { return e.sortName }
+func (e *Episode) Path() string              { return e.path }
+func (e *Episode) BaseUrl() string           { return "" }
+func (e *Episode) Created() time.Time        { return e.created }
+func (e *Episode) Banner() string            { return "" }
+func (e *Episode) Fanart() string            { return "" }
+func (e *Episode) Folder() string            { return "" }
+func (e *Episode) Poster() string            { return e.thumb }
+func (e *Episode) Logo() string              { return "" }
+func (e *Episode) FileName() string          { return e.fileName }
+func (e *Episode) FileSize() int64           { return e.fileSize }
+func (e *Episode) Number() int               { return e.EpisodeNo }
+func (e *Episode) Duration() time.Duration   { return e.Metadata.Duration() }
+func (e *Episode) VideoCodec() string        { return e.Metadata.VideoCodec() }
+func (e *Episode) VideoBitrate() int         { return e.Metadata.VideoBitrate() }
+func (e *Episode) VideoFrameRate() float64   { return e.Metadata.VideoFrameRate() }
+func (e *Episode) VideoHeight() int          { return e.Metadata.VideoHeight() }
+func (e *Episode) VideoWidth() int           { return e.Metadata.VideoWidth() }
+func (e *Episode) AudioCodec() string        { return e.Metadata.AudioCodec() }
+func (e *Episode) AudioBitrate() int         { return e.Metadata.AudioBitrate() }
+func (e *Episode) AudioChannels() int        { return e.Metadata.AudioChannels() }
+func (e *Episode) AudioLanguage() string     { return e.Metadata.AudioLanguage() }
+func (e *Episode) Title() string             { return e.Metadata.Title() }
+func (e *Episode) Plot() string              { return e.Metadata.Plot() }
+func (e *Episode) Genres() []string          { return e.Metadata.Genres() }
+func (e *Episode) Actors() map[string]string { return e.Metadata.Actors() }
+func (e *Episode) Writers() []string         { return e.Metadata.Writers() }
+func (e *Episode) Directors() []string       { return e.Metadata.Directors() }
+func (e *Episode) Studios() []string         { return e.Metadata.Studios() }
+func (e *Episode) Year() int                 { return e.Metadata.Year() }
+func (e *Episode) Rating() float32           { return e.Metadata.Rating() }
+func (e *Episode) OfficialRating() string    { return e.Metadata.OfficialRating() }
 
 type Episodes []Episode
 

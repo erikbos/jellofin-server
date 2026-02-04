@@ -5,7 +5,7 @@ package collection
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"log"
 	"slices"
 	"strings"
@@ -386,51 +386,61 @@ func (j *CollectionRepo) BuildSearchIndex(ctx context.Context) error {
 	return nil
 }
 
-// Search performs a item search in collection repository and returns matching items.
-func (j *CollectionRepo) Search(ctx context.Context, term string) ([]string, error) {
+var (
+	SearchIndexNotInitializedError = errors.New("search index not initialized")
+	// default number of search results to return.
+	searchResultCount = 15
+)
+
+// SearchItem performs an item search in collection repository and returns matching items.
+func (j *CollectionRepo) SearchItem(ctx context.Context, term string) ([]string, error) {
 	if j.bleveIndex == nil {
-		return nil, fmt.Errorf("search index not initialized")
+		return nil, SearchIndexNotInitializedError
 	}
-	return j.bleveIndex.Search(ctx, term, 15)
+	return j.bleveIndex.SearchItem(ctx, term, searchResultCount)
 }
 
-// Search performs a item search in collection repository and returns matching items.
+// SearchPerson performs a person search in collection repository and returns matching person names.
+func (j *CollectionRepo) SearchPerson(ctx context.Context, term string) ([]string, error) {
+	if j.bleveIndex == nil {
+		return nil, SearchIndexNotInitializedError
+	}
+	return j.bleveIndex.SearchPerson(ctx, term, searchResultCount)
+}
+
+// Similar performs a item search in collection repository and returns matching items.
 func (j *CollectionRepo) Similar(ctx context.Context, c *Collection, i Item) ([]string, error) {
 	if j.bleveIndex == nil {
-		return nil, fmt.Errorf("search index not initialized")
+		return nil, SearchIndexNotInitializedError
 	}
-	return j.bleveIndex.Similar(ctx, makeSearchDocument(c, i), 15)
+	return j.bleveIndex.Similar(ctx, makeSearchDocument(c, i), searchResultCount)
 }
 
 // makeSearchDocument creates a search document from a collection item.
 func makeSearchDocument(c *Collection, i Item) search.Document {
-	var name, overview string
-	switch v := i.(type) {
-	case *Movie:
-		name = v.Metadata.Title()
-		overview = v.Metadata.Plot()
-	case *Show:
-		name = v.Metadata.Title()
-		overview = v.Metadata.Plot()
-	case *Season:
-		//
-	case *Episode:
-		name = v.Metadata.Title()
-		overview = v.Metadata.Plot()
+	// Collect people involved in the item
+	people := make([]string, 0, len(i.Actors())+len(i.Directors())+len(i.Writers()))
+	for actorName := range i.Actors() {
+		people = append(people, strings.ToLower(actorName))
 	}
-
-	// log.Printf("makeSearchDocument: item %s (%s), type: %s, name: %s\n", i.ID(), c.ID, t, name)
+	for _, director := range i.Directors() {
+		people = append(people, strings.ToLower(director))
+	}
+	for _, writer := range i.Writers() {
+		people = append(people, strings.ToLower(writer))
+	}
 
 	// Strings need to be lowercase as all search matching is done in lower case.
 	doc := search.Document{
 		ID:        i.ID(),
 		ParentID:  c.ID,
-		Name:      strings.ToLower(name),
-		NameExact: strings.ToLower(name),
+		Name:      strings.ToLower(i.Title()),
+		NameExact: strings.ToLower(i.Title()),
 		SortName:  strings.ToLower(i.SortName()),
-		Overview:  strings.ToLower(overview),
+		Overview:  strings.ToLower(i.Plot()),
 		Genres:    i.Genres(),
-		Year:      i.Year(),
+		People:    people,
 	}
+	// log.Printf("makeSearchDocument: item %s (%s), type: %s, name: %s\n", i.ID(), c.ID, t, name)
 	return doc
 }

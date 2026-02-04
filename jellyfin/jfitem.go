@@ -3,10 +3,10 @@ package jellyfin
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log"
-	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -487,6 +487,8 @@ func (j *Jellyfin) makeJFItemByID(ctx context.Context, userID, itemID string) (J
 		return j.makeJFItemCollection(trimPrefix(itemID))
 	case isJFPlaylistID(itemID):
 		return j.makeJFItemPlaylist(ctx, userID, trimPrefix(itemID))
+	case isJFPersonID(itemID):
+		return j.makeJFItemPerson(ctx, userID, trimPrefix(itemID))
 	}
 
 	// Try to fetch individual item: movie, show, episode
@@ -1284,7 +1286,18 @@ func makeJFStudioID(studio string) string {
 
 // makeJFPersonID returns an external id for a person.
 func makeJFPersonID(name string) string {
-	return itemprefix_person + url.PathEscape(strings.ToLower(name))
+	// Name is base64 encoded to handle special characters in names.
+	// Regular URL encoding is not used as some clients have issues with % characters in IDs.
+	return itemprefix_person + base64.RawURLEncoding.EncodeToString([]byte(strings.ToLower(name)))
+}
+
+// decodeJFPersonID decodes a person ID to get the original name.
+func decodeJFPersonID(id string) (string, error) {
+	nameBytes, err := base64.RawURLEncoding.DecodeString(trimPrefix(id))
+	if err != nil {
+		return "", errors.New("invalid person ID")
+	}
+	return string(nameBytes), nil
 }
 
 // trimPrefix removes the type prefix from an item id.
