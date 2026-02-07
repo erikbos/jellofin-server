@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"log"
-	"slices"
 	"strings"
 	"time"
 
@@ -288,52 +287,37 @@ func (cr *CollectionRepo) NextUp(watchedEpisodeIDs []string) (nextUpEpisodeIDs [
 	return nextUpEpisodeIDs, nil
 }
 
-// Details returns collection details such as genres, tags, ratings, etc.
-func (c *CollectionRepo) Details() CollectionDetails {
+// Statistics contains aggregate stats about the collection.
+type Statistics struct {
+	// Number of movies.
+	MovieCount int
+	// Number of shows.
+	ShowCount int
+	// Number of episodes.
+	EpisodeCount int
+}
+
+// Statistics returns collection details such as genres, tags, ratings, etc.
+func (c *CollectionRepo) GetStatistics() Statistics {
 	var movieCount, showCount, episodeCount int
-	genres := make([]string, 0)
-	studios := make([]string, 0)
-	tags := make([]string, 0)
-	official := make([]string, 0)
-	years := make([]int, 0)
-
-	for _, collection := range c.collections {
-		details := collection.Details()
-
-		movieCount += details.MovieCount
-		showCount += details.ShowCount
-		episodeCount += details.EpisodeCount
-
-		for _, g := range details.Genres {
-			if !slices.Contains(genres, g) {
-				genres = append(genres, g)
-			}
-		}
-		for _, s := range details.Studios {
-			if !slices.Contains(studios, s) {
-				studios = append(studios, s)
-			}
-		}
-		for _, t := range details.Tags {
-			if !slices.Contains(tags, t) {
-				tags = append(tags, t)
-			}
-		}
-		for _, r := range details.OfficialRatings {
-			if !slices.Contains(official, r) {
-				official = append(official, r)
+	for _, col := range c.GetCollections() {
+		for _, i := range col.Items {
+			switch v := i.(type) {
+			case *Movie:
+				movieCount++
+			case *Show:
+				showCount++
+				for _, season := range v.Seasons {
+					episodeCount += len(season.Episodes)
+				}
 			}
 		}
 	}
 
-	details := CollectionDetails{
-		MovieCount:      movieCount,
-		ShowCount:       showCount,
-		EpisodeCount:    episodeCount,
-		Genres:          genres,
-		Tags:            tags,
-		OfficialRatings: official,
-		Years:           years,
+	details := Statistics{
+		MovieCount:   movieCount,
+		ShowCount:    showCount,
+		EpisodeCount: episodeCount,
 	}
 	return details
 }

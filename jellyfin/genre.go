@@ -1,13 +1,12 @@
 package jellyfin
 
 import (
+	"context"
 	"net/http"
 	"slices"
-	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
-
-	"github.com/erikbos/jellofin-server/collection"
 )
 
 // /Genres
@@ -19,19 +18,27 @@ func (j *Jellyfin) genresHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var details collection.CollectionDetails
-	if collection := r.URL.Query().Get("parentId"); collection != "" {
-		// Not every collection has genres (e.g. dynamic collections such as playlists or favorites)
-		if c := j.collections.GetCollection(strings.TrimPrefix(collection, itemprefix_collection)); c != nil {
-			details = c.Details()
-		}
-	} else {
-		details = j.collections.Details()
+	// Get all items for which we need to get genres.
+	queryparams := r.URL.Query()
+	parentID := queryparams.Get("parentId")
+	items, err := j.getJFItems(r.Context(), accessToken.UserID, parentID)
+	if err != nil {
+		apierror(w, "Failed to get items", http.StatusInternalServerError)
+		return
 	}
 
+	// Build unique genre from the items.
 	genres := []JFItem{}
-	for _, g := range details.Genres {
-		genres = append(genres, j.makeJFItemGenre(r.Context(), g))
+	genreSet := make(map[string]struct{})
+	for _, item := range items {
+		for _, genre := range item.Genres {
+			if _, exists := genreSet[genre]; !exists {
+				genreSet[genre] = struct{}{}
+				if genreItem, err := j.makeJFItemGenre(r.Context(), accessToken.UserID, genre); err == nil {
+					genres = append(genres, genreItem)
+				}
+			}
+		}
 	}
 
 	genres = j.applyItemSorting(genres, r.URL.Query())
@@ -55,20 +62,18 @@ func (j *Jellyfin) genreHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vars := mux.Vars(r)
-	genreName := vars["name"]
-	if genreName == "" {
+	name := vars["name"]
+	if name == "" {
 		apierror(w, "Missing genre", http.StatusBadRequest)
 		return
 	}
-
-	for _, genre := range j.collections.Details().Genres {
-		if genre == genreName {
-			response := j.makeJFItemGenre(r.Context(), genre)
-			serveJSON(response, w)
-			return
-		}
+	//TOD: validate genre is actually in the collection?
+	response, err := j.makeJFItemGenre(r.Context(), accessToken.UserID, makeJFGenreID(name))
+	if err != nil {
+		apierror(w, "Genre not found", http.StatusNotFound)
+		return
 	}
-	apierror(w, "Genre not found", http.StatusNotFound)
+	serveJSON(response, w)
 }
 
 // /Items/Filters?userId=XAOVnIQY8sd0&parentId=collection_1
@@ -80,23 +85,47 @@ func (j *Jellyfin) usersItemsFiltersHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var details collection.CollectionDetails
-	if collection := r.URL.Query().Get("parentId"); collection != "" {
-		// Not every collection has genres (e.g. dynamic collections such as playlists or favorites)
-		if c := j.collections.GetCollection(strings.TrimPrefix(collection, itemprefix_collection)); c != nil {
-			details = c.Details()
-		}
-	} else {
-		details = j.collections.Details()
+	// Get all items for which we need to get genres.
+	queryparams := r.URL.Query()
+	parentID := queryparams.Get("parentId")
+	items, err := j.getJFItems(r.Context(), accessToken.UserID, parentID)
+	if err != nil {
+		apierror(w, "Failed to get items", http.StatusInternalServerError)
+		return
 	}
 
-	slices.Sort(details.Years)
+	genres := make([]string, 0)
+	studios := make([]string, 0)
+	tags := make([]string, 0)
+	official := make([]string, 0)
+	years := make([]int, 0)
+
+	for _, i := range items {
+		for _, g := range i.Genres {
+			if !slices.Contains(genres, g) {
+				genres = append(genres, g)
+			}
+		}
+		for _, s := range i.Studios {
+			if !slices.Contains(studios, s.Name) {
+				studios = append(studios, s.Name)
+			}
+		}
+		if i.OfficialRating != "" && !slices.Contains(official, i.OfficialRating) {
+			official = append(official, i.OfficialRating)
+		}
+		if i.ProductionYear != 0 && !slices.Contains(years, i.ProductionYear) {
+			years = append(years, i.ProductionYear)
+		}
+	}
+
+	slices.Sort(years)
 
 	response := JFItemFilterResponse{
-		Genres:          details.Genres,
-		Tags:            details.Tags,
-		OfficialRatings: details.OfficialRatings,
-		Years:           details.Years,
+		Genres:          genres,
+		Tags:            tags,
+		OfficialRatings: official,
+		Years:           years,
 	}
 	serveJSON(response, w)
 }
@@ -110,17 +139,32 @@ func (j *Jellyfin) usersItemsFilters2Handler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var details collection.CollectionDetails
-	if searchCollection := r.URL.Query().Get("parentId"); searchCollection != "" {
-		collectionid := strings.TrimPrefix(searchCollection, itemprefix_collection)
-		details = j.collections.GetCollection(collectionid).Details()
-	} else {
-		details = j.collections.Details()
+	// Get all items for which we need to get genres.
+	queryparams := r.URL.Query()
+	parentID := queryparams.Get("parentId")
+	items, err := j.getJFItems(r.Context(), accessToken.UserID, parentID)
+	if err != nil {
+		apierror(w, "Failed to get items", http.StatusInternalServerError)
+		return
+	}
+
+	// Build unique genre from the items.
+	genres := []JFGenreItem{}
+	genreIDs := make(map[string]struct{})
+	for _, item := range items {
+		for _, genre := range item.GenreItems {
+			if genre.ID != "" {
+				if _, exists := genreIDs[genre.ID]; !exists {
+					genreIDs[genre.ID] = struct{}{}
+					genres = append(genres, genre)
+				}
+			}
+		}
 	}
 
 	response := JFItemFilter2Response{
-		Genres: makeJFGenreItems(details.Genres),
-		Tags:   details.Tags,
+		Genres: genres,
+		Tags:   []string{},
 	}
 	serveJSON(response, w)
 
@@ -134,4 +178,32 @@ func makeJFGenreItems(array []string) (genreItems []JFGenreItem) {
 		})
 	}
 	return genreItems
+}
+
+func (j *Jellyfin) makeJFItemGenre(_ context.Context, _, genreID string) (JFItem, error) {
+	genre, err := decodeJFGenreID(genreID)
+	if err != nil {
+		return JFItem{}, err
+	}
+
+	response := JFItem{
+		ID:           genreID,
+		ServerID:     j.serverID,
+		Type:         itemTypeGenre,
+		Name:         genre,
+		SortName:     genre,
+		Etag:         genreID,
+		DateCreated:  time.Now().UTC(),
+		PremiereDate: time.Now().UTC(),
+		LocationType: "FileSystem",
+		MediaType:    "Unknown",
+		ChildCount:   1,
+	}
+
+	if genreItemCount := j.collections.GenreItemCount(); genreItemCount != nil {
+		if genreCount, ok := genreItemCount[genre]; ok {
+			response.ChildCount = genreCount
+		}
+	}
+	return response, nil
 }

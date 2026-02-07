@@ -88,7 +88,7 @@ func (b *Search) SearchPerson(ctx context.Context, personName string, size int) 
 	}
 
 	// Collect all matching person names from results
-	personNamesMap := make(map[string]bool) // Use map for deduplication
+	personNamesMap := make(map[string]struct{}) // Use map for deduplication
 
 	for _, hit := range res.Hits {
 		// Extract people field
@@ -98,7 +98,7 @@ func (b *Search) SearchPerson(ctx context.Context, personName string, size int) 
 			// Filter to only include names that match the search term
 			matchedNames := filterMatchingNames(people, personName)
 			for _, name := range matchedNames {
-				personNamesMap[name] = true
+				personNamesMap[name] = struct{}{}
 			}
 		}
 	}

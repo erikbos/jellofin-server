@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -42,6 +43,15 @@ const (
 	// imagetag prefix will get HTTP-redirected
 	tagprefix_redirect = "redirect_"
 )
+
+// getJFItems returns list of items based on provided parentID or all items if parentID is empty
+func (j *Jellyfin) getJFItems(ctx context.Context, userID, parentID string) ([]JFItem, error) {
+	if parentID != "" {
+		return j.getJFItemsByParentID(ctx, userID, parentID)
+	} else {
+		return j.getJFItemsAll(ctx, userID)
+	}
+}
 
 // getJFItemsByParentID returns list of all items with a specific parentID
 func (j *Jellyfin) getJFItemsByParentID(ctx context.Context, userID, parentID string) ([]JFItem, error) {
@@ -106,8 +116,21 @@ func (j *Jellyfin) getJFItemsByParentID(ctx context.Context, userID, parentID st
 		return studioItems, nil
 
 	// List by person?
-	// case isJFPersonID(parentID):
-	// 	return []JFItem{}, nil
+	case isJFPersonID(parentID):
+		items, err := j.getJFItemsAll(ctx, userID)
+		if err != nil {
+			return []JFItem{}, errors.New("could not get all items")
+		}
+		// Make a new list with only items where personid matches provided parentID
+		personItems := make([]JFItem, 0, len(items))
+		for _, item := range items {
+			for _, person := range item.People {
+				if person.ID == parentID {
+					personItems = append(personItems, item)
+				}
+			}
+		}
+		return personItems, nil
 
 	// Specific collection requested?
 	case isJFCollectionID(parentID):
@@ -172,7 +195,17 @@ func (j *Jellyfin) makeJFItemRoot(ctx context.Context, userID string) (response 
 		childCount = len(rootitems)
 	}
 
-	genres := j.collections.Details().Genres
+	// Build list of genres from all collections.
+	var collectionGenres []string
+	for _, c := range j.collections.GetCollections() {
+		for _, i := range c.Items {
+			for _, genre := range i.Genres() {
+				if !slices.Contains(collectionGenres, genre) {
+					collectionGenres = append(collectionGenres, genre)
+				}
+			}
+		}
+	}
 
 	response = JFItem{
 		Name:                     "Media Folders",
@@ -194,8 +227,8 @@ func (j *Jellyfin) makeJFItemRoot(ctx context.Context, userID string) (response 
 		ProviderIds:              JFProviderIds{},
 		People:                   []JFPeople{},
 		Studios:                  []JFStudios{},
-		Genres:                   genres,
-		GenreItems:               makeJFGenreItems(genres),
+		Genres:                   collectionGenres,
+		GenreItems:               makeJFGenreItems(collectionGenres),
 		LocalTrailerCount:        0,
 		ChildCount:               childCount,
 		SpecialFeatureCount:      0,
@@ -236,10 +269,18 @@ func (j *Jellyfin) makeJFItemCollection(collectionID string) (response JFItem, e
 		e = errors.New("collection not found")
 		return
 	}
-	collectionGenres := c.Details().Genres
+
+	// Build list of genres from collection.
+	var collectionGenres []string
+	for _, i := range c.Items {
+		for _, genre := range i.Genres() {
+			if !slices.Contains(collectionGenres, genre) {
+				collectionGenres = append(collectionGenres, genre)
+			}
+		}
+	}
 
 	id := makeJFCollectionID(collectionID)
-
 	response = JFItem{
 		Name:                     c.Name,
 		ServerID:                 j.serverID,
@@ -489,6 +530,10 @@ func (j *Jellyfin) makeJFItemByID(ctx context.Context, userID, itemID string) (J
 		return j.makeJFItemPlaylist(ctx, userID, trimPrefix(itemID))
 	case isJFPersonID(itemID):
 		return j.makeJFItemPerson(ctx, userID, trimPrefix(itemID))
+	case isJFGenreID(itemID):
+		return j.makeJFItemGenre(ctx, userID, trimPrefix(itemID))
+	case isJFStudioID(itemID):
+		return j.makeJFItemStudio(ctx, userID, trimPrefix(itemID))
 	}
 
 	// Try to fetch individual item: movie, show, episode
@@ -517,7 +562,6 @@ func (j *Jellyfin) makeJFItem(ctx context.Context, userID string, item collectio
 
 // makeJFItem make movie item
 func (j *Jellyfin) makeJFItemMovie(ctx context.Context, userID string, movie *collection.Movie, parentID string) (response JFItem, e error) {
-
 	response = JFItem{
 		Type:                    itemTypeMovie,
 		ID:                      movie.ID(),
@@ -943,30 +987,6 @@ func (j *Jellyfin) makeJFItemEpisode(ctx context.Context, userID string, episode
 	return response, nil
 }
 
-func (j *Jellyfin) makeJFItemGenre(_ context.Context, genre string) (response JFItem) {
-	response = JFItem{
-		ID:           makeJFGenreID(genre),
-		ServerID:     j.serverID,
-		Type:         itemTypeGenre,
-		Name:         genre,
-		SortName:     genre,
-		Etag:         makeJFGenreID(genre),
-		DateCreated:  time.Now().UTC(),
-		PremiereDate: time.Now().UTC(),
-		LocationType: "FileSystem",
-		MediaType:    "Unknown",
-		ChildCount:   1,
-	}
-
-	if genreItemCount := j.collections.GenreItemCount(); genreItemCount != nil {
-		if genreCount, ok := genreItemCount[genre]; ok {
-			response.ChildCount = genreCount
-		}
-	}
-
-	return
-}
-
 // makeJFPeople creates a list of people (actors, directors, writers) for the item
 func (j *Jellyfin) makeJFPeople(_ context.Context, m metadata.Metadata, userID string) []JFPeople {
 	if userID != "XAOVn7iqiBujnIQY8sd0" {
@@ -989,32 +1009,10 @@ func (j *Jellyfin) makeJFPeople(_ context.Context, m metadata.Metadata, userID s
 	return people
 }
 
-func (j *Jellyfin) makeJFItemStudio(_ context.Context, studio string) JFItem {
-	response := JFItem{
-		ID:                makeJFStudioID(studio),
-		ServerID:          j.serverID,
-		Type:              itemTypeStudio,
-		Name:              studio,
-		SortName:          studio,
-		Etag:              makeJFStudioID(studio),
-		DateCreated:       time.Now().UTC(),
-		PremiereDate:      time.Now().UTC(),
-		LocationType:      "FileSystem",
-		MediaType:         "Unknown",
-		ImageBlurHashes:   &JFImageBlurHashes{},
-		ImageTags:         &JFImageTags{},
-		BackdropImageTags: []string{},
-		UserData:          &JFUserData{},
-	}
-	return response
-}
-
 func makeJFStudios(studios []string) []JFStudios {
-	var studioItems []JFStudios
+	studioItems := make([]JFStudios, 0, len(studios))
 	for _, studio := range studios {
-		studioItems = append(studioItems, JFStudios{
-			Name: studio, ID: makeJFStudioID(studio),
-		})
+		studioItems = append(studioItems, JFStudios{ID: makeJFStudioID(studio), Name: studio})
 	}
 	return studioItems
 }
@@ -1276,12 +1274,34 @@ func makeJFDisplayPreferencesID(dpID string) string {
 
 // makeJFGenreID returns an external id for a genre name.
 func makeJFGenreID(genre string) string {
-	return itemprefix_genre + idhash.IdHash(genre)
+	// Genre is base64 encoded to handle special characters in names.
+	// Regular URL encoding is not used as some clients have issues with % characters in IDs.
+	return itemprefix_genre + base64.RawURLEncoding.EncodeToString([]byte(strings.ToLower(genre)))
+}
+
+// decodeJFGenreID decodes a genre ID to get the original name.
+func decodeJFGenreID(id string) (string, error) {
+	genreBytes, err := base64.RawURLEncoding.DecodeString(trimPrefix(id))
+	if err != nil {
+		return "", errors.New("invalid genre ID")
+	}
+	return string(genreBytes), nil
 }
 
 // makeJFStudioID returns an external id for a studio.
 func makeJFStudioID(studio string) string {
-	return itemprefix_studio + idhash.IdHash(studio)
+	// Studio is base64 encoded to handle special characters in names.
+	// Regular URL encoding is not used as some clients have issues with % characters in IDs.
+	return itemprefix_studio + base64.RawURLEncoding.EncodeToString([]byte(strings.ToLower(studio)))
+}
+
+// decodeJFStudioID decodes a studio ID to get the original name.
+func decodeJFStudioID(id string) (string, error) {
+	studioBytes, err := base64.RawURLEncoding.DecodeString(trimPrefix(id))
+	if err != nil {
+		return "", errors.New("invalid studio ID")
+	}
+	return string(studioBytes), nil
 }
 
 // makeJFPersonID returns an external id for a person.

@@ -1,12 +1,11 @@
 package jellyfin
 
 import (
+	"context"
 	"net/http"
-	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
-
-	"github.com/erikbos/jellofin-server/collection"
 )
 
 // /Studios
@@ -18,19 +17,29 @@ func (j *Jellyfin) studiosHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var details collection.CollectionDetails
-	if collection := r.URL.Query().Get("parentId"); collection != "" {
-		// Not every collection has studios (e.g. dynamic collections such as playlists or favorites)
-		if c := j.collections.GetCollection(strings.TrimPrefix(collection, itemprefix_collection)); c != nil {
-			details = c.Details()
-		}
-	} else {
-		details = j.collections.Details()
+	// Get all items for which we need to get studios.
+	queryparams := r.URL.Query()
+	parentID := queryparams.Get("parentId")
+	items, err := j.getJFItems(r.Context(), accessToken.UserID, parentID)
+	if err != nil {
+		apierror(w, "Failed to get items", http.StatusInternalServerError)
+		return
 	}
 
+	// Build unique studios from the items.
 	studios := []JFItem{}
-	for _, s := range details.Studios {
-		studios = append(studios, j.makeJFItemStudio(r.Context(), s))
+	studioSet := make(map[string]struct{})
+	for _, item := range items {
+		for _, studio := range item.Studios {
+			if studio.ID != "" {
+				if _, exists := studioSet[studio.ID]; !exists {
+					studioSet[studio.ID] = struct{}{}
+					if studioItem, err := j.makeJFItemStudio(r.Context(), accessToken.UserID, studio.ID); err == nil {
+						studios = append(studios, studioItem)
+					}
+				}
+			}
+		}
 	}
 
 	studios = j.applyItemSorting(studios, r.URL.Query())
@@ -59,6 +68,35 @@ func (j *Jellyfin) studioHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := j.makeJFItemStudio(r.Context(), studio)
+	response, err := j.makeJFItemStudio(r.Context(), accessToken.UserID, makeJFStudioID(studio))
+	if err != nil {
+		apierror(w, "Studio not found", http.StatusNotFound)
+		return
+	}
 	serveJSON(response, w)
+}
+
+func (j *Jellyfin) makeJFItemStudio(_ context.Context, _ string, studioID string) (JFItem, error) {
+	studio, err := decodeJFStudioID(studioID)
+	if err != nil {
+		return JFItem{}, err
+	}
+	response := JFItem{
+		ID:                studioID,
+		ServerID:          j.serverID,
+		Type:              itemTypeStudio,
+		Name:              studio,
+		SortName:          studio,
+		Etag:              studioID,
+		DateCreated:       time.Now().UTC(),
+		PremiereDate:      time.Now().UTC(),
+		LocationType:      "FileSystem",
+		MediaType:         "Unknown",
+		ImageBlurHashes:   &JFImageBlurHashes{},
+		ImageTags:         &JFImageTags{},
+		BackdropImageTags: []string{},
+		UserData:          &JFUserData{},
+		LockedFields:      []string{},
+	}
+	return response, nil
 }

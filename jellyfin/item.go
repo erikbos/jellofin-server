@@ -294,11 +294,12 @@ func (j *Jellyfin) usersItemsCountsHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	details := j.collections.Details()
+	stats := j.collections.GetStatistics()
+
 	response := JFItemCountResponse{
-		MovieCount:   details.MovieCount,
-		SeriesCount:  details.ShowCount,
-		EpisodeCount: details.EpisodeCount,
+		MovieCount:   stats.MovieCount,
+		SeriesCount:  stats.ShowCount,
+		EpisodeCount: stats.EpisodeCount,
 	}
 	serveJSON(response, w)
 }

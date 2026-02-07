@@ -203,7 +203,19 @@ func (n *Notflix) genresHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gc := c.GenreCount()
+	gc := make(map[string]int)
+	for _, i := range c.Items {
+		for _, g := range i.Genres() {
+			if g == "" {
+				continue
+			}
+			if _, found := gc[g]; !found {
+				gc[g] = 1
+			} else {
+				gc[g] += 1
+			}
+		}
+	}
 	serveJSON(gc, w)
 }
 
