@@ -12,27 +12,6 @@ import (
 	"github.com/erikbos/jellofin-server/idhash"
 )
 
-type JFCreatePlaylistRequest struct {
-	Name   string   `json:"Name"`
-	UserID string   `json:"UserId"`
-	Ids    []string `json:"Ids,omitempty"`
-}
-
-type JFCreatePlaylistResponse struct {
-	Id string `json:"Id"`
-}
-
-type JFGetPlaylistResponse struct {
-	OpenAccess bool     `json:"OpenAccess"`
-	Shares     []string `json:"Shares"`
-	ItemIds    []string `json:"ItemIds,omitempty"`
-}
-
-type JFPlaylistAccess struct {
-	Users   []string `json:"Users"`
-	Canedit bool     `json:"CanEdit"`
-}
-
 // POST /Playlists
 //
 // createPlaylistHandler creates a new playlist
@@ -273,4 +252,14 @@ func (j *Jellyfin) getPlaylistUsersHandler(w http.ResponseWriter, r *http.Reques
 		Canedit: true,
 	}
 	serveJSON(response, w)
+}
+
+// makeJFPlaylistID returns an external id for a playlist.
+func makeJFPlaylistID(playlistID string) string {
+	return itemprefix_playlist + playlistID
+}
+
+// isJFPlaylistID checks if the provided ID is a playlist ID.
+func isJFPlaylistID(id string) bool {
+	return strings.HasPrefix(id, itemprefix_playlist)
 }

@@ -1,16 +1,23 @@
 package jellyfin
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"sort"
+	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 
 	"github.com/erikbos/jellofin-server/collection"
+	"github.com/erikbos/jellofin-server/database/model"
+	"github.com/erikbos/jellofin-server/idhash"
 )
 
-// /Shows/rXlq4EHNxq4HIVQzw3o2/Episodes?UserId=2b1ec0a52b09456c9823a367d84ac9e5&ExcludeLocationTypes=Virtual&Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount&SeasonId=rXlq4EHNxq4HIVQzw3o2/1
+// /Shows/rXlq4EHNxq4HIVQzw3o2/Episodes?UserId=2b1ec0a52b09456c9823a367d84ac9e5&ExcludeLocationTypes=Virtual&SeasonId=rXlq4EHNxq4HIVQzw3o2/1
 //
 // generate episode overview for one season of a show
 func (j *Jellyfin) showsEpisodesHandler(w http.ResponseWriter, r *http.Request) {
@@ -119,6 +126,7 @@ func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	queryparams := r.URL.Query()
+	seriesID := queryparams.Get("seriesId")
 
 	// todo: pass seriesId/seasonId to filter next up items to a specific series/season
 	recentlyWatchedIDs, err := j.repo.GetRecentlyWatched(r.Context(), accessToken.UserID, true)
@@ -126,7 +134,7 @@ func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 		apierror(w, "Could not get recently watched items list", http.StatusInternalServerError)
 		return
 	}
-	nextUpItemIDs, err := j.collections.NextUp(recentlyWatchedIDs)
+	nextUpItemIDs, err := j.collections.NextUp(recentlyWatchedIDs, seriesID)
 	if err != nil {
 		apierror(w, "Could not get next up items list", http.StatusInternalServerError)
 		return
@@ -157,4 +165,371 @@ func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 		TotalRecordCount: totalItemCount,
 	}
 	serveJSON(response, w)
+}
+
+// makeJFItemShow makes show item
+func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, show *collection.Show, parentID string) (JFItem, error) {
+	response := JFItem{
+		Type:                    itemTypeShow,
+		ID:                      show.ID(),
+		ParentID:                makeJFCollectionID(parentID),
+		ServerID:                j.serverID,
+		Name:                    show.Name(),
+		OriginalTitle:           show.Name(),
+		SortName:                show.SortName(),
+		ForcedSortName:          show.SortName(),
+		Genres:                  show.Metadata.Genres(),
+		GenreItems:              makeJFGenreItems(show.Metadata.Genres()),
+		Studios:                 makeJFStudios(show.Metadata.Studios()),
+		IsFolder:                true,
+		Etag:                    idhash.IdHash(show.ID()),
+		DateCreated:             show.FirstVideo().UTC(),
+		PrimaryImageAspectRatio: 0.6666666666666666,
+		CanDelete:               false,
+		CanDownload:             true,
+		PlayAccess:              "Full",
+		ImageTags: &JFImageTags{
+			Primary:  show.ID(),
+			Backdrop: show.ID(),
+		},
+		// Required to have Infuse load backdrop of episode
+		BackdropImageTags: []string{
+			show.ID(),
+		},
+		Overview:        show.Metadata.Plot(),
+		OfficialRating:  show.Metadata.OfficialRating(),
+		CommunityRating: show.Metadata.Rating(),
+		ChannelID:       nil,
+		Chapters:        []JFChapter{},
+		ExternalUrls:    []JFExternalUrls{},
+		People:          j.makeJFPeople(ctx, show.Metadata, userID),
+		RemoteTrailers:  []JFRemoteTrailers{},
+		Tags:            []string{},
+		Taglines:        []string{show.Metadata.Tagline()},
+		Trickplay:       []string{},
+		LockedFields:    []string{},
+	}
+
+	// Show logo tends to be optional
+	if show.Logo() != "" {
+		response.ImageTags.Logo = show.ID()
+	}
+
+	// Metadata might have a better title
+	if show.Metadata.Title() != "" {
+		response.Name = show.Metadata.Title()
+	}
+
+	if show.Metadata.Year() != 0 {
+		response.ProductionYear = show.Metadata.Year()
+	}
+
+	if !show.Metadata.Premiered().IsZero() {
+		response.PremiereDate = show.Metadata.Premiered().UTC()
+	} else {
+		response.PremiereDate = show.FirstVideo().UTC()
+	}
+
+	// Get playstate of the show itself
+	playstate, err := j.repo.GetUserData(ctx, userID, show.ID())
+	if err != nil {
+		playstate = &model.UserData{
+			Timestamp: time.Now().UTC(),
+		}
+	}
+	response.UserData = j.makeJFUserData(userID, show.ID(), playstate)
+
+	// Set child count to number of seasons
+	response.ChildCount = len(show.Seasons)
+	// In case show does not have any seasons no need to calculate userdata
+	if response.ChildCount == 0 {
+		return response, nil
+	}
+
+	// Set recursive item count to number of episodes
+	for _, s := range show.Seasons {
+		response.RecursiveItemCount += len(s.Episodes)
+	}
+
+	// Calculate the number of episodes and played episode in the show
+	var playedEpisodes, totalEpisodes int
+	var lastestPlayed time.Time
+	for _, s := range show.Seasons {
+		for _, e := range s.Episodes {
+			totalEpisodes++
+			// Get playstate of episode
+			episodePlaystate, err := j.repo.GetUserData(ctx, userID, e.ID())
+			if err == nil && episodePlaystate != nil {
+				if episodePlaystate.Played {
+					playedEpisodes++
+					if episodePlaystate.Timestamp.After(lastestPlayed) {
+						lastestPlayed = episodePlaystate.Timestamp
+					}
+				}
+			}
+		}
+	}
+
+	// In case show has played episodes get playstate of the show itself
+	if totalEpisodes != 0 {
+		response.UserData.UnplayedItemCount = totalEpisodes - playedEpisodes
+		response.UserData.PlayedPercentage = 100 * playedEpisodes / totalEpisodes
+		response.UserData.LastPlayedDate = lastestPlayed
+		response.UserData.Key = response.ID
+		// Mark show as played when all episodes are played
+		if playedEpisodes == totalEpisodes {
+			response.UserData.Played = true
+		}
+	}
+	return response, nil
+}
+
+// makeJFSeasonsOverview generates all season items for a show
+func (j *Jellyfin) makeJFSeasonsOverview(ctx context.Context, userID string, show *collection.Show) ([]JFItem, error) {
+	seasons := make([]JFItem, 0, len(show.Seasons))
+	for _, s := range show.Seasons {
+		if jfitem, err := j.makeJFItemSeason(ctx, userID, &s, show.ID()); err == nil {
+			seasons = append(seasons, jfitem)
+		}
+	}
+
+	// Always sort seasons by number, no user provided sortBy option.
+	// This way season 99, Specials ends up last.
+	sort.SliceStable(seasons, func(i, j int) bool {
+		return seasons[i].IndexNumber < seasons[j].IndexNumber
+	})
+
+	return seasons, nil
+}
+
+// makeJFItemSeason makes a season item
+func (j *Jellyfin) makeJFItemSeason(ctx context.Context, userID string, season *collection.Season, _ string) (JFItem, error) {
+	_, show, season := j.collections.GetSeasonByID(season.ID())
+	if season == nil {
+		return JFItem{}, errors.New("could not find season")
+	}
+
+	response := JFItem{
+		Type:               itemTypeSeason,
+		ID:                 makeJFSeasonID(season.ID()),
+		SeriesID:           show.ID(),
+		SeriesName:         show.Name(),
+		ParentID:           show.ID(),
+		ParentLogoItemId:   show.ID(),
+		ServerID:           j.serverID,
+		IsFolder:           true,
+		LocationType:       "FileSystem",
+		Etag:               idhash.IdHash(season.ID()),
+		MediaType:          "Unknown",
+		ChildCount:         len(season.Episodes),
+		RecursiveItemCount: len(season.Episodes),
+		DateCreated:        time.Now().UTC(),
+		PremiereDate:       time.Now().UTC(),
+		CanDelete:          false,
+		CanDownload:        true,
+		PlayAccess:         "Full",
+		ImageTags: &JFImageTags{
+			Primary: makeJFSeasonID(season.ID()),
+		},
+		ChannelID:      nil,
+		Chapters:       []JFChapter{},
+		ExternalUrls:   []JFExternalUrls{},
+		People:         []JFPeople{},
+		RemoteTrailers: []JFRemoteTrailers{},
+		Tags:           []string{},
+		Taglines:       []string{},
+		Trickplay:      []string{},
+		LockedFields:   []string{},
+	}
+	// Regular season? (>0)
+	seasonNumber := season.Number()
+	if seasonNumber != 0 {
+		response.IndexNumber = seasonNumber
+		response.Name = makeSeasonName(seasonNumber)
+		response.SortName = fmt.Sprintf("%04d", seasonNumber)
+	} else {
+		// Specials tend to have season number 0, set season
+		// number to 99 to make it sort at the end
+		response.IndexNumber = 99
+		response.Name = makeSeasonName(seasonNumber)
+		response.SortName = "9999"
+	}
+
+	// Set season premiere date to first episode airdate if available
+	if len(season.Episodes) != 0 {
+		response.PremiereDate = season.Episodes[0].Metadata.Premiered()
+	}
+
+	// Get playstate of the season itself
+	playstate, err := j.repo.GetUserData(ctx, userID, season.ID())
+	if err != nil {
+		playstate = &model.UserData{
+			Timestamp: time.Now().UTC(),
+		}
+	}
+	response.UserData = j.makeJFUserData(userID, season.ID(), playstate)
+
+	// Calculate the number of played episodes in the season
+	var playedEpisodes int
+	var lastestPlayed time.Time
+	for _, e := range season.Episodes {
+		episodePlaystate, err := j.repo.GetUserData(ctx, userID, e.ID())
+		if err == nil {
+			if episodePlaystate.Played {
+				playedEpisodes++
+				if episodePlaystate.Timestamp.After(lastestPlayed) {
+					lastestPlayed = episodePlaystate.Timestamp
+				}
+			}
+		}
+	}
+
+	// Populate playstate fields with playstate of episodes in the season
+	response.UserData.UnplayedItemCount = response.ChildCount - playedEpisodes
+	response.UserData.PlayedPercentage = 100 * playedEpisodes / response.ChildCount
+	response.UserData.LastPlayedDate = lastestPlayed
+	// Mark season as played when all episodes are played
+	if playedEpisodes == response.ChildCount {
+		response.UserData.Played = true
+	}
+
+	return response, nil
+}
+
+func makeSeasonName(seasonNo int) string {
+	// Regular season? (>0)
+	if seasonNo != 0 {
+		return fmt.Sprintf("Season %d", seasonNo)
+	} else {
+		return "Specials"
+	}
+}
+
+// makeJFEpisodesOverview generates all episode items for one season of a show
+func (j *Jellyfin) makeJFEpisodesOverview(ctx context.Context, userID string, season *collection.Season) ([]JFItem, error) {
+	episodes := make([]JFItem, 0, len(season.Episodes))
+	for _, e := range season.Episodes {
+		if episode, err := j.makeJFItemEpisode(ctx, userID, &e, season.ID()); err == nil {
+			episodes = append(episodes, episode)
+		}
+	}
+	return episodes, nil
+}
+
+// makeJFItemEpisode makes an episode item
+func (j *Jellyfin) makeJFItemEpisode(ctx context.Context, userID string, episode *collection.Episode, _ string) (JFItem, error) {
+	_, show, season, episode := j.collections.GetEpisodeByID(episode.ID())
+	if episode == nil {
+		return JFItem{}, errors.New("could not find episode")
+	}
+
+	response := JFItem{
+		Type:              itemTypeEpisode,
+		ID:                makeJFEpisodeID(episode.ID()),
+		SeasonID:          makeJFSeasonID(season.ID()),
+		SeasonName:        makeSeasonName(season.Number()),
+		SeriesID:          show.ID(),
+		SeriesName:        show.Name(),
+		ParentLogoItemId:  show.ID(),
+		ServerID:          j.serverID,
+		ParentIndexNumber: season.Number(),
+		IndexNumber:       episode.Number(),
+		Overview:          episode.Metadata.Plot(),
+		IsHD:              itemIsHD(episode),
+		Is4K:              itemIs4K(episode),
+		RunTimeTicks:      makeRuntimeTicks(episode.Duration()),
+		IsFolder:          false,
+		LocationType:      "FileSystem",
+		Path:              "episode.mp4",
+		Etag:              idhash.IdHash(episode.ID()),
+		MediaType:         "Video",
+		VideoType:         "VideoFile",
+		Container:         "mov,mp4,m4a",
+		DateCreated:       episode.Created().UTC(),
+		HasSubtitles:      true,
+		CanDelete:         false,
+		CanDownload:       true,
+		PlayAccess:        "Full",
+		Width:             episode.VideoWidth(),
+		Height:            episode.VideoHeight(),
+		ProductionYear:    episode.Metadata.Year(),
+		CommunityRating:   episode.Metadata.Rating(),
+		ProviderIds:       makeJFProviderIds(episode.Metadata.ProviderIDs()),
+		ChannelID:         nil,
+		Chapters:          []JFChapter{},
+		ExternalUrls:      []JFExternalUrls{},
+		People:            j.makeJFPeople(ctx, episode.Metadata, userID),
+		RemoteTrailers:    []JFRemoteTrailers{},
+		Tags:              []string{},
+		Taglines:          []string{},
+		Trickplay:         []string{},
+		LockedFields:      []string{},
+	}
+
+	if episode.Poster() != "" {
+		response.ImageTags = &JFImageTags{
+			Primary: episode.ID(),
+		}
+	}
+
+	// Get genres from episode, if not available use show genres
+	genres := episode.Metadata.Genres()
+	if len(genres) == 0 {
+		genres = show.Metadata.Genres()
+	}
+	response.Genres = genres
+	response.GenreItems = makeJFGenreItems(genres)
+
+	// Get studios from episode, if not available use show studios
+	studios := episode.Metadata.Studios()
+	if len(studios) == 0 {
+		studios = show.Metadata.Studios()
+	}
+	response.Studios = makeJFStudios(studios)
+
+	// Metadata might have a better title
+	if episode.Metadata.Title() != "" {
+		response.Name = episode.Metadata.Title()
+	}
+
+	if !show.Metadata.Premiered().IsZero() {
+		response.PremiereDate = show.Metadata.Premiered()
+	} else {
+		response.PremiereDate = episode.Created().UTC()
+	}
+
+	response.MediaSources = j.makeMediaSource(episode)
+	response.MediaStreams = response.MediaSources[0].MediaStreams
+
+	if playstate, err := j.repo.GetUserData(ctx, userID, episode.ID()); err == nil {
+		response.UserData = j.makeJFUserData(userID, episode.ID(), playstate)
+	} else {
+		response.UserData = j.makeJFUserData(userID, episode.ID(), nil)
+	}
+	return response, nil
+}
+
+// makeJFSeasonID returns an external id for a season ID.
+func makeJFSeasonID(seasonID string) string {
+	return itemprefix_season + seasonID
+}
+
+// makeJFEpisodeID returns an external id for an episode ID.
+func makeJFEpisodeID(episodeID string) string {
+	return itemprefix_episode + episodeID
+}
+
+// isJFShowID checks if the provided ID is a show ID.
+func isJFShowID(id string) bool {
+	return strings.HasPrefix(id, itemprefix_show)
+}
+
+// isJFSeasonID checks if the provided ID is a season ID.
+func isJFSeasonID(id string) bool {
+	return strings.HasPrefix(id, itemprefix_season)
+}
+
+// isJFEpisodeID checks if the provided ID is an episode ID.
+func isJFEpisodeID(id string) bool {
+	return strings.HasPrefix(id, itemprefix_episode)
 }

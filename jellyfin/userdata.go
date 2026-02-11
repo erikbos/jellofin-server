@@ -33,10 +33,9 @@ func (j *Jellyfin) usersItemUserDataHandler(w http.ResponseWriter, r *http.Reque
 
 	playstate, err := j.repo.GetUserData(r.Context(), accessToken.UserID, trimPrefix(itemID))
 	if err != nil {
-		// TODO: should we return an empty object or a 404?
+		// If we don't have user data for this item, we return an empty userdata object
 		playstate = &model.UserData{}
 	}
-
 	userData := j.makeJFUserData(accessToken.UserID, itemID, playstate)
 	serveJSON(userData, w)
 }
@@ -235,4 +234,20 @@ func (j *Jellyfin) userFavoriteItemsDeleteHandler(w http.ResponseWriter, r *http
 	}
 	userData := j.makeJFUserData(accessToken.UserID, itemID, playstate)
 	serveJSON(userData, w)
+}
+
+// makeJFUserData creates a JFUserData object, and populates from Userdata if provided
+func (j *Jellyfin) makeJFUserData(userID, itemID string, p *model.UserData) (response *JFUserData) {
+	response = &JFUserData{
+		Key:    userID + "/" + itemID,
+		ItemID: "00000000000000000000000000000000",
+	}
+	if p != nil {
+		response.IsFavorite = p.Favorite
+		response.LastPlayedDate = p.Timestamp
+		response.PlaybackPositionTicks = p.Position * TicsToSeconds
+		response.PlayedPercentage = p.PlayedPercentage
+		response.Played = p.Played
+	}
+	return
 }

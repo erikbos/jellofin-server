@@ -60,6 +60,11 @@ type JFPluginResponse struct {
 	Status                string `json:"Status"`
 }
 
+type JFSystemEndpointResponse struct {
+	IsLocal     bool `json:"IsLocal"`
+	IsInNetwork bool `json:"IsInNetwork"`
+}
+
 type JFUser struct {
 	Name                      string              `json:"Name"`
 	ServerId                  string              `json:"ServerId"`
@@ -694,4 +699,43 @@ type JFDeviceItem struct {
 	LastUserID       string                        `json:"LastUserId"`
 	LastUserName     string                        `json:"LastUserName"`
 	Capabilities     JFSessionResponseCapabilities `json:"Capabilities"`
+}
+
+type JFItemThemeMediaResponse struct {
+	ThemeVideosResult     JFItemThemeMediaResponseResult `json:"ThemeVideosResult"`
+	ThemeSongsResult      JFItemThemeMediaResponseResult `json:"ThemeSongsResult"`
+	SoundtrackSongsResult JFItemThemeMediaResponseResult `json:"SoundtrackSongsResult"`
+}
+
+type JFItemThemeMediaResponseResult struct {
+	OwnerID          string   `json:"OwnerId"`
+	Items            []JFItem `json:"Items"`
+	TotalRecordCount int      `json:"TotalRecordCount"`
+	StartIndex       int      `json:"StartIndex"`
+}
+
+type JFGetUtcTimeResponse struct {
+	RequestReceptionTime     time.Time `json:"RequestReceptionTime"`
+	ResponseTransmissionTime time.Time `json:"ResponseTransmissionTime"`
+}
+
+type JFCreatePlaylistRequest struct {
+	Name   string   `json:"Name"`
+	UserID string   `json:"UserId"`
+	Ids    []string `json:"Ids,omitempty"`
+}
+
+type JFCreatePlaylistResponse struct {
+	Id string `json:"Id"`
+}
+
+type JFGetPlaylistResponse struct {
+	OpenAccess bool     `json:"OpenAccess"`
+	Shares     []string `json:"Shares"`
+	ItemIds    []string `json:"ItemIds,omitempty"`
+}
+
+type JFPlaylistAccess struct {
+	Users   []string `json:"Users"`
+	Canedit bool     `json:"CanEdit"`
 }

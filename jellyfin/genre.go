@@ -2,8 +2,12 @@ package jellyfin
 
 import (
 	"context"
+	"encoding/base64"
+	"errors"
 	"net/http"
+	"net/url"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -31,10 +35,10 @@ func (j *Jellyfin) genresHandler(w http.ResponseWriter, r *http.Request) {
 	genres := []JFItem{}
 	genreSet := make(map[string]struct{})
 	for _, item := range items {
-		for _, genre := range item.Genres {
-			if _, exists := genreSet[genre]; !exists {
-				genreSet[genre] = struct{}{}
-				if genreItem, err := j.makeJFItemGenre(r.Context(), accessToken.UserID, genre); err == nil {
+		for _, genre := range item.GenreItems {
+			if _, exists := genreSet[genre.ID]; !exists {
+				genreSet[genre.ID] = struct{}{}
+				if genreItem, err := j.makeJFItemGenre(r.Context(), accessToken.UserID, genre.ID); err == nil {
 					genres = append(genres, genreItem)
 				}
 			}
@@ -62,13 +66,19 @@ func (j *Jellyfin) genreHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vars := mux.Vars(r)
-	name := vars["name"]
-	if name == "" {
+	genre := vars["name"]
+	if genre == "" {
 		apierror(w, "Missing genre", http.StatusBadRequest)
 		return
 	}
+	var err error
+	genre, err = url.PathUnescape(genre)
+	if err != nil {
+		apierror(w, "Invalid genre name", http.StatusBadRequest)
+		return
+	}
 	//TOD: validate genre is actually in the collection?
-	response, err := j.makeJFItemGenre(r.Context(), accessToken.UserID, makeJFGenreID(name))
+	response, err := j.makeJFItemGenre(r.Context(), accessToken.UserID, makeJFGenreID(genre))
 	if err != nil {
 		apierror(w, "Genre not found", http.StatusNotFound)
 		return
@@ -206,4 +216,27 @@ func (j *Jellyfin) makeJFItemGenre(_ context.Context, _, genreID string) (JFItem
 		}
 	}
 	return response, nil
+}
+
+// makeJFGenreID returns an external id for a genre name.
+func makeJFGenreID(genre string) string {
+	// base64 encoded to handle special characters, as some clients have issues with % characters in IDs.
+	return itemprefix_genre + base64.RawURLEncoding.EncodeToString([]byte(genre))
+}
+
+// isJFGenreID checks if the provided ID is a genre ID.
+func isJFGenreID(id string) bool {
+	return strings.HasPrefix(id, itemprefix_genre)
+}
+
+// decodeJFGenreID decodes a genre ID to get the original name.
+func decodeJFGenreID(genreID string) (string, error) {
+	if !strings.HasPrefix(genreID, itemprefix_genre) {
+		return "", errors.New("invalid genre ID")
+	}
+	genreBytes, err := base64.RawURLEncoding.DecodeString(trimPrefix(genreID))
+	if err != nil {
+		return "", errors.New("cannot decode genre ID")
+	}
+	return string(genreBytes), nil
 }

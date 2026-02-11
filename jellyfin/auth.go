@@ -232,7 +232,7 @@ func (j *Jellyfin) authmiddleware(next http.Handler) http.Handler {
 			token = t
 			found = true
 		}
-		if t := r.URL.Query().Get("ApiKey"); t != "" {
+		if t := r.URL.Query().Get("apiKey"); t != "" {
 			token = t
 			found = true
 		}

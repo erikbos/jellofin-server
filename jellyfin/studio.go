@@ -2,7 +2,11 @@ package jellyfin
 
 import (
 	"context"
+	"encoding/base64"
+	"errors"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -31,7 +35,7 @@ func (j *Jellyfin) studiosHandler(w http.ResponseWriter, r *http.Request) {
 	studioSet := make(map[string]struct{})
 	for _, item := range items {
 		for _, studio := range item.Studios {
-			if studio.ID != "" {
+			if studio.Name != "" {
 				if _, exists := studioSet[studio.ID]; !exists {
 					studioSet[studio.ID] = struct{}{}
 					if studioItem, err := j.makeJFItemStudio(r.Context(), accessToken.UserID, studio.ID); err == nil {
@@ -67,7 +71,12 @@ func (j *Jellyfin) studioHandler(w http.ResponseWriter, r *http.Request) {
 		apierror(w, "Missing studio", http.StatusBadRequest)
 		return
 	}
-
+	var err error
+	studio, err = url.PathUnescape(studio)
+	if err != nil {
+		apierror(w, "Invalid studio name", http.StatusBadRequest)
+		return
+	}
 	response, err := j.makeJFItemStudio(r.Context(), accessToken.UserID, makeJFStudioID(studio))
 	if err != nil {
 		apierror(w, "Studio not found", http.StatusNotFound)
@@ -99,4 +108,38 @@ func (j *Jellyfin) makeJFItemStudio(_ context.Context, _ string, studioID string
 		LockedFields:      []string{},
 	}
 	return response, nil
+}
+
+// makeJFStudios converts a list of studio names to a list of JFStudios with IDs and names.
+func makeJFStudios(studios []string) []JFStudios {
+	studioItems := make([]JFStudios, 0, len(studios))
+	for _, studio := range studios {
+		if studio != "" {
+			studioItems = append(studioItems, JFStudios{ID: makeJFStudioID(studio), Name: studio})
+		}
+	}
+	return studioItems
+}
+
+// makeJFStudioID returns an external id for a studio.
+func makeJFStudioID(studioName string) string {
+	// base64 encoded to handle special characters, as some clients have issues with % characters in IDs.
+	return itemprefix_studio + base64.RawURLEncoding.EncodeToString([]byte(studioName))
+}
+
+// isJFStudioID checks if the provided ID is a studio ID.
+func isJFStudioID(id string) bool {
+	return strings.HasPrefix(id, itemprefix_studio)
+}
+
+// decodeJFStudioID decodes a studio ID to get the original name.
+func decodeJFStudioID(studioID string) (string, error) {
+	if !strings.HasPrefix(studioID, itemprefix_studio) {
+		return "", errors.New("invalid studio ID")
+	}
+	studioBytes, err := base64.RawURLEncoding.DecodeString(trimPrefix(studioID))
+	if err != nil {
+		return "", errors.New("cannot decode studio ID")
+	}
+	return string(studioBytes), nil
 }

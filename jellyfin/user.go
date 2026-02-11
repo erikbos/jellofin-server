@@ -83,50 +83,6 @@ func (j *Jellyfin) usersPublicHandler(w http.ResponseWriter, r *http.Request) {
 	serveJSON(response, w)
 }
 
-// /UserViews
-// /Users/2b1ec0a52b09456c9823a367d84ac9e5/Views?IncludeExternalContent=false
-//
-// usersViewsHandler returns the collections available to the user
-func (j *Jellyfin) usersViewsHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
-		return
-	}
-
-	items, err := j.makeJFCollectionRootOverview(r.Context(), accessToken.UserID)
-	if err != nil {
-		apierror(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	response := JFUserViewsResponse{
-		Items:            items,
-		TotalRecordCount: len(items),
-		StartIndex:       0,
-	}
-	serveJSON(response, w)
-}
-
-// /Users/2b1ec0a52b09456c9823a367d84ac9e5/GroupingOptions
-//
-// usersGroupingOptionsHandler returns the available collections as grouping options
-func (j *Jellyfin) usersGroupingOptionsHandler(w http.ResponseWriter, r *http.Request) {
-	collections := []JFCollection{}
-	for _, c := range j.collections.GetCollections() {
-		collectionItem, err := j.makeJFItemCollection(c.ID)
-		if err != nil {
-			apierror(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		collection := JFCollection{
-			Name: collectionItem.Name,
-			ID:   collectionItem.ID,
-		}
-		collections = append(collections, collection)
-	}
-	serveJSON(collections, w)
-}
-
 func (j *Jellyfin) makeJFUser(user *model.User) JFUser {
 	return JFUser{
 		Id:                        user.ID,

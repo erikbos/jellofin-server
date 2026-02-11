@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"slices"
 	"sort"
 	"strconv"
@@ -59,54 +58,66 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 	queryparams := r.URL.Query()
 	parentID := queryparams.Get("parentId")
 	searchTerm := queryparams.Get("searchTerm")
-	var recursive bool
-	if strings.Compare(queryparams.Get("recursive"), "true") == 0 {
-		recursive = true
-	}
 
-	// Get list of items if parentID provided and no searchTerm is provided
 	var items []JFItem
 	var err error
-	if parentID != "" && searchTerm == "" {
-		items, err = j.getJFItemsByParentID(r.Context(), accessToken.UserID, parentID)
-		if err != nil {
-			apierror(w, err.Error(), http.StatusNotFound)
-			return
-		}
-		// Remove parentID from queryparams as we already applied it by calling getJFItemsByParentID()
-		queryparams.Del("parentId")
-	} else {
-		// No parentID provided
 
-		// Streamyfin uses "ids" filter param to fetch items without setting recursive=true..
-		// Let's do recursive when an id-based filter is requested.
-		if queryparams.Has("ids") ||
-			queryparams.Has("excludeItemIds") ||
-			queryparams.Has("genreIds") ||
-			queryparams.Has("studioIds") ||
-			queryparams.Has("personIds") {
-			recursive = true
-		}
-
-		if !recursive {
-			// Just items in the root
-			items, err = j.makeJFCollectionRootOverview(r.Context(), accessToken.UserID)
+	if searchTerm == "" {
+		if parentID != "" {
+			// Get list of items based upon provided parentID, this means
+			// we are fetching items for a specific collection, season or series.
+			items, err = j.getJFItemsByParentID(r.Context(), accessToken.UserID, parentID)
 			if err != nil {
 				apierror(w, err.Error(), http.StatusNotFound)
 				return
 			}
+			// Remove parentID as we do not want applyItemsFilter() to act and filter on this later.
+			queryparams.Del("parentId")
 		} else {
-			// All items recursively
-			items, err = j.getJFItemsAll(r.Context(), accessToken.UserID)
-			if err != nil {
-				apierror(w, err.Error(), http.StatusNotFound)
-				return
+			// No parentID provided. Now it gets interesting.. #observed api behaviour
+			//
+			// Case of:
+			// 1) "ids" filter provided and found items -> we return those items, do not fetch top-level collection items
+			// 2) "ids" did not find any items -> we return top-level collection items, do not apply "ids" filter as it did not find those items
+			// 3) "ids" did not find any items and "recursive=true" is provided -> we return all items recursively
+
+			// (1) Handle provided "ids", we fetch these directly by ID.
+			var itemsFetchedByIDs bool
+			if ids := queryparams.Get("ids"); ids != "" {
+				items, err = j.makeJFItemByIDs(r.Context(), accessToken.UserID, strings.Split(ids, ","))
+				if err != nil {
+					apierror(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				if len(items) > 0 {
+					itemsFetchedByIDs = true
+				}
+				// Remove ids as we do not want applyItemsFilter() to act and filter on this later.
+				queryparams.Del("ids")
+			}
+
+			// (2) Get top-level collection items if no items found by IDs
+			if !itemsFetchedByIDs {
+				items, err = j.makeJFCollectionRootOverview(r.Context(), accessToken.UserID)
+				if err != nil {
+					apierror(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+			}
+
+			// (3) No items found so far, add all media items recursively
+			if !itemsFetchedByIDs && strings.EqualFold(queryparams.Get("recursive"), "true") {
+				allitems, err := j.getJFItemsAll(r.Context(), accessToken.UserID)
+				if err != nil {
+					apierror(w, err.Error(), http.StatusNotFound)
+					return
+				}
+				items = append(items, allitems...)
 			}
 		}
 	}
 
 	// If searchTerm is provided, filter items based on search results
-	// and override items list
 	if searchTerm != "" {
 		// If searchTerm is provided we search in whole collection,
 		// applyItemFilter() will take care of parentID filtering
@@ -126,11 +137,6 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			items = append(items, jfitem)
-
-			// // Apply filters on the item, this will also take care of parentID filtering
-			// if j.applyItemFilter(&jfitem, queryparams) {
-			// 	items = append(items, jfitem)
-			// }
 		}
 	}
 
@@ -148,6 +154,9 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 
 // /Items/Latest
 // /Users/2b1ec0a52b09456c9823a367d84ac9e5/Items/Latest?Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount&ParentId=f137a2dd21bbc1b99aa5c0f6bf02a805&StartIndex=0&Limit=20
+//
+// Phyn
+// /Items/Latest?enableImageTypes=Primary&enableImageTypes=Backdrop&enableImageTypes=Thumb&fields=PrimaryImageAspectRatio&fields=CanDelete&fields=ProviderIds&fields=SeasonUserData&groupItems=true&imageTypeLimit=1&limit=20&parentId=collection_1&userId=XAOVn7iqiBujnIQY8sd0
 //
 // Supported query params:
 // - ParentId, if provided scope result set to this collection
@@ -307,6 +316,9 @@ func (j *Jellyfin) usersItemsCountsHandler(w http.ResponseWriter, r *http.Reques
 // /Users/2b1ec0a52b09456c9823a367d84ac9e5/Items/Resume?Limit=12&MediaTypes=Video&Recursive=true&Fields=DateCreated,Etag,Genres,MediaSources,AlternateMediaSources,Overview,ParentId,Path,People,ProviderIds,SortName,RecursiveItemCount,ChildCount
 // /UserItems/Resume?userId=XAOVn7iqiBujnIQY8sd0&enableImageTypes=Primary&enableImageTypes=Backdrop&enableImageTypes=Thumb&includeItemTypes=Movie&includeItemTypes=Series&includeItemTypes=Episode
 //
+// Phyn
+// /UserItems/Resume?enableImageTypes=Primary&enableImageTypes=Backdrop&enableImageTypes=Thumb&enableImages=true&enableTotalRecordCount=false&excludeActiveSessions=false&fields=PrimaryImageAspectRatio&fields=CanDelete&fields=ProviderIds&fields=Path&imageTypeLimit=1&limit=20&mediaTypes=Audio&userId=XAOVn7iqiBujnIQY8sd0
+//
 // usersItemsResumeHandler returns a list of items that have not been fully watched and could be resumed
 func (j *Jellyfin) usersItemsResumeHandler(w http.ResponseWriter, r *http.Request) {
 	accessToken := j.getAccessTokenDetails(w, r)
@@ -351,6 +363,14 @@ func (j *Jellyfin) usersItemsResumeHandler(w http.ResponseWriter, r *http.Reques
 	serveJSON(response, w)
 }
 
+// /Items/{item}/Refresh
+//
+// usersItemsRefreshHandler refreshes the item metadata
+func (j *Jellyfin) usersItemsRefreshHandler(w http.ResponseWriter, r *http.Request) {
+	// Not implemented, return 204 to indicate refreshing item has been queud
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // /Items/Similar
 //
 // usersItemsSimilarHandler returns a list of items that are similar
@@ -363,6 +383,23 @@ func (j *Jellyfin) usersItemsSimilarHandler(w http.ResponseWriter, r *http.Reque
 	vars := mux.Vars(r)
 	itemID := vars["item"]
 	queryparams := r.URL.Query()
+
+	// We support similar items for movies, series and episodes only.
+	if isJFPersonID(itemID) ||
+		isJFGenreID(itemID) ||
+		isJFStudioID(itemID) ||
+		isJFCollectionID(itemID) ||
+		isJFCollectionFavoritesID(itemID) ||
+		isJFCollectionPlaylistID(itemID) ||
+		isJFRootID(itemID) {
+		response := JFUsersItemsSimilarResponse{
+			Items:            []JFItem{},
+			StartIndex:       0,
+			TotalRecordCount: 0,
+		}
+		serveJSON(response, w)
+		return
+	}
 
 	// Retrieve item to find similars for
 	c, i := j.collections.GetItemByID(trimPrefix(itemID))
@@ -396,6 +433,18 @@ func (j *Jellyfin) usersItemsSimilarHandler(w http.ResponseWriter, r *http.Reque
 		Items:            responseItems,
 		StartIndex:       startIndex,
 		TotalRecordCount: totalItemCount,
+	}
+	serveJSON(response, w)
+}
+
+// /Items/{item}/Intros
+// /Users/{user}/Items/{item}/Intros
+func (j *Jellyfin) usersItemsIntrosHandler(w http.ResponseWriter, r *http.Request) {
+	// Not implemented, return empty list
+	response := UserItemsResponse{
+		Items:            []JFItem{},
+		StartIndex:       0,
+		TotalRecordCount: 0,
 	}
 	serveJSON(response, w)
 }
@@ -566,15 +615,6 @@ func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
 			return false
 		}
 	}
-
-	// handling of parentId is done in handler functions before calling applyItemFilter()
-	//
-	// filter on parentId
-	// if parentID := queryparams.Get("parentId"); parentID != "" {
-	// 	if i.ParentID != parentID {
-	// 		return false
-	// 	}
-	// }
 
 	// filter on seriesId
 	if seriesID := queryparams.Get("seriesId"); seriesID != "" {
@@ -967,88 +1007,6 @@ func (j *Jellyfin) itemsDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	apierror(w, "Not implemented", http.StatusForbidden)
 }
 
-// /Items/rVFG3EzPthk2wowNkqUl/Images/Backdrop?tag=7cec54f0c8f362c75588e83d76fefa75
-// /Items/rVFG3EzPthk2wowNkqUl/Images/Logo?tag=e28fbe648d2dbb76b65c14f14e6b1d72
-// /Items/q2e2UzCOd9zkmJenIOph/Images/Primary?tag=70931a7d8c147c9e2c0aafbad99e03e5
-// /Items/rVFG3EzPthk2wowNkqUl/Images/Primary?tag=268b80952354f01d5a184ed64b36dd52
-// /Items/2vx0ZYKeHxbh5iWhloIB/Images/Primary?tag=redirect_https://image.tmdb.org/t/p/original/3E4x5doNuuu6i9Mef6HPrlZjNb1.jpg
-//
-// itemsImagesHandler serves item images like posters, backdrops and logos
-func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
-	// handle tag-based redirects for item imagery that is external (e.g. external images of actors)
-	// for these we do not care about the provided item id
-	queryparams := r.URL.Query()
-	tag := queryparams.Get("tag")
-	if strings.HasPrefix(tag, tagprefix_redirect) {
-		w.Header().Set("cache-control", "max-age=2592000")
-		http.Redirect(w, r, strings.TrimPrefix(tag, tagprefix_redirect), http.StatusFound)
-		return
-	}
-
-	vars := mux.Vars(r)
-	itemID := vars["item"]
-	imageType := vars["type"]
-
-	switch {
-	case isJFCollectionID(itemID):
-		fallthrough
-	case isJFCollectionFavoritesID(itemID):
-		fallthrough
-	case isJFCollectionPlaylistID(itemID):
-		log.Printf("Image request for collection %s!", itemID)
-		apierror(w, "Image request for collection not yet supported", http.StatusNotFound)
-		return
-	case isJFPersonID(itemID):
-		name, err := decodeJFPersonID(itemID)
-		if err != nil {
-			apierror(w, "Invalid person ID", http.StatusBadRequest)
-			return
-		}
-		dbperson, err := j.repo.GetPersonByName(r.Context(), name, "")
-		if err == nil && dbperson.PosterURL != "" {
-			http.Redirect(w, r, dbperson.PosterURL, http.StatusFound)
-			return
-		}
-		apierror(w, ErrUserIDNotFound, http.StatusNotFound)
-		return
-	}
-
-	c, i := j.collections.GetItemByID(trimPrefix(itemID))
-	if i == nil {
-		apierror(w, "Item not found", http.StatusNotFound)
-		return
-	}
-
-	switch strings.ToLower(imageType) {
-	case "primary":
-		if i.Poster() != "" {
-			j.serveImage(w, r, c.Directory+"/"+i.Path()+"/"+i.Poster(), j.imageQualityPoster)
-			return
-		}
-		// todo implement fallback options:
-		// 1. Serve item season all poster
-		// 2. Serve show poster as fallback
-		apierror(w, "Poster not found", http.StatusNotFound)
-		return
-	case "backdrop":
-		if i.Fanart() != "" {
-			j.serveFile(w, r, c.Directory+"/"+i.Path()+"/"+i.Fanart())
-			return
-		}
-		apierror(w, "Backdrop not found", http.StatusNotFound)
-		return
-	case "logo":
-		if i.Logo() != "" {
-			j.serveImage(w, r, c.Directory+"/"+i.Path()+"/"+i.Logo(), j.imageQualityPoster)
-			return
-		}
-		apierror(w, "Logo not found", http.StatusNotFound)
-		return
-	}
-	log.Printf("Unknown image type requested: %s\n", vars["type"])
-	apierror(w, "Item image not found", http.StatusNotFound)
-}
-
 // /Items/68d73f6f48efedb7db697bf9fee580cb/PlaybackInfo?UserId=2b1ec0a52b09456c9823a367d84ac9e5
 //
 // itemsPlaybackInfoHandler returns playback information about an item, including media sources
@@ -1072,6 +1030,30 @@ func (j *Jellyfin) itemsPlaybackInfoHandler(w http.ResponseWriter, r *http.Reque
 		// TODO this static id should be generated based upon authenticated user
 		// this id is used when submitting playstate via /Sessions/Playing endpoints
 		PlaySessionID: sessionID,
+	}
+	serveJSON(response, w)
+}
+
+// /Items/{item}/ThemeMedia
+//
+// usersItemsThemeMediaHandler
+func (j *Jellyfin) usersItemsThemeMediaHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	itemID := vars["item"]
+
+	response := JFItemThemeMediaResponse{
+		ThemeVideosResult: JFItemThemeMediaResponseResult{
+			OwnerID: itemID,
+			Items:   []JFItem{},
+		},
+		ThemeSongsResult: JFItemThemeMediaResponseResult{
+			OwnerID: itemID,
+			Items:   []JFItem{},
+		},
+		SoundtrackSongsResult: JFItemThemeMediaResponseResult{
+			OwnerID: "00000000000000000000000000000000",
+			Items:   []JFItem{},
+		},
 	}
 	serveJSON(response, w)
 }
@@ -1121,66 +1103,9 @@ func (j *Jellyfin) serveFile(w http.ResponseWriter, r *http.Request, filename st
 	http.ServeContent(w, r, fileStat.Name(), fileStat.ModTime(), file)
 }
 
-func (j *Jellyfin) serveImage(w http.ResponseWriter, r *http.Request, filename string, imageQuality int) {
-	file, err := j.imageresizer.OpenFile(w, r, filename, imageQuality)
-	if err != nil {
-		apierror(w, "File not found", http.StatusNotFound)
-		return
-	}
-	defer file.Close()
-
-	fileStat, err := file.Stat()
-	if err != nil {
-		apierror(w, "Could not retrieve file info", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("cache-control", "max-age=2592000")
-	w.Header().Set("content-type", mimeTypeByExtension(filename))
-	http.ServeContent(w, r, fileStat.Name(), fileStat.ModTime(), file)
-}
-
 func serveJSON(obj any, w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("content-type", "application/json")
 	_ = json.NewEncoder(w).Encode(obj)
-}
-
-// mimeTypeByExtension returns the mime type based on the file extension
-func mimeTypeByExtension(filename string) string {
-	switch strings.ToLower(path.Ext(filename)) {
-	case ".jpg", ".jpeg":
-		return "image/jpeg"
-	case ".png":
-		return "image/png"
-	case ".gif":
-		return "image/gif"
-
-	case ".mp4":
-		return "video/mp4"
-	case ".m4v":
-		return "video/x-m4v"
-	case ".mov":
-		return "video/quicktime"
-	case ".wmv":
-		return "video/x-ms-wmv"
-	case ".avi":
-		return "video/x-msvideo"
-	case ".mkv":
-		return "video/x-matroska"
-	case ".webm":
-		return "video/webm"
-
-	case ".mp3":
-		return "audio/mpeg"
-	case ".aac":
-		return "audio/aac"
-	case ".flac":
-		return "audio/flac"
-	case ".wav":
-		return "audio/wav"
-
-	default:
-		return "application/octet-stream"
-	}
 }
 
 // parseISO8601date tries to parse a date string in various ISO 8601 formats

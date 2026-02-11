@@ -1,6 +1,7 @@
 package jellyfin
 
 import (
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -62,8 +63,7 @@ func New(o *Options) *Jellyfin {
 		if hostname, err := os.Hostname(); err == nil {
 			j.serverID = idhash.IdHash(hostname)
 		} else {
-			// fallback to a fixed ID if hostname cannot be determined}
-			j.serverID = "2b11644442754f02a0c1e45d2a9f5c71"
+			log.Printf("Failed to get hostname for server ID generation: %v", err)
 		}
 	}
 	if j.serverName == "" {
@@ -83,10 +83,13 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	}
 
 	r.Handle("/health", http.HandlerFunc(j.healthHandler))
+	r.Handle("/System/Endpoint", middleware(j.systemEndpointHandler))
 	r.Handle("/System/Ping", http.HandlerFunc(j.systemPingHandler))
 	r.Handle("/System/Info", middleware(j.systemInfoHandler))
 	r.Handle("/System/Info/Public", http.HandlerFunc(j.systemInfoPublicHandler))
-	r.Handle("/Plugins", http.HandlerFunc(j.pluginsHandler))
+	r.Handle("/Plugins", middleware(j.pluginsHandler))
+	r.Handle("/GetUtcTime", http.HandlerFunc(j.getUtcTimeHandler))
+	r.Handle("/Playback/BitrateTest", middleware(j.playbackBitrateTestHandler))
 
 	r.Handle("/Users/AuthenticateByName", http.HandlerFunc(j.usersAuthenticateByNameHandler)).Methods("POST")
 	r.Handle("/Users/authenticatebyname", http.HandlerFunc(j.usersAuthenticateByNameHandler)).Methods("POST")
@@ -104,6 +107,7 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/Users/{user}/Views", middleware(j.usersViewsHandler))
 	r.Handle("/Users/{user}/GroupingOptions", middleware(j.usersGroupingOptionsHandler))
 	r.Handle("/Users/{user}/Items", middleware(j.usersItemsHandler))
+	r.Handle("/Users/{user}/Items/Intros", middleware(j.usersItemsIntrosHandler))
 	r.Handle("/Users/{user}/Items/Latest", middleware(j.usersItemsLatestHandler))
 	r.Handle("/Users/{user}/Items/Resume", middleware(j.usersItemsResumeHandler))
 	r.Handle("/Users/{user}/Items/Suggestions", middleware(j.usersItemsSuggestionsHandler))
@@ -136,9 +140,12 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	// streamyfin does not yet set auth headers
 	r.Handle("/Items/{item}/Images/{type}", http.HandlerFunc(j.itemsImagesHandler)).Methods("GET")
 	r.Handle("/Items/{item}/Images/{type}/{index}", http.HandlerFunc(j.itemsImagesHandler)).Methods("GET")
+	r.Handle("/Items/{item}/Intros", middleware(j.usersItemsIntrosHandler))
 	r.Handle("/Items/{item}/PlaybackInfo", middleware(j.itemsPlaybackInfoHandler))
+	r.Handle("/Items/{item}/Refresh", middleware(j.usersItemsRefreshHandler)).Methods("POST")
 	r.Handle("/Items/{item}/Similar", middleware(j.usersItemsSimilarHandler))
 	r.Handle("/Items/{item}/SpecialFeatures", middleware(j.usersItemsSpecialFeaturesHandler))
+	r.Handle("/Items/{item}/ThemeMedia", middleware(j.usersItemsThemeMediaHandler))
 
 	r.Handle("/Genres", middleware(j.genresHandler))
 	r.Handle("/Genres/{name}", middleware(j.genreHandler))
@@ -203,6 +210,10 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.HandleFunc("/Localization/Cultures", j.localizationCulturesHandler)
 	r.HandleFunc("/Localization/Options", j.localizationOptionsHandler)
 	r.HandleFunc("/Localization/ParentalRatings", j.localizationParentalRatingsHandler)
+
+	// SyncPlay
+	r.Handle("/SyncPlay/List", http.HandlerFunc(j.syncPlayListHandler))
+	r.Handle("/SyncPlay/New", http.HandlerFunc(j.syncPlayNewHandler))
 }
 
 // normalizeJellyfinRequest is a middleware that normalizes requests:
@@ -216,6 +227,11 @@ func normalizeJellyfinRequest(next http.Handler) http.Handler {
 		// E.g. ParentId should have been parentId, SeasonId -> seasonId
 		newParams := url.Values{}
 		for key, values := range r.URL.Query() {
+			// Skip adding "fields" as we return full api response on every reply,
+			// and it tends to clutters log entries
+			if key == "fields" {
+				continue
+			}
 			for _, value := range values {
 				newKey := strings.ToLower(string(key[0])) + key[1:]
 				newParams.Add(newKey, value)

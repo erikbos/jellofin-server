@@ -1,14 +1,30 @@
 package jellyfin
 
 import (
+	"crypto/rand"
 	"fmt"
+	"io"
 	"net/http"
 	"runtime"
+	"strconv"
+	"time"
 )
 
 const (
 	serverVersion = "10.10.11"
 )
+
+// /System/Endpoint
+//
+// systemEndpointHandler returns endpoint info
+func (j *Jellyfin) systemEndpointHandler(w http.ResponseWriter, r *http.Request) {
+	// We return false as we do not support local network discovery / optimization
+	response := JFSystemEndpointResponse{
+		IsLocal:     false,
+		IsInNetwork: false,
+	}
+	serveJSON(response, w)
+}
 
 // /System/Info
 //
@@ -59,7 +75,7 @@ func (j *Jellyfin) systemInfoPublicHandler(w http.ResponseWriter, r *http.Reques
 	response := JFSystemInfoPublicResponse{
 		Id:           j.serverID,
 		LocalAddress: localAddress(r),
-		// Jellyfin native client checks for exact productname ..
+		// Jellyfin ios native client checks for exact productname so we have to return the same name..
 		// https://github.com/jellyfin/jellyfin-expo/blob/7dedbc72fb53fc4b83c3967c9a8c6c071916425b/utils/ServerValidator.js#L82C49-L82C64
 		ProductName:            "Jellyfin Server",
 		ServerName:             j.serverName,
@@ -86,19 +102,40 @@ func (j *Jellyfin) systemPingHandler(w http.ResponseWriter, r *http.Request) {
 
 // /Plugins
 //
-// pluginsHandler returns emply plugin list, we do not support plugins
+// pluginsHandler returns emply plugin list, we do not support plugins at the moment
 func (j *Jellyfin) pluginsHandler(w http.ResponseWriter, r *http.Request) {
-	// We do not list InfuseSync plugin as Infuse should be configured to use direct mode
-	response := []JFPluginResponse{
-		// {
-		// 	Name:         "InfuseSync",
-		// 	Version:      "1.5.0.0",
-		// 	Description:  "Plugin for fast synchronization with Infuse.",
-		// 	Id:           "022a3003993f45f1856587d12af2e12a",
-		// 	CanUninstall: true,
-		// 	HasImage:     true,
-		// 	Status:       "Disabled",
-		// },
+	response := []JFPluginResponse{}
+	serveJSON(response, w)
+}
+
+// /Playback/BitrateTest?size=500000
+//
+// playbackBitrateTestHandler returns random data of requested size for bitrate testing
+func (j *Jellyfin) playbackBitrateTestHandler(w http.ResponseWriter, r *http.Request) {
+	size := int64(102400)              // Default to 100 KB if size is not specified
+	maxSize := int64(20 * 1024 * 1024) // 20 MB safety cap
+
+	if s := r.URL.Query().Get("size"); s != "" {
+		var err error
+		size, err = strconv.ParseInt(s, 10, 64)
+		if err != nil || size < 0 || size > maxSize {
+			http.Error(w, "invalid size", http.StatusBadRequest)
+			return
+		}
+	}
+	w.Header().Set("content-type", "application/octet-stream")
+	w.Header().Set("content-length", strconv.FormatInt(size, 10))
+	io.CopyN(w, rand.Reader, size)
+}
+
+// /GetUtcTime
+//
+// getUtcTimeHandler returns current time in UTC
+func (j *Jellyfin) getUtcTimeHandler(w http.ResponseWriter, r *http.Request) {
+	t := time.Now().UTC()
+	response := JFGetUtcTimeResponse{
+		RequestReceptionTime:     t,
+		ResponseTransmissionTime: t,
 	}
 	serveJSON(response, w)
 }
