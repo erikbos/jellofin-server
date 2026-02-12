@@ -24,7 +24,7 @@ func (j *Jellyfin) createPlaylistHandler(w http.ResponseWriter, r *http.Request)
 	var req JFCreatePlaylistRequest
 
 	queryparams := r.URL.Query()
-	req.Name = queryparams.Get("Name")
+	req.Name = queryparams.Get("name")
 	req.UserID = queryparams.Get("userId")
 	if r.Body != nil {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

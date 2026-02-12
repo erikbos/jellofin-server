@@ -121,6 +121,7 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 
 	r.Handle("/DisplayPreferences/usersettings", middleware(j.displayPreferencesHandler))
 
+	r.Handle("/Library/MediaFolders", middleware(j.usersViewsHandler))
 	r.Handle("/Library/VirtualFolders", middleware(j.libraryVirtualFoldersHandler))
 
 	r.Handle("/Shows/NextUp", middleware(j.showsNextUpHandler))

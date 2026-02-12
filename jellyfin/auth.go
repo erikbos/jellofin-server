@@ -188,25 +188,35 @@ func (j *Jellyfin) parseAuthHeader(r *http.Request) (*authSchemeValues, error) {
 	// MediaBrowser Device="Mac", DeviceId="0dabe147-5d08-4e70-adde-d6b778b725aa", Token="826c2aa3596b47f2a386dd2811248649", Client="Infuse-Direct", Version="8.0.9"
 	// MediaBrowser Client="Jellyflix", Device="MacBookPro18,1", DeviceId="11C750BF-4CE0-54C1-89B8-075C36A97A17", Version="1.0.0", Token="ba644327ee654ef5ac7116367da81fe3"]
 	// MediaBrowser Client="JellyWatch", Device="Android", DeviceId="3a9112ee-8a68-4bbb-89dc-2d1ac008f4c7", Version="1.6.REV-90"
+	// MediaBrowser Version=1.4.1, DeviceId=iOS_11798B04-7824-46EE-B608-AB4BEB956AD2, Device=iPhone, Client=Swiftfin iOS, Token=LVLWISEHBBEKJDQJURZCCAEJCS
 
-	kvMatch := `(\w+)="(.*?)"`
-	re := regexp.MustCompile(kvMatch)
-	matches := re.FindAllStringSubmatch(authHeader, -1)
+	// Try parsing quoted format: key="value", key="value"
+	kvMatchQuoted := `(\w+)="(.*?)"`
+	reQuoted := regexp.MustCompile(kvMatchQuoted)
+	matches := reQuoted.FindAllStringSubmatch(authHeader, -1)
+
+	if len(matches) == 0 {
+		// Try parsing unquoted format: key=value, key=value
+		kvMatchUnquoted := `(\w+)=([^,]+)`
+		reUnquoted := regexp.MustCompile(kvMatchUnquoted)
+		matches = reUnquoted.FindAllStringSubmatch(authHeader, -1)
+	}
 
 	var result authSchemeValues
 	for _, match := range matches {
 		if len(match) == 3 {
+			value := strings.TrimSpace(match[2])
 			switch match[1] {
 			case "Client":
-				result.client = match[2]
+				result.client = value
 			case "Version":
-				result.clientVersion = match[2]
+				result.clientVersion = value
 			case "Device":
-				result.device = match[2]
+				result.device = value
 			case "DeviceId":
-				result.deviceID = match[2]
+				result.deviceID = value
 			case "Token":
-				result.token = match[2]
+				result.token = value
 			}
 		}
 	}

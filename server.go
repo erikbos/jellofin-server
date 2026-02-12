@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"strings"
 	"sync"
 	"time"
 
@@ -22,6 +21,7 @@ import (
 	"github.com/erikbos/jellofin-server/database/sqlite"
 	"github.com/erikbos/jellofin-server/imageresize"
 	"github.com/erikbos/jellofin-server/jellyfin"
+	"github.com/erikbos/jellofin-server/muxnormalizer"
 	"github.com/erikbos/jellofin-server/notflix"
 )
 
@@ -169,7 +169,12 @@ func main() {
 
 	addr := net.JoinHostPort(config.Listen.Address, config.Listen.Port)
 
-	server := normalizeRequest(HttpLog(r))
+	// Add muxnormalizer middleware to canonicalize request paths and query parameters
+	canon, err := muxnormalizer.New(r)
+	if err != nil {
+		log.Fatal(err)
+	}
+	server := HttpLog(canon.Middleware(r))
 
 	if config.Listen.TlsCert != "" && config.Listen.TlsKey != "" {
 		kpr, err := NewKeypairReloader(config.Listen.TlsCert, config.Listen.TlsKey)
@@ -244,21 +249,4 @@ func (kpr *keypairReloader) maybeReload() error {
 	defer kpr.certMu.Unlock()
 	kpr.cert = &newCert
 	return nil
-}
-
-// normalizeRequest is a middleware that:
-// 1. normalizes the request URL path by removing redundant slashes.
-// 2. strips the "/emby" prefix from the request URL path.
-func normalizeRequest(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Remove double slashes in path.
-		for strings.Contains(r.URL.Path, "//") {
-			r.URL.Path = strings.ReplaceAll(r.URL.Path, "//", "/")
-		}
-		// Strip "/emby" prefix.
-		if strings.HasPrefix(r.URL.Path, "/emby/") {
-			r.URL.Path = strings.TrimPrefix(r.URL.Path, "/emby")
-		}
-		next.ServeHTTP(w, r)
-	})
 }

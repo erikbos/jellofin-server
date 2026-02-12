@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	serverVersion = "10.10.11"
+	serverVersion = "10.11.6"
 )
 
 // /System/Endpoint
