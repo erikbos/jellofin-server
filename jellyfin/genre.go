@@ -190,7 +190,7 @@ func makeJFGenreItems(array []string) (genreItems []JFGenreItem) {
 	return genreItems
 }
 
-func (j *Jellyfin) makeJFItemGenre(_ context.Context, _, genreID string) (JFItem, error) {
+func (j *Jellyfin) makeJFItemGenre(ctx context.Context, _, genreID string) (JFItem, error) {
 	genre, err := decodeJFGenreID(genreID)
 	if err != nil {
 		return JFItem{}, err
@@ -208,6 +208,7 @@ func (j *Jellyfin) makeJFItemGenre(_ context.Context, _, genreID string) (JFItem
 		LocationType: "FileSystem",
 		MediaType:    "Unknown",
 		ChildCount:   1,
+		ImageTags:    j.makeJFImageTags(ctx, genreID, ImageTypePrimary),
 	}
 
 	if genreItemCount := j.collections.GenreItemCount(); genreItemCount != nil {
