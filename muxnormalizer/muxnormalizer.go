@@ -1,5 +1,5 @@
 // middleware for normalizing request paths and query parameters to improve
-// ompatibility with clients that may not use consistent casing or parameter naming.
+// compatibility with clients that deviate from Jellyfin OpenAPI spec.
 //
 // E.g. /emby/Items?ParentId=123 will be normalized to /Items?parentId=123
 package muxnormalizer
@@ -74,6 +74,11 @@ func (n *Normalizer) Middleware(next http.Handler) http.Handler {
 		// Remove duplicate slashes
 		for strings.Contains(path, "//") {
 			path = strings.ReplaceAll(path, "//", "/")
+		}
+
+		// Remove trailing slash (except for root path)
+		if path != "/" && strings.HasSuffix(path, "/") {
+			path = path[:len(path)-1]
 		}
 
 		// Canonicalize casing using route index
@@ -165,6 +170,7 @@ var queryParameters = map[string]string{
 	"genres":                  "genres",
 	"id":                      "id",
 	"ids":                     "ids",
+	"includehidden":           "includeHidden",
 	"indexnumber":             "indexNumber",
 	"is4k":                    "is4K",
 	"isfavorite":              "isFavorite",
@@ -172,6 +178,7 @@ var queryParameters = map[string]string{
 	"isplayed":                "isPlayed",
 	"limit":                   "limit",
 	"maxpremieredate":         "maxPremiereDate",
+	"mediatypes":              "mediaTypes",
 	"mincommunityrating":      "minCommunityRating",
 	"mincriticrating":         "minCriticRating",
 	"minpremieredate":         "minPremiereDate",

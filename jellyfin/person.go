@@ -137,6 +137,7 @@ func (j *Jellyfin) makeJFItemPerson(ctx context.Context, userID string, personID
 			Key:    "Person-" + name,
 			ItemID: personID,
 		},
+		// Given an item trigger a request for this person, we assume this person was involved in at least one item.
 		ChildCount: 1,
 	}
 

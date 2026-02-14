@@ -15,7 +15,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/erikbos/jellofin-server/database/model"
-	"github.com/erikbos/jellofin-server/idhash"
 )
 
 // Authentication specs:
@@ -25,7 +24,7 @@ import (
 type contextKey string
 
 const (
-	// Context key holding access token details of an API request
+	// Context key holds access token details of a request in flight
 	contextAccessTokenDetails contextKey = "AccessTokenDetails"
 )
 
@@ -109,7 +108,7 @@ func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http
 		AccessToken: newToken.Token,
 		SessionInfo: j.makeJFSessionInfo(newToken, user.Username),
 		ServerId:    j.serverID,
-		User:        j.makeJFUser(user),
+		User:        j.makeJFUser(r.Context(), user),
 	}
 	serveJSON(response, w)
 }
@@ -145,25 +144,6 @@ func updateTokenDetails(tokendetails *model.AccessToken, r *http.Request, embyHe
 		changed = true
 	}
 	return changed
-}
-
-// createUser creates a new user in the database
-func (j *Jellyfin) createUser(context context.Context, username, password string) (*model.User, error) {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, err
-	}
-	modelUser := &model.User{
-		ID:       idhash.IdHash(username),
-		Username: strings.ToLower(username),
-		Password: string(hashedPassword),
-		Created:  time.Now().UTC(),
-		LastUsed: time.Now().UTC(),
-	}
-	if err = j.repo.UpsertUser(context, modelUser); err != nil {
-		return nil, err
-	}
-	return modelUser, nil
 }
 
 // parseAuthHeader parses emby authorization header
@@ -289,48 +269,4 @@ func (j *Jellyfin) getAccessTokenDetails(w http.ResponseWriter, r *http.Request)
 	}
 	apierror(w, "access token not found", http.StatusUnauthorized)
 	return nil
-}
-
-// GET /QuickConnect/Enabled
-//
-// quickConnectEnabledHandler returns boolean whether quickconnect is enabled.
-func (j *Jellyfin) quickConnectEnabledHandler(w http.ResponseWriter, r *http.Request) {
-	// For now always return false as quickconnect is not implemented
-	serveJSON(false, w)
-}
-
-// POST /QuickConnect/Authorize
-//
-// usersAuthenticateByNameHandler stores quickconnect code of an authenticated user.
-func (j *Jellyfin) quickConnectAuthorizeHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
-		return
-	}
-
-	queryparams := r.URL.Query()
-	userID := queryparams.Get("userId")
-	code := queryparams.Get("code")
-
-	if userID != accessToken.UserID {
-		apierror(w, "userID does not match access token", http.StatusForbidden)
-		return
-	}
-	log.Printf("quickConnectAuthorizeHandler: user: %s, code: %s", userID, code)
-	apierror(w, "quickconnect code not implemented", http.StatusUnauthorized)
-}
-
-// GET /QuickConnect/Connect
-//
-// quickConnectConnectHandler returns info about a quick connect code.
-func (j *Jellyfin) quickConnectConnectHandler(w http.ResponseWriter, r *http.Request) {
-	apierror(w, "quickconnect code not found", http.StatusNotFound)
-}
-
-// POST /QuickConnect/Initiate
-//
-// usersAuthenticateByNameHandler authenticates a user by quick connect code.
-func (j *Jellyfin) quickConnectInitiateHandler(w http.ResponseWriter, r *http.Request) {
-	log.Printf("quickConnectInitiateHandler: %+v", r)
-	apierror(w, "quickconnect code not implemented", http.StatusUnauthorized)
 }

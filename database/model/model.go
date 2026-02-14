@@ -20,12 +20,38 @@ type User struct {
 	Username string
 	// Password is the hashed password of the user.
 	Password string
+	// Properties of the user
+	Properties UserProperties
 	// Created is the time the user was created.
 	Created time.Time
 	// LastLogin is the last time the user logged in.
 	LastLogin time.Time
 	// LastUsed is the last time the user was active.
 	LastUsed time.Time
+}
+
+// UserProperties represents the properties of a user.
+// unset properties will be treated as false or empty,
+// so we can use this struct to only update specific properties without affecting others.
+type UserProperties struct {
+	// Admin indicates if the user is an administrator.
+	Admin bool
+	// BlockDownload indicates if the user is blocked from downloading content.
+	BlockDownload bool
+	// Disabled indicates if the user account is disabled.
+	Disabled bool
+	// Public indicates if the user is visible to others.
+	Public bool
+	// EnabledFolders is a list of collection item IDs that should be enabled for the user.
+	EnabledFolders []string
+	// OrderedViews is a list of collection displayPreferenceIDs in the order they should be displayed for the user.
+	OrderedViews []string
+	// MyMediaExcludes is a list of collection displayPreferenceIDs that should be excluded from the user's personalized view.
+	MyMediaExcludes []string
+	// AllowTags is a list of tags that are allowed for the user.
+	AllowTags []string
+	// BlockTags is a list of tags that are blocked for the user.
+	BlockTags []string
 }
 
 // AccessToken represents an access token for a user.
@@ -108,4 +134,15 @@ type Person struct {
 	Created time.Time
 	// LastUpdated is the last time the person was updated.
 	LastUpdated time.Time
+}
+
+type ImageMetadata struct {
+	// MimeType is the MIME type of the image (e.g., "image/jpeg").
+	MimeType string
+	// FileSize is the size of the image file in bytes.
+	FileSize int
+	// Etag is a unique identifier for the image content, used for caching.
+	Etag string
+	// Updated is the time the image was last received and stored.
+	Updated time.Time
 }

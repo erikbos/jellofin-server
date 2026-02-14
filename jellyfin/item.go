@@ -35,6 +35,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 	response, err := j.makeJFItemByID(r.Context(), accessToken.UserID, itemID)
 	if err != nil {
 		apierror(w, err.Error(), http.StatusNotFound)
+		return
 	}
 	serveJSON(response, w)
 }
@@ -280,7 +281,7 @@ func (j *Jellyfin) usersItemsAncestorsHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	collectionItem, err := j.makeJFItemCollection(c.ID)
+	collectionItem, err := j.makeJFItemCollection(r.Context(), c.ID)
 	if err != nil {
 		apierror(w, err.Error(), http.StatusNotFound)
 		return
@@ -531,6 +532,23 @@ func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
 				if excludeType == "Episode" && i.Type == itemTypeEpisode {
 					keepItem = false
 				}
+			}
+		}
+		if !keepItem {
+			return false
+		}
+	}
+
+	// media type filtering, top level categories: audio, video, photo, book
+	if mediaType := queryparams.Get("mediaTypes"); mediaType != "" {
+		keepItem := false
+		for mediaTypeEntry := range strings.SplitSeq(mediaType, ",") {
+			if mediaTypeEntry == "Video" &&
+				(i.MediaType == itemTypeMovie || i.MediaType == itemTypeShow || i.MediaType == itemTypeSeason || i.MediaType == itemTypeEpisode) {
+				keepItem = true
+			}
+			if mediaTypeEntry == "Audio" && (i.Type == itemTypeMusicAlbum || i.Type == itemTypeAudio) {
+				keepItem = true
 			}
 		}
 		if !keepItem {

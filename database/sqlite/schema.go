@@ -34,7 +34,15 @@ created DATETIME,
 lastlogin DATETIME,
 lastused DATETIME);`,
 
-		`CREATE UNIQUE INDEX IF NOT EXISTS users_name_idx ON users (username);`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS users_name_idx ON users (LOWER(username));`,
+
+		`CREATE TABLE user_properties (
+userid INTEGER NOT NULL,
+key TEXT NOT NULL,
+value TEXT,
+PRIMARY KEY (userid, key),
+FOREIGN KEY (userid) REFERENCES users(id) ON DELETE CASCADE
+);`,
 
 		`CREATE TABLE IF NOT EXISTS accesstokens (
 userid TEXT NOT NULL,
@@ -73,8 +81,18 @@ itemid TEXT NOT NULL,
 itemorder INTEGER NOT NULL,
 timestamp DATETIME,
 PRIMARY KEY (playlistid, itemid),
-FOREIGN KEY (playlistid) REFERENCES playlists(id)
-);`,
+FOREIGN KEY (playlistid) REFERENCES playlists(id));`,
+
+		`CREATE TABLE IF NOT EXISTS images (
+itemid TEXT NOT NULL,
+type TEXT NOT NULL,
+mimetype TEXT NOT NULL,
+etag TEXT NOT NULL,
+updated DATETIME NOT NULL,
+filesize INTEGER NOT NULL,
+data BLOB NOT NULL);`,
+
+		`CREATE UNIQUE INDEX IF NOT EXISTS images_idx ON images (itemid, type)`,
 	}
 
 	for _, query := range schema {

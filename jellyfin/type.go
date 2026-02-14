@@ -77,6 +77,11 @@ type JFUser struct {
 	LastActivityDate          time.Time           `json:"LastActivityDate"`
 	Configuration             JFUserConfiguration `json:"Configuration"`
 	Policy                    JFUserPolicy        `json:"Policy"`
+	PrimaryImageTag           string              `json:"PrimaryImageTag,omitempty"`
+}
+type JFUserNewRequest struct {
+	Name     string `json:"Name"`
+	Password string `json:"Password"`
 }
 
 type JFUserConfiguration struct {
@@ -738,4 +743,64 @@ type JFGetPlaylistResponse struct {
 type JFPlaylistAccess struct {
 	Users   []string `json:"Users"`
 	Canedit bool     `json:"CanEdit"`
+}
+
+type JFResponseItemImages struct {
+	BlurHash   string `json:"BlurHash,omitempty"`
+	Height     int    `json:"Height"`
+	ImageTag   string `json:"ImageTag"`
+	ImageType  string `json:"ImageType"`
+	Path       string `json:"Path"`
+	Size       int    `json:"Size"`
+	Width      int    `json:"Width"`
+	ImageIndex int    `json:"ImageIndex,omitempty"`
+}
+
+type JFResponseItemRemoteImages struct {
+	Images           []JFResponseItemRemoteImagesImage `json:"Images"`
+	Providers        []string                          `json:"Providers"`
+	TotalRecordCount int                               `json:"TotalRecordCount"`
+}
+
+type JFResponseItemRemoteImagesImage struct {
+	CommunityRating float64 `json:"CommunityRating,omitempty"`
+	Height          int     `json:"Height,omitempty"`
+	Language        string  `json:"Language,omitempty"`
+	ProviderName    string  `json:"ProviderName"`
+	RatingType      string  `json:"RatingType"`
+	Type            string  `json:"Type"`
+	URL             string  `json:"Url"`
+	VoteCount       int     `json:"VoteCount,omitempty"`
+	Width           int     `json:"Width,omitempty"`
+}
+
+type JFResponseItemRemoteImagesProviders []struct {
+	Name            string   `json:"Name"`
+	SupportedImages []string `json:"SupportedImages"`
+}
+
+type JFScheduledTasksResponse struct {
+	Name                string                           `json:"Name"`
+	State               string                           `json:"State"`
+	ID                  string                           `json:"Id"`
+	LastExecutionResult ScheduledTaskLastExecutionResult `json:"LastExecutionResult,omitempty"`
+	Triggers            []ScheduledTaskTrigger           `json:"Triggers"`
+	Description         string                           `json:"Description"`
+	Category            string                           `json:"Category"`
+	IsHidden            bool                             `json:"IsHidden"`
+	Key                 string                           `json:"Key"`
+}
+
+type ScheduledTaskLastExecutionResult struct {
+	StartTimeUtc time.Time `json:"StartTimeUtc"`
+	EndTimeUtc   time.Time `json:"EndTimeUtc"`
+	Status       string    `json:"Status"`
+	Name         string    `json:"Name"`
+	Key          string    `json:"Key"`
+	ID           string    `json:"Id"`
+}
+
+type ScheduledTaskTrigger struct {
+	Type          string `json:"Type"`
+	IntervalTicks int64  `json:"IntervalTicks"`
 }

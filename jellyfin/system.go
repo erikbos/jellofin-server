@@ -7,12 +7,41 @@ import (
 	"net/http"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 )
 
 const (
 	serverVersion = "10.11.6"
 )
+
+// /health
+//
+// healthHandler returns health status
+func (j *Jellyfin) healthHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("cache-control", "no-cache, no-store")
+	w.Write([]byte("Healthy"))
+}
+
+// /GetUtcTime
+//
+// getUtcTimeHandler returns current time in UTC
+func (j *Jellyfin) getUtcTimeHandler(w http.ResponseWriter, r *http.Request) {
+	t := time.Now().UTC()
+	response := JFGetUtcTimeResponse{
+		RequestReceptionTime:     t,
+		ResponseTransmissionTime: t,
+	}
+	serveJSON(response, w)
+}
+
+// /Plugins
+//
+// pluginsHandler returns emply plugin list, we do not support plugins at the moment
+func (j *Jellyfin) pluginsHandler(w http.ResponseWriter, r *http.Request) {
+	response := []JFPluginResponse{}
+	serveJSON(response, w)
+}
 
 // /System/Endpoint
 //
@@ -72,6 +101,13 @@ func (j *Jellyfin) systemInfoHandler(w http.ResponseWriter, r *http.Request) {
 //
 // systemInfoPublicHandler returns basic server info
 func (j *Jellyfin) systemInfoPublicHandler(w http.ResponseWriter, r *http.Request) {
+	// Block desktop app and Jellyfin IOS as they depends on web assets that we do not have.
+	// If we do not do this they hangs.. :(
+	ua := r.Header.Get("user-agent")
+	if strings.HasPrefix(ua, "Jellyfin/1") && strings.HasPrefix(ua, "JellyfinMediaPlayer") {
+		w.WriteHeader(http.StatusTeapot)
+		return
+	}
 	response := JFSystemInfoPublicResponse{
 		Id:           j.serverID,
 		LocalAddress: localAddress(r),
@@ -85,14 +121,6 @@ func (j *Jellyfin) systemInfoPublicHandler(w http.ResponseWriter, r *http.Reques
 	serveJSON(response, w)
 }
 
-// /health
-//
-// healthHandler returns health status
-func (j *Jellyfin) healthHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("cache-control", "no-cache, no-store")
-	w.Write([]byte("Healthy"))
-}
-
 // /System/Ping
 //
 // systemPingHandler returns static string
@@ -100,11 +128,41 @@ func (j *Jellyfin) systemPingHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("\"Jellyfin Server\""))
 }
 
-// /Plugins
+// /System/Logs
 //
-// pluginsHandler returns emply plugin list, we do not support plugins at the moment
-func (j *Jellyfin) pluginsHandler(w http.ResponseWriter, r *http.Request) {
-	response := []JFPluginResponse{}
+// systemLogsHandler returns empty log list, we do not support logs at the moment
+func (j *Jellyfin) systemLogsHandler(w http.ResponseWriter, r *http.Request) {
+	response := []string{}
+	serveJSON(response, w)
+}
+
+// /System/Restart
+// /System/Shutdown
+//
+// systemRestartHandler, nop
+func (j *Jellyfin) systemRestartHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusForbidden)
+}
+
+// GET /ScheduledTasks
+//
+// scheduledTasksHandler returns empty scheduled task list, we do not support scheduled tasks at the moment
+func (j *Jellyfin) scheduledTasksHandler(w http.ResponseWriter, r *http.Request) {
+	response := []JFScheduledTasksResponse{
+		{
+			Name:  "Scan collections",
+			State: "Idle",
+			ID:    "3a025083141d3c17dd96d5f9b951287b",
+			LastExecutionResult: ScheduledTaskLastExecutionResult{
+				StartTimeUtc: time.Now().UTC(),
+				EndTimeUtc:   time.Now().UTC(),
+				Status:       "Completed",
+				Name:         "Scan collections",
+				Key:          "ScanCollections",
+				ID:           "3a025083141d3c17dd96d5f9b951287b",
+			},
+		},
+	}
 	serveJSON(response, w)
 }
 
@@ -126,45 +184,6 @@ func (j *Jellyfin) playbackBitrateTestHandler(w http.ResponseWriter, r *http.Req
 	w.Header().Set("content-type", "application/octet-stream")
 	w.Header().Set("content-length", strconv.FormatInt(size, 10))
 	io.CopyN(w, rand.Reader, size)
-}
-
-// /GetUtcTime
-//
-// getUtcTimeHandler returns current time in UTC
-func (j *Jellyfin) getUtcTimeHandler(w http.ResponseWriter, r *http.Request) {
-	t := time.Now().UTC()
-	response := JFGetUtcTimeResponse{
-		RequestReceptionTime:     t,
-		ResponseTransmissionTime: t,
-	}
-	serveJSON(response, w)
-}
-
-// /DisplayPreferences/usersettings?userId=2b1ec0a52b09456c9823a367d84ac9e5&client=emby'
-//
-// displayPreferencesHandler returns the display preferences for the user
-func (j *Jellyfin) displayPreferencesHandler(w http.ResponseWriter, r *http.Request) {
-	serveJSON(DisplayPreferencesResponse{
-		ID:                 "3ce5b65d-e116-d731-65d1-efc4a30ec35c",
-		SortBy:             "SortName",
-		RememberIndexing:   false,
-		PrimaryImageHeight: 250,
-		PrimaryImageWidth:  250,
-		CustomPrefs: DisplayPreferencesCustomPrefs{
-			ChromecastVersion:          "stable",
-			SkipForwardLength:          "30000",
-			SkipBackLength:             "10000",
-			EnableNextVideoInfoOverlay: "False",
-			Tvhome:                     "null",
-			DashboardTheme:             "null",
-		},
-		ScrollDirection: "Horizontal",
-		ShowBackdrop:    true,
-		RememberSorting: false,
-		SortOrder:       "Ascending",
-		ShowSidebar:     false,
-		Client:          "emby",
-	}, w)
 }
 
 func localAddress(r *http.Request) string {

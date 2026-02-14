@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"slices"
 	"strings"
 	"time"
 
@@ -35,6 +34,8 @@ const (
 	itemTypeGenre            = "Genre"
 	itemTypeStudio           = "Studio"
 	itemTypePerson           = "Person"
+	itemTypeMusicAlbum       = "MusicAlbum"
+	itemTypeAudio            = "Audio"
 
 	// imagetag prefix will get HTTP-redirected
 	tagprefix_redirect = "redirect_"
@@ -211,251 +212,6 @@ func (j *Jellyfin) GetAllPersonNames(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
-// makeJFItemRoot creates the top-level root item representing all collections
-func (j *Jellyfin) makeJFItemRoot(ctx context.Context, userID string) (response JFItem, e error) {
-	var childCount int
-	if rootitems, err := j.makeJFCollectionRootOverview(ctx, userID); err == nil {
-		childCount = len(rootitems)
-	}
-
-	// Build list of genres from all collections.
-	var collectionGenres []string
-	for _, c := range j.collections.GetCollections() {
-		for _, i := range c.Items {
-			for _, genre := range i.Genres() {
-				if !slices.Contains(collectionGenres, genre) {
-					collectionGenres = append(collectionGenres, genre)
-				}
-			}
-		}
-	}
-
-	response = JFItem{
-		Name:                     "Media Folders",
-		ServerID:                 j.serverID,
-		ID:                       makeJFRootID(collectionRootID),
-		Etag:                     idhash.IdHash(collectionRootID),
-		DateCreated:              time.Now().UTC(),
-		Type:                     itemTypeUserRootFolder,
-		IsFolder:                 true,
-		CanDelete:                false,
-		CanDownload:              false,
-		SortName:                 "media folders",
-		ExternalUrls:             []JFExternalUrls{},
-		Path:                     "/root",
-		EnableMediaSourceDisplay: true,
-		Taglines:                 []string{},
-		PlayAccess:               "Full",
-		RemoteTrailers:           []JFRemoteTrailers{},
-		ProviderIds:              JFProviderIds{},
-		People:                   []JFPeople{},
-		Studios:                  []JFStudios{},
-		Genres:                   collectionGenres,
-		GenreItems:               makeJFGenreItems(collectionGenres),
-		LocalTrailerCount:        0,
-		ChildCount:               childCount,
-		SpecialFeatureCount:      0,
-		DisplayPreferencesID:     makeJFDisplayPreferencesID(collectionRootID),
-		Tags:                     []string{},
-		PrimaryImageAspectRatio:  1.7777777777777777,
-		BackdropImageTags:        []string{},
-		LocationType:             "FileSystem",
-		MediaType:                "Unknown",
-		// ImageTags: &JFImageTags{
-		// 	Primary: collectionRootID,
-		// },
-	}
-	return
-}
-
-// makeJFItemCollectionFavorites creates a collection item for favorites folder of the user.
-func (j *Jellyfin) makeJFItemCollectionFavorites(ctx context.Context, userID string) (JFItem, error) {
-	var itemCount int
-	if favoriteIDs, err := j.repo.GetFavorites(ctx, userID); err == nil {
-		itemCount = len(favoriteIDs)
-	}
-
-	id := makeJFCollectionFavoritesID(favoritesCollectionID)
-
-	response := JFItem{
-		Name:                     "Favorites",
-		ServerID:                 j.serverID,
-		ID:                       id,
-		ParentID:                 makeJFRootID(collectionRootID),
-		Etag:                     idhash.IdHash(favoritesCollectionID),
-		DateCreated:              time.Now().UTC(),
-		PremiereDate:             time.Now().UTC(),
-		CollectionType:           collectionTypePlaylists,
-		SortName:                 collectionTypePlaylists,
-		Type:                     itemTypeUserView,
-		IsFolder:                 true,
-		EnableMediaSourceDisplay: true,
-		ChildCount:               itemCount,
-		DisplayPreferencesID:     makeJFDisplayPreferencesID(favoritesCollectionID),
-		ExternalUrls:             []JFExternalUrls{},
-		PlayAccess:               "Full",
-		PrimaryImageAspectRatio:  1.7777777777777777,
-		RemoteTrailers:           []JFRemoteTrailers{},
-		LocationType:             "FileSystem",
-		Path:                     "/collection",
-		LockData:                 false,
-		MediaType:                "Unknown",
-		CanDelete:                false,
-		CanDownload:              true,
-		SpecialFeatureCount:      0,
-		// PremiereDate should be set based upon most recent item in collection
-		// TODO: we do not support images for a collection
-		// ImageTags: &JFImageTags{
-		// 	Primary: "collection",
-		// },
-	}
-	return response, nil
-}
-
-// makeJFItemFavoritesOverview creates a list of favorite items.
-func (j *Jellyfin) makeJFItemFavoritesOverview(ctx context.Context, userID string) ([]JFItem, error) {
-	favoriteIDs, err := j.repo.GetFavorites(ctx, userID)
-	if err != nil {
-		return []JFItem{}, err
-	}
-
-	items := []JFItem{}
-	for _, itemID := range favoriteIDs {
-		if c, i := j.collections.GetItemByID(itemID); c != nil && i != nil {
-			// We only add movies and shows in favorites
-			switch i.(type) {
-			case *collection.Movie, *collection.Show:
-				jfitem, err := j.makeJFItem(ctx, userID, i, c.ID)
-				if err != nil {
-					return []JFItem{}, err
-				}
-				items = append(items, jfitem)
-			}
-		}
-	}
-	return items, nil
-}
-
-// makeJFItemCollectionPlaylist creates a top level collection item representing all playlists of the user
-func (j *Jellyfin) makeJFItemCollectionPlaylist(ctx context.Context, userID string) (JFItem, error) {
-	var itemCount int
-
-	// Get total item count across all playlists
-	if playlistIDs, err := j.repo.GetPlaylists(ctx, userID); err == nil {
-		for _, ID := range playlistIDs {
-			playlist, err := j.repo.GetPlaylist(ctx, userID, ID)
-			if err == nil && playlist != nil {
-				itemCount += len(playlist.ItemIDs)
-			}
-		}
-	}
-
-	id := makeJFCollectionPlaylistID(playlistCollectionID)
-	response := JFItem{
-		Name:                     "Playlists",
-		ServerID:                 j.serverID,
-		ID:                       id,
-		ParentID:                 makeJFRootID(collectionRootID),
-		Etag:                     idhash.IdHash(playlistCollectionID),
-		DateCreated:              time.Now().UTC(),
-		PremiereDate:             time.Now().UTC(),
-		CollectionType:           collectionTypePlaylists,
-		SortName:                 collectionTypePlaylists,
-		Type:                     itemTypeUserView,
-		IsFolder:                 true,
-		EnableMediaSourceDisplay: true,
-		ChildCount:               itemCount,
-		DisplayPreferencesID:     makeJFDisplayPreferencesID(playlistCollectionID),
-		ExternalUrls:             []JFExternalUrls{},
-		PlayAccess:               "Full",
-		PrimaryImageAspectRatio:  1.7777777777777777,
-		RemoteTrailers:           []JFRemoteTrailers{},
-		LocationType:             "FileSystem",
-		Path:                     "/collection",
-		LockData:                 false,
-		MediaType:                "Unknown",
-		CanDelete:                false,
-		CanDownload:              true,
-		SpecialFeatureCount:      0,
-		// PremiereDate should be set based upon most recent item in collection
-		// TODO: we do not support images for a collection
-		// ImageTags: &JFImageTags{
-		// 	Primary: "collection",
-		// },
-	}
-	return response, nil
-}
-
-// makeJFItemPlaylist creates a playlist item from the provided playlistID
-func (j *Jellyfin) makeJFItemPlaylist(ctx context.Context, userID, playlistID string) (JFItem, error) {
-	playlist, err := j.repo.GetPlaylist(ctx, userID, playlistID)
-	if err != nil || playlist == nil {
-		return JFItem{}, errors.New("could not find playlist")
-	}
-
-	response := JFItem{
-		Type:                     itemTypePlaylist,
-		ID:                       makeJFPlaylistID(playlist.ID),
-		ParentID:                 makeJFCollectionPlaylistID(playlistCollectionID),
-		ServerID:                 j.serverID,
-		Name:                     playlist.Name,
-		SortName:                 playlist.Name,
-		IsFolder:                 true,
-		Path:                     "/playlist",
-		Etag:                     idhash.IdHash(playlist.ID),
-		DateCreated:              time.Now().UTC(),
-		CanDelete:                true,
-		CanDownload:              true,
-		PlayAccess:               "Full",
-		RecursiveItemCount:       len(playlist.ItemIDs),
-		ChildCount:               len(playlist.ItemIDs),
-		LocationType:             "FileSystem",
-		MediaType:                "Video",
-		DisplayPreferencesID:     makeJFDisplayPreferencesID(playlistCollectionID),
-		EnableMediaSourceDisplay: true,
-	}
-	return response, nil
-}
-
-// makeJFItemPlaylistOverview creates a list of playlists of the user.
-func (j *Jellyfin) makeJFItemPlaylistOverview(ctx context.Context, userID string) ([]JFItem, error) {
-	playlistIDs, err := j.repo.GetPlaylists(ctx, userID)
-	if err != nil {
-		return []JFItem{}, err
-	}
-
-	items := []JFItem{}
-	for _, ID := range playlistIDs {
-		if playlistItem, err := j.makeJFItemPlaylist(ctx, userID, ID); err == nil {
-			items = append(items, playlistItem)
-		}
-	}
-	return items, nil
-}
-
-// makeJFItemPlaylistItemList creates an item list of one playlist of the user.
-func (j *Jellyfin) makeJFItemPlaylistItemList(ctx context.Context, userID, playlistID string) ([]JFItem, error) {
-
-	playlist, err := j.repo.GetPlaylist(ctx, userID, playlistID)
-	log.Printf("makeJFItemPlaylistItemList: %+v, %+v", playlistID, err)
-	if err != nil {
-		return []JFItem{}, err
-	}
-
-	items := []JFItem{}
-	for _, itemID := range playlist.ItemIDs {
-		c, i := j.collections.GetItemByID(itemID)
-		if i != nil {
-			item, err := j.makeJFItem(ctx, userID, i, c.ID)
-			if err != nil {
-				return []JFItem{}, err
-			}
-			items = append(items, item)
-		}
-	}
-	return items, nil
-}
-
 // makeJFItemByIDs creates a list of items based on the provided itemIDs
 func (j *Jellyfin) makeJFItemByIDs(ctx context.Context, userID string, itemIDs []string) ([]JFItem, error) {
 	items := make([]JFItem, 0, len(itemIDs))
@@ -479,7 +235,7 @@ func (j *Jellyfin) makeJFItemByID(ctx context.Context, userID, itemID string) (J
 	case isJFCollectionPlaylistID(itemID):
 		return j.makeJFItemCollectionPlaylist(ctx, userID)
 	case isJFCollectionID(itemID):
-		return j.makeJFItemCollection(trimPrefix(itemID))
+		return j.makeJFItemCollection(ctx, trimPrefix(itemID))
 	case isJFPlaylistID(itemID):
 		return j.makeJFItemPlaylist(ctx, userID, trimPrefix(itemID))
 	case isJFPersonID(itemID):
@@ -698,6 +454,7 @@ func makeRuntimeTicks(d time.Duration) int64 {
 
 const (
 	itemprefix_separator            = "_"
+	itemprefix_user                 = "u_"
 	itemprefix_root                 = "root_"
 	itemprefix_collection           = "collection_"
 	itemprefix_collection_favorites = "collectionfavorites_"
@@ -712,38 +469,12 @@ const (
 	itemprefix_displaypreferences   = "dp_"
 )
 
-// makeJFCollectionFavoritesID returns an external id for a favorites collection.
-func makeJFCollectionFavoritesID(favoritesID string) string {
-	return itemprefix_collection_favorites + favoritesID
-}
-
-// makeJFCollectionPlaylistID returns an external id for a playlist collection.
-func makeJFCollectionPlaylistID(playlistCollectionID string) string {
-	return itemprefix_collection_playlist + playlistCollectionID
-}
-
-// isJFCollectionPlaylistID checks if the provided ID is the playlist collection ID.
-func isJFCollectionPlaylistID(id string) bool {
-	// There is only one playlist collection id, so we can do a direct comparison
-	return id == makeJFCollectionPlaylistID(playlistCollectionID)
-}
-
-// makeJFDisplayPreferencesID returns an external id for display preferences.
-func makeJFDisplayPreferencesID(dpID string) string {
-	return itemprefix_displaypreferences + dpID
-}
-
 // trimPrefix removes the type prefix from an item id.
 func trimPrefix(s string) string {
 	if i := strings.Index(s, itemprefix_separator); i != -1 {
 		return s[i+1:]
 	}
 	return s
-}
-
-// isJFCollectionFavoritesID checks if the provided ID is a favorites collection ID.
-func isJFCollectionFavoritesID(id string) bool {
-	return strings.HasPrefix(id, itemprefix_collection_favorites)
 }
 
 // itemIsHD checks if the provided item is HD (720p or higher)

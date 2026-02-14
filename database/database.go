@@ -16,6 +16,7 @@ type Repository interface {
 	UserDataRepo
 	PlaylistRepo
 	PersonRepo
+	ImageRepo
 	StartBackgroundJobs(ctx context.Context)
 }
 
@@ -25,6 +26,8 @@ type UserRepo interface {
 	GetUser(ctx context.Context, username string) (user *model.User, err error)
 	// GetByID retrieves a user from the database by ID.
 	GetUserByID(ctx context.Context, userID string) (user *model.User, err error)
+	// GetUsers retrieves all users from the database.
+	GetAllUsers(ctx context.Context) (users []model.User, err error)
 	// UpsertUser upserts a user into the database.
 	UpsertUser(ctx context.Context, user *model.User) (err error)
 }
@@ -72,6 +75,17 @@ type PlaylistRepo interface {
 type PersonRepo interface {
 	// GetPerson retrieves a person by name.
 	GetPersonByName(ctx context.Context, name, userID string) (person *model.Person, err error)
+}
+
+type ImageRepo interface {
+	// HasImage checks if an image exists for the given itemID and type
+	HasImage(ctx context.Context, itemID, imageType string) (model.ImageMetadata, error)
+	// GetImage retrieves image data for the given itemID and type
+	GetImage(ctx context.Context, itemID, imageType string) (model.ImageMetadata, []byte, error)
+	// StoreImage stores image data for the given itemID and type
+	StoreImage(ctx context.Context, itemID, imageType string, metadata model.ImageMetadata, data []byte) error
+	// DeleteImage deletes an image for the given itemID and type
+	DeleteImage(ctx context.Context, itemID, imageType string) error
 }
 
 // New creates a new database repository based on the type and options provided.

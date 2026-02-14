@@ -1,10 +1,13 @@
 package jellyfin
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 
@@ -254,6 +257,123 @@ func (j *Jellyfin) getPlaylistUsersHandler(w http.ResponseWriter, r *http.Reques
 	serveJSON(response, w)
 }
 
+// makeJFItemCollectionPlaylist creates a top level collection item with items for each playlists of the user
+func (j *Jellyfin) makeJFItemCollectionPlaylist(ctx context.Context, userID string) (JFItem, error) {
+	var itemCount int
+
+	// Get total item count across all playlists
+	if playlistIDs, err := j.repo.GetPlaylists(ctx, userID); err == nil {
+		for _, ID := range playlistIDs {
+			playlist, err := j.repo.GetPlaylist(ctx, userID, ID)
+			if err == nil && playlist != nil {
+				itemCount += len(playlist.ItemIDs)
+			}
+		}
+	}
+
+	id := makeJFCollectionPlaylistID(playlistCollectionID)
+	response := JFItem{
+		Name:                     "Playlists",
+		ServerID:                 j.serverID,
+		ID:                       id,
+		ParentID:                 makeJFRootID(collectionRootID),
+		Etag:                     idhash.IdHash(playlistCollectionID),
+		DateCreated:              time.Now().UTC(),
+		PremiereDate:             time.Now().UTC(),
+		CollectionType:           collectionTypePlaylists,
+		SortName:                 collectionTypePlaylists,
+		Type:                     itemTypeUserView,
+		IsFolder:                 true,
+		EnableMediaSourceDisplay: true,
+		ChildCount:               itemCount,
+		DisplayPreferencesID:     makeJFDisplayPreferencesID(playlistCollectionID),
+		ExternalUrls:             []JFExternalUrls{},
+		PlayAccess:               "Full",
+		PrimaryImageAspectRatio:  1.7777777777777777,
+		RemoteTrailers:           []JFRemoteTrailers{},
+		LocationType:             "FileSystem",
+		Path:                     "/collection",
+		LockData:                 false,
+		MediaType:                "Unknown",
+		CanDelete:                false,
+		CanDownload:              true,
+		SpecialFeatureCount:      0,
+		ImageTags:                j.makeJFImageTags(ctx, id, ImageTypePrimary),
+		// PremiereDate should be set based upon most recent item in collection
+	}
+	return response, nil
+}
+
+// makeJFItemPlaylist creates a playlist item from the provided playlistID
+func (j *Jellyfin) makeJFItemPlaylist(ctx context.Context, userID, playlistID string) (JFItem, error) {
+	playlist, err := j.repo.GetPlaylist(ctx, userID, playlistID)
+	if err != nil || playlist == nil {
+		return JFItem{}, errors.New("could not find playlist")
+	}
+
+	response := JFItem{
+		Type:                     itemTypePlaylist,
+		ID:                       makeJFPlaylistID(playlist.ID),
+		ParentID:                 makeJFCollectionPlaylistID(playlistCollectionID),
+		ServerID:                 j.serverID,
+		Name:                     playlist.Name,
+		SortName:                 playlist.Name,
+		IsFolder:                 true,
+		Path:                     "/playlist",
+		Etag:                     idhash.IdHash(playlist.ID),
+		DateCreated:              time.Now().UTC(),
+		CanDelete:                true,
+		CanDownload:              true,
+		PlayAccess:               "Full",
+		RecursiveItemCount:       len(playlist.ItemIDs),
+		ChildCount:               len(playlist.ItemIDs),
+		LocationType:             "FileSystem",
+		MediaType:                "Video",
+		DisplayPreferencesID:     makeJFDisplayPreferencesID(playlistCollectionID),
+		EnableMediaSourceDisplay: true,
+	}
+	return response, nil
+}
+
+// makeJFItemPlaylistOverview creates a list of playlists of the user.
+func (j *Jellyfin) makeJFItemPlaylistOverview(ctx context.Context, userID string) ([]JFItem, error) {
+	playlistIDs, err := j.repo.GetPlaylists(ctx, userID)
+	if err != nil {
+		return []JFItem{}, err
+	}
+
+	items := []JFItem{}
+	for _, ID := range playlistIDs {
+		if playlistItem, err := j.makeJFItemPlaylist(ctx, userID, ID); err == nil {
+			items = append(items, playlistItem)
+		}
+	}
+	return items, nil
+}
+
+// makeJFItemPlaylistItemList creates an item list of one playlist of the user.
+func (j *Jellyfin) makeJFItemPlaylistItemList(ctx context.Context, userID, playlistID string) ([]JFItem, error) {
+
+	playlist, err := j.repo.GetPlaylist(ctx, userID, playlistID)
+	log.Printf("makeJFItemPlaylistItemList: %+v, %+v", playlistID, err)
+	if err != nil {
+		return []JFItem{}, err
+	}
+
+	items := []JFItem{}
+	for _, itemID := range playlist.ItemIDs {
+		c, i := j.collections.GetItemByID(itemID)
+		if i != nil {
+			item, err := j.makeJFItem(ctx, userID, i, c.ID)
+			if err != nil {
+				return []JFItem{}, err
+			}
+			items = append(items, item)
+		}
+	}
+	return items, nil
+}
+
 // makeJFPlaylistID returns an external id for a playlist.
 func makeJFPlaylistID(playlistID string) string {
 	return itemprefix_playlist + playlistID
@@ -262,4 +382,15 @@ func makeJFPlaylistID(playlistID string) string {
 // isJFPlaylistID checks if the provided ID is a playlist ID.
 func isJFPlaylistID(id string) bool {
 	return strings.HasPrefix(id, itemprefix_playlist)
+}
+
+// makeJFCollectionPlaylistID returns an external id for a playlist collection.
+func makeJFCollectionPlaylistID(playlistCollectionID string) string {
+	return itemprefix_collection_playlist + playlistCollectionID
+}
+
+// isJFCollectionPlaylistID checks if the provided ID is the playlist collection ID.
+func isJFCollectionPlaylistID(id string) bool {
+	// There is only one playlist collection id, so we can do a direct comparison
+	return id == makeJFCollectionPlaylistID(playlistCollectionID)
 }

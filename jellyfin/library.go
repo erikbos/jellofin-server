@@ -13,13 +13,36 @@ import (
 	"github.com/erikbos/jellofin-server/idhash"
 )
 
+// /Library/MediaFolders
+//
+// libraryMediaFoldersHandler returns all collections available to the user
+func (j *Jellyfin) libraryMediaFoldersHandler(w http.ResponseWriter, r *http.Request) {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
+		return
+	}
+	// todo: should this take EnabledFolders into account? Or is that only for the /UserViews endpoint?
+	items, err := j.makeJFCollectionRootOverview(r.Context(), accessToken.UserID)
+	if err != nil {
+		apierror(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	response := JFUserViewsResponse{
+		Items:            items,
+		TotalRecordCount: len(items),
+		StartIndex:       0,
+	}
+	serveJSON(response, w)
+}
+
 // /Library/VirtualFolders
 //
 // libraryVirtualFoldersHandler returns the available collections as virtual folders
 func (j *Jellyfin) libraryVirtualFoldersHandler(w http.ResponseWriter, r *http.Request) {
 	response := []JFMediaLibrary{}
+	// todo: should this take EnabledFolders into account? Or is that only for the /UserViews endpoint?
 	for _, c := range j.collections.GetCollections() {
-		collectionItem, err := j.makeJFItemCollection(c.ID)
+		collectionItem, err := j.makeJFItemCollection(r.Context(), c.ID)
 		if err != nil {
 			apierror(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -39,19 +62,45 @@ func (j *Jellyfin) libraryVirtualFoldersHandler(w http.ResponseWriter, r *http.R
 // /UserViews
 // /Users/2b1ec0a52b09456c9823a367d84ac9e5/Views?IncludeExternalContent=false
 //
-// usersViewsHandler returns the collections available to the user
+// this is the same as /Library/MediaFolders, but a user configured ordering of items is applied
+//
+// usersViewsHandler returns collection list in order as configured by user
 func (j *Jellyfin) usersViewsHandler(w http.ResponseWriter, r *http.Request) {
 	accessToken := j.getAccessTokenDetails(w, r)
 	if accessToken == nil {
 		return
 	}
-
 	items, err := j.makeJFCollectionRootOverview(r.Context(), accessToken.UserID)
 	if err != nil {
 		apierror(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
+	// Now we need to apply the user configured order of views
+	dbuser, err := j.repo.GetUserByID(r.Context(), accessToken.UserID)
+	if err != nil {
+		apierror(w, ErrUserIDNotFound, http.StatusNotFound)
+		return
+	}
+	queryparams := r.URL.Query()
+	includeHidden := queryparams.Get("includeHidden")
+	// If the user has configured an order of views, we need to order the items based on that.
+	// And exclude collection items unless includeHidden is true
+	if len(dbuser.Properties.OrderedViews) != 0 {
+		// Order the items based on user preferences, and exclude items in my media excludes
+		orderedItems := make([]JFItem, 0, len(items))
+		for _, displayPreferenceID := range dbuser.Properties.OrderedViews {
+			if includeHidden != "true" && slices.Contains(dbuser.Properties.MyMediaExcludes, displayPreferenceID) {
+				continue
+			}
+			for _, item := range items {
+				if item.DisplayPreferencesID == displayPreferenceID {
+					orderedItems = append(orderedItems, item)
+					break
+				}
+			}
+		}
+		items = orderedItems
+	}
 	response := JFUserViewsResponse{
 		Items:            items,
 		TotalRecordCount: len(items),
@@ -66,7 +115,7 @@ func (j *Jellyfin) usersViewsHandler(w http.ResponseWriter, r *http.Request) {
 func (j *Jellyfin) usersGroupingOptionsHandler(w http.ResponseWriter, r *http.Request) {
 	collections := []JFCollection{}
 	for _, c := range j.collections.GetCollections() {
-		collectionItem, err := j.makeJFItemCollection(c.ID)
+		collectionItem, err := j.makeJFItemCollection(r.Context(), c.ID)
 		if err != nil {
 			apierror(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -80,11 +129,75 @@ func (j *Jellyfin) usersGroupingOptionsHandler(w http.ResponseWriter, r *http.Re
 	serveJSON(collections, w)
 }
 
+// POST /Library/Refresh
+//
+// libraryRefreshHandler triggers a library refresh
+func (j *Jellyfin) libraryRefreshHandler(w http.ResponseWriter, r *http.Request) {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
+		return
+	}
+	// we just return 204 as we do not support this
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// makeJFItemRoot creates the top-level root item representing all collections
+func (j *Jellyfin) makeJFItemRoot(ctx context.Context, userID string) (response JFItem, e error) {
+	var childCount int
+	if rootitems, err := j.makeJFCollectionRootOverview(ctx, userID); err == nil {
+		childCount = len(rootitems)
+	}
+	// Build list of genres from all collections.
+	var collectionGenres []string
+	for _, c := range j.collections.GetCollections() {
+		for _, genre := range c.Genres() {
+			if !slices.Contains(collectionGenres, genre) {
+				collectionGenres = append(collectionGenres, genre)
+			}
+		}
+	}
+	rootID := makeJFRootID(collectionRootID)
+	response = JFItem{
+		Name:                     "Media Folders",
+		ServerID:                 j.serverID,
+		ID:                       rootID,
+		Etag:                     idhash.IdHash(collectionRootID),
+		DateCreated:              time.Now().UTC(),
+		Type:                     itemTypeUserRootFolder,
+		IsFolder:                 true,
+		CanDelete:                false,
+		CanDownload:              false,
+		SortName:                 "media folders",
+		ExternalUrls:             []JFExternalUrls{},
+		Path:                     "/root",
+		EnableMediaSourceDisplay: true,
+		Taglines:                 []string{},
+		PlayAccess:               "Full",
+		RemoteTrailers:           []JFRemoteTrailers{},
+		ProviderIds:              JFProviderIds{},
+		People:                   []JFPeople{},
+		Studios:                  []JFStudios{},
+		Genres:                   collectionGenres,
+		GenreItems:               makeJFGenreItems(collectionGenres),
+		LocalTrailerCount:        0,
+		ChildCount:               childCount,
+		SpecialFeatureCount:      0,
+		DisplayPreferencesID:     makeJFDisplayPreferencesID(collectionRootID),
+		Tags:                     []string{},
+		PrimaryImageAspectRatio:  1.7777777777777777,
+		BackdropImageTags:        []string{},
+		LocationType:             "FileSystem",
+		MediaType:                "Unknown",
+		ImageTags:                j.makeJFImageTags(ctx, rootID, ImageTypePrimary),
+	}
+	return
+}
+
 // makeJFCollectionRootOverview creates a list of items representing the collections available to the user
 func (j *Jellyfin) makeJFCollectionRootOverview(ctx context.Context, userID string) ([]JFItem, error) {
 	items := make([]JFItem, 0)
 	for _, c := range j.collections.GetCollections() {
-		if item, err := j.makeJFItemCollection(c.ID); err == nil {
+		if item, err := j.makeJFItemCollection(ctx, c.ID); err == nil {
 			items = append(items, item)
 		}
 	}
@@ -99,23 +212,13 @@ func (j *Jellyfin) makeJFCollectionRootOverview(ctx context.Context, userID stri
 }
 
 // makeJFItemCollection creates a JFItem representing a collection.
-func (j *Jellyfin) makeJFItemCollection(collectionID string) (JFItem, error) {
+func (j *Jellyfin) makeJFItemCollection(ctx context.Context, collectionID string) (JFItem, error) {
 	c := j.collections.GetCollection(collectionID)
 	if c == nil {
 		return JFItem{}, errors.New("collection not found")
 	}
-
-	// Build list of genres from collection.
-	var collectionGenres []string
-	for _, i := range c.Items {
-		for _, genre := range i.Genres() {
-			if !slices.Contains(collectionGenres, genre) {
-				collectionGenres = append(collectionGenres, genre)
-			}
-		}
-	}
-
 	id := makeJFCollectionID(collectionID)
+	collectionGenres := c.Genres()
 	response := JFItem{
 		Name:                     c.Name,
 		ServerID:                 j.serverID,
@@ -142,10 +245,7 @@ func (j *Jellyfin) makeJFItemCollection(collectionID string) (JFItem, error) {
 		GenreItems:               makeJFGenreItems(collectionGenres),
 		ExternalUrls:             []JFExternalUrls{},
 		RemoteTrailers:           []JFRemoteTrailers{},
-		// TODO: we do not support images for a collection
-		// ImageTags: &JFImageTags{
-		// 	Primary: "collection",
-		// },
+		ImageTags:                j.makeJFImageTags(ctx, id, ImageTypePrimary),
 	}
 	switch c.Type {
 	case collection.CollectionTypeMovies:
@@ -157,6 +257,70 @@ func (j *Jellyfin) makeJFItemCollection(collectionID string) (JFItem, error) {
 	}
 	response.SortName = response.CollectionType
 	return response, nil
+}
+
+// makeJFItemCollectionFavorites creates a collection item for favorites folder of the user.
+func (j *Jellyfin) makeJFItemCollectionFavorites(ctx context.Context, userID string) (JFItem, error) {
+	var itemCount int
+	if favoriteIDs, err := j.repo.GetFavorites(ctx, userID); err == nil {
+		itemCount = len(favoriteIDs)
+	}
+
+	id := makeJFCollectionFavoritesID(favoritesCollectionID)
+	response := JFItem{
+		Name:                     "Favorites",
+		ServerID:                 j.serverID,
+		ID:                       id,
+		ParentID:                 makeJFRootID(collectionRootID),
+		Etag:                     idhash.IdHash(favoritesCollectionID),
+		DateCreated:              time.Now().UTC(),
+		PremiereDate:             time.Now().UTC(),
+		CollectionType:           collectionTypePlaylists,
+		SortName:                 collectionTypePlaylists,
+		Type:                     itemTypeUserView,
+		IsFolder:                 true,
+		EnableMediaSourceDisplay: true,
+		ChildCount:               itemCount,
+		DisplayPreferencesID:     makeJFDisplayPreferencesID(favoritesCollectionID),
+		ExternalUrls:             []JFExternalUrls{},
+		PlayAccess:               "Full",
+		PrimaryImageAspectRatio:  1.7777777777777777,
+		RemoteTrailers:           []JFRemoteTrailers{},
+		LocationType:             "FileSystem",
+		Path:                     "/collection",
+		LockData:                 false,
+		MediaType:                "Unknown",
+		CanDelete:                false,
+		CanDownload:              true,
+		SpecialFeatureCount:      0,
+		ImageTags:                j.makeJFImageTags(ctx, id, ImageTypePrimary),
+		// PremiereDate should be set based upon most recent item in collection
+	}
+	return response, nil
+}
+
+// makeJFItemFavoritesOverview creates a list of favorite items.
+func (j *Jellyfin) makeJFItemFavoritesOverview(ctx context.Context, userID string) ([]JFItem, error) {
+	favoriteIDs, err := j.repo.GetFavorites(ctx, userID)
+	if err != nil {
+		return []JFItem{}, err
+	}
+
+	items := []JFItem{}
+	for _, itemID := range favoriteIDs {
+		if c, i := j.collections.GetItemByID(itemID); c != nil && i != nil {
+			// We only add movies and shows in favorites
+			switch i.(type) {
+			case *collection.Movie, *collection.Show:
+				jfitem, err := j.makeJFItem(ctx, userID, i, c.ID)
+				if err != nil {
+					return []JFItem{}, err
+				}
+				items = append(items, jfitem)
+			}
+		}
+	}
+	return items, nil
 }
 
 // makeJFRootID returns an external id for the root folder.
@@ -177,4 +341,14 @@ func makeJFCollectionID(collectionID string) string {
 // isJFCollectionID checks if the provided ID is a collection ID.
 func isJFCollectionID(id string) bool {
 	return strings.HasPrefix(id, itemprefix_collection)
+}
+
+// makeJFCollectionFavoritesID returns an external id for a favorites collection.
+func makeJFCollectionFavoritesID(favoritesID string) string {
+	return itemprefix_collection_favorites + favoritesID
+}
+
+// isJFCollectionFavoritesID checks if the provided ID is a favorites collection ID.
+func isJFCollectionFavoritesID(id string) bool {
+	return strings.HasPrefix(id, itemprefix_collection_favorites)
 }

@@ -162,7 +162,38 @@ tvshows/
         └── S02E02 - EpisodeName.mp4
 ```
 
-Tvshows season number 0 are renamed to 'Specials' and
+Tvshows season number 0 are renamed to 'Specials' and have 99 as internal to force them to appear as "last" season.
+
+### Unsupported folder layouts:
+
+Nested folders are not supported:
+
+```text
+movies/
+├── History/
+│   └── Movie 1 (1984)/
+│       └── movie.mp4
+│   └── Movie 2 (2001)/
+│       └── movie.mp4
+```
+
+_Workaround: specify each subfolder individually in configuration._
+
+2. Mixed Movies & Shows
+
+Unsupported:
+
+```text
+movies/
+├── Movie 1 (1984)/
+│   └── movie.mp4
+└── ShowName/
+│   ├── Season 1/
+│   │   ├── S01E01 - EpisodeName.mp4
+│   │   └── S01E02 - EpisodeName.mp4
+└── Movie 2 (2001)/
+    └── movie.mp4
+```
 
 ### Data
 
