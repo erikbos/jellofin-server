@@ -105,9 +105,10 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/Users", middleware(j.usersPostHandler)).Methods("POST")
 	r.Handle("/Users/Me", middleware(j.usersMeHandler))
 	r.Handle("/Users/New", middleware(j.usersNewItemsHandler)).Methods("POST")
+	r.Handle("/Users/Password", middleware(j.usersPasswordHandler)).Methods("POST")
 	r.Handle("/Users/Public", http.HandlerFunc(j.usersPublicHandler))
-	r.Handle("/Users/{userid}", middleware(j.usersHandler))
-
+	r.Handle("/Users/{userid}", middleware(j.userGetHandler)).Methods("GET")
+	r.Handle("/Users/{userid}", middleware(j.userDeleteHandler)).Methods("DELETE")
 	r.Handle("/Users/{userid}/Configuration", middleware(j.usersConfigurationHandler)).Methods("POST")
 	r.Handle("/Users/{userid}/Policy", middleware(j.usersPolicyHandler)).Methods("POST")
 	r.Handle("/Users/{userid}/Views", middleware(j.usersViewsHandler))
@@ -128,7 +129,7 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 
 	r.Handle("/DisplayPreferences/{id}", middleware(j.displayPreferencesHandler))
 
-	r.Handle("/Library/MediaFolders", middleware(j.libraryMediaFoldersHandler))
+	r.Handle("/Library/MediaFolders", middleware(j.usersViewsHandler))
 	r.Handle("/Library/VirtualFolders", middleware(j.libraryVirtualFoldersHandler))
 	r.Handle("/Library/Refresh", middleware(j.libraryRefreshHandler)).Methods("POST")
 

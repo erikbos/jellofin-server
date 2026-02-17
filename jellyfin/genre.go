@@ -25,7 +25,7 @@ func (j *Jellyfin) genresHandler(w http.ResponseWriter, r *http.Request) {
 	// Get all items for which we need to get genres.
 	queryparams := r.URL.Query()
 	parentID := queryparams.Get("parentId")
-	items, err := j.getJFItems(r.Context(), accessToken.UserID, parentID)
+	items, err := j.getJFItems(r.Context(), accessToken.User.ID, parentID)
 	if err != nil {
 		apierror(w, "Failed to get items", http.StatusInternalServerError)
 		return
@@ -38,7 +38,7 @@ func (j *Jellyfin) genresHandler(w http.ResponseWriter, r *http.Request) {
 		for _, genre := range item.GenreItems {
 			if _, exists := genreSet[genre.ID]; !exists {
 				genreSet[genre.ID] = struct{}{}
-				if genreItem, err := j.makeJFItemGenre(r.Context(), accessToken.UserID, genre.ID); err == nil {
+				if genreItem, err := j.makeJFItemGenre(r.Context(), accessToken.User.ID, genre.ID); err == nil {
 					genres = append(genres, genreItem)
 				}
 			}
@@ -78,7 +78,7 @@ func (j *Jellyfin) genreHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	//TOD: validate genre is actually in the collection?
-	response, err := j.makeJFItemGenre(r.Context(), accessToken.UserID, makeJFGenreID(genre))
+	response, err := j.makeJFItemGenre(r.Context(), accessToken.User.ID, makeJFGenreID(genre))
 	if err != nil {
 		apierror(w, "Genre not found", http.StatusNotFound)
 		return
@@ -98,7 +98,7 @@ func (j *Jellyfin) usersItemsFiltersHandler(w http.ResponseWriter, r *http.Reque
 	// Get all items for which we need to get genres.
 	queryparams := r.URL.Query()
 	parentID := queryparams.Get("parentId")
-	items, err := j.getJFItems(r.Context(), accessToken.UserID, parentID)
+	items, err := j.getJFItems(r.Context(), accessToken.User.ID, parentID)
 	if err != nil {
 		apierror(w, "Failed to get items", http.StatusInternalServerError)
 		return
@@ -152,7 +152,7 @@ func (j *Jellyfin) usersItemsFilters2Handler(w http.ResponseWriter, r *http.Requ
 	// Get all items for which we need to get genres.
 	queryparams := r.URL.Query()
 	parentID := queryparams.Get("parentId")
-	items, err := j.getJFItems(r.Context(), accessToken.UserID, parentID)
+	items, err := j.getJFItems(r.Context(), accessToken.User.ID, parentID)
 	if err != nil {
 		apierror(w, "Failed to get items", http.StatusInternalServerError)
 		return

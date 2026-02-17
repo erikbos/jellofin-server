@@ -73,8 +73,8 @@ type JFUser struct {
 	HasConfiguredPassword     bool                `json:"HasConfiguredPassword"`
 	HasConfiguredEasyPassword bool                `json:"HasConfiguredEasyPassword"`
 	EnableAutoLogin           bool                `json:"EnableAutoLogin"`
-	LastLoginDate             time.Time           `json:"LastLoginDate"`
-	LastActivityDate          time.Time           `json:"LastActivityDate"`
+	LastLoginDate             *time.Time          `json:"LastLoginDate,omitempty"`
+	LastActivityDate          *time.Time          `json:"LastActivityDate,omitempty"`
 	Configuration             JFUserConfiguration `json:"Configuration"`
 	Policy                    JFUserPolicy        `json:"Policy"`
 	PrimaryImageTag           string              `json:"PrimaryImageTag,omitempty"`
@@ -85,68 +85,84 @@ type JFUserNewRequest struct {
 }
 
 type JFUserConfiguration struct {
-	GroupedFolders []string `json:"GroupedFolders"`
-	SubtitleMode   string   `json:"SubtitleMode"`
-	// OrderedViews is a list of collection displayPreference IDs indicating in which order to collections should be shown.
-	OrderedViews []string `json:"OrderedViews"`
 	// MyMediaExcludes is a list of collection displayPreference IDs to exclude from the collection overview.
-	MyMediaExcludes            []string `json:"MyMediaExcludes"`
-	LatestItemsExcludes        []string `json:"LatestItemsExcludes"`
-	SubtitleLanguagePreference string   `json:"SubtitleLanguagePreference"`
-	CastReceiverId             string   `json:"CastReceiverId"`
+	// OrderedViews is a list of collection displayPreference IDs indicating in which order to collections should be shown.
+	CastReceiverId            string   `json:"CastReceiverId"`
+	DisplayCollectionsView    bool     `json:"DisplayCollectionsView"`
+	DisplayMissingEpisodes    bool     `json:"DisplayMissingEpisodes"`
+	EnableLocalPassword       bool     `json:"EnableLocalPassword"`
+	EnableNextEpisodeAutoPlay bool     `json:"EnableNextEpisodeAutoPlay"`
+	GroupedFolders            []string `json:"GroupedFolders"`
+	HidePlayedInLatest        bool     `json:"HidePlayedInLatest"`
+	LatestItemsExcludes       []string `json:"LatestItemsExcludes"`
+	// MyMediaExcludes is a list of collection displayPreference IDs to exclude from the collection overview.
+	MyMediaExcludes []string `json:"MyMediaExcludes"`
+	// OrderedViews is a list of collection displayPreference IDs indicating in which order to collections should be shown.
+	OrderedViews               []string `json:"OrderedViews"`
 	PlayDefaultAudioTrack      bool     `json:"PlayDefaultAudioTrack"`
-	DisplayMissingEpisodes     bool     `json:"DisplayMissingEpisodes"`
-	DisplayCollectionsView     bool     `json:"DisplayCollectionsView"`
-	EnableLocalPassword        bool     `json:"EnableLocalPassword"`
-	HidePlayedInLatest         bool     `json:"HidePlayedInLatest"`
 	RememberAudioSelections    bool     `json:"RememberAudioSelections"`
 	RememberSubtitleSelections bool     `json:"RememberSubtitleSelections"`
-	EnableNextEpisodeAutoPlay  bool     `json:"EnableNextEpisodeAutoPlay"`
+	SubtitleLanguagePreference string   `json:"SubtitleLanguagePreference"`
+	SubtitleMode               string   `json:"SubtitleMode"`
 }
 
 type JFUserPolicy struct {
-	IsAdministrator                  bool     `json:"IsAdministrator"`
-	IsHidden                         bool     `json:"IsHidden"`
-	EnableCollectionManagement       bool     `json:"EnableCollectionManagement"`
-	EnableSubtitleManagement         bool     `json:"EnableSubtitleManagement"`
-	EnableLyricManagement            bool     `json:"EnableLyricManagement"`
-	IsDisabled                       bool     `json:"IsDisabled"`
-	BlockedTags                      []string `json:"BlockedTags"`
-	AllowedTags                      []string `json:"AllowedTags"`
-	EnableUserPreferenceAccess       bool     `json:"EnableUserPreferenceAccess"`
-	AccessSchedules                  []string `json:"AccessSchedules"`
-	BlockUnratedItems                []string `json:"BlockUnratedItems"`
-	EnableRemoteControlOfOtherUsers  bool     `json:"EnableRemoteControlOfOtherUsers"`
-	EnableSharedDeviceControl        bool     `json:"EnableSharedDeviceControl"`
-	EnableRemoteAccess               bool     `json:"EnableRemoteAccess"`
-	EnableLiveTvManagement           bool     `json:"EnableLiveTvManagement"`
-	EnableLiveTvAccess               bool     `json:"EnableLiveTvAccess"`
-	EnableMediaPlayback              bool     `json:"EnableMediaPlayback"`
+	AccessSchedules          []string `json:"AccessSchedules"`
+	AllowedTags              []string `json:"AllowedTags"`
+	AuthenticationProviderID string   `json:"AuthenticationProviderId"`
+	BlockedChannels          []string `json:"BlockedChannels"`
+	BlockedMediaFolders      []string `json:"BlockedMediaFolders"`
+	BlockedTags              []string `json:"BlockedTags"`
+	BlockUnratedItems        []string `json:"BlockUnratedItems"`
+	EnableAllChannels        bool     `json:"EnableAllChannels"`
+	EnableAllDevices         bool     `json:"EnableAllDevices"`
+	// EnableAllFolders is true if the user has access to all media folders.
+	// If false, the user only has access to the folders specified in EnabledFolders.
+	EnableAllFolders                 bool     `json:"EnableAllFolders"`
 	EnableAudioPlaybackTranscoding   bool     `json:"EnableAudioPlaybackTranscoding"`
-	EnableVideoPlaybackTranscoding   bool     `json:"EnableVideoPlaybackTranscoding"`
-	EnablePlaybackRemuxing           bool     `json:"EnablePlaybackRemuxing"`
-	ForceRemoteSourceTranscoding     bool     `json:"ForceRemoteSourceTranscoding"`
+	EnableCollectionManagement       bool     `json:"EnableCollectionManagement"`
 	EnableContentDeletion            bool     `json:"EnableContentDeletion"`
 	EnableContentDeletionFromFolders []string `json:"EnableContentDeletionFromFolders"`
 	EnableContentDownloading         bool     `json:"EnableContentDownloading"`
-	EnableSyncTranscoding            bool     `json:"EnableSyncTranscoding"`
-	EnableMediaConversion            bool     `json:"EnableMediaConversion"`
-	EnabledDevices                   []string `json:"EnabledDevices"`
-	EnableAllDevices                 bool     `json:"EnableAllDevices"`
 	EnabledChannels                  []string `json:"EnabledChannels"`
-	EnableAllChannels                bool     `json:"EnableAllChannels"`
-	EnabledFolders                   []string `json:"EnabledFolders"`
-	EnableAllFolders                 bool     `json:"EnableAllFolders"`
-	InvalidLoginAttemptCount         int      `json:"InvalidLoginAttemptCount"`
-	LoginAttemptsBeforeLockout       int      `json:"LoginAttemptsBeforeLockout"`
-	MaxActiveSessions                int      `json:"MaxActiveSessions"`
-	EnablePublicSharing              bool     `json:"EnablePublicSharing"`
-	BlockedMediaFolders              []string `json:"BlockedMediaFolders"`
-	BlockedChannels                  []string `json:"BlockedChannels"`
-	RemoteClientBitrateLimit         int      `json:"RemoteClientBitrateLimit"`
-	AuthenticationProviderID         string   `json:"AuthenticationProviderId"`
-	PasswordResetProviderID          string   `json:"PasswordResetProviderId"`
-	SyncPlayAccess                   string   `json:"SyncPlayAccess"`
+	EnabledDevices                   []string `json:"EnabledDevices"`
+	// EnabledFolders is a list of media folders the user has access to.
+	// Only applicable if EnableAllFolders is false.
+	EnabledFolders                  []string `json:"EnabledFolders"`
+	EnableLiveTvAccess              bool     `json:"EnableLiveTvAccess"`
+	EnableLiveTvManagement          bool     `json:"EnableLiveTvManagement"`
+	EnableLyricManagement           bool     `json:"EnableLyricManagement"`
+	EnableMediaConversion           bool     `json:"EnableMediaConversion"`
+	EnableMediaPlayback             bool     `json:"EnableMediaPlayback"`
+	EnablePlaybackRemuxing          bool     `json:"EnablePlaybackRemuxing"`
+	EnablePublicSharing             bool     `json:"EnablePublicSharing"`
+	EnableRemoteAccess              bool     `json:"EnableRemoteAccess"`
+	EnableRemoteControlOfOtherUsers bool     `json:"EnableRemoteControlOfOtherUsers"`
+	EnableSharedDeviceControl       bool     `json:"EnableSharedDeviceControl"`
+	EnableSubtitleManagement        bool     `json:"EnableSubtitleManagement"`
+	EnableSyncTranscoding           bool     `json:"EnableSyncTranscoding"`
+	EnableUserPreferenceAccess      bool     `json:"EnableUserPreferenceAccess"`
+	EnableVideoPlaybackTranscoding  bool     `json:"EnableVideoPlaybackTranscoding"`
+	ForceRemoteSourceTranscoding    bool     `json:"ForceRemoteSourceTranscoding"`
+	InvalidLoginAttemptCount        int      `json:"InvalidLoginAttemptCount"`
+	// IsAdministrator is true if the user is an administrator.
+	IsAdministrator bool `json:"IsAdministrator"`
+	// IsDisabled is true if the user is disabled.
+	IsDisabled bool `json:"IsDisabled"`
+	// IsHidden is true if the user is hidden, /Users/Public does not list hidden users.
+	IsHidden                   bool   `json:"IsHidden"`
+	LoginAttemptsBeforeLockout int    `json:"LoginAttemptsBeforeLockout"`
+	MaxActiveSessions          int    `json:"MaxActiveSessions"`
+	PasswordResetProviderID    string `json:"PasswordResetProviderId"`
+	RemoteClientBitrateLimit   int    `json:"RemoteClientBitrateLimit"`
+	SyncPlayAccess             string `json:"SyncPlayAccess"`
+}
+
+type JFUserPasswordRequest struct {
+	CurrentPassword string `json:"CurrentPassword"`
+	CurrentPw       string `json:"CurrentPw"`
+	NewPw           string `json:"NewPw"`
+	ResetPassword   bool   `json:"ResetPassword"`
 }
 
 type JFAuthenticateUserByNameRequest struct {

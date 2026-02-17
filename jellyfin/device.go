@@ -14,28 +14,19 @@ func (j *Jellyfin) devicesGetHandler(w http.ResponseWriter, r *http.Request) {
 	if accessToken == nil {
 		return
 	}
-
-	dbuser, err := j.repo.GetUserByID(r.Context(), accessToken.UserID)
-	if err != nil {
-		apierror(w, ErrUserIDNotFound, http.StatusNotFound)
-		return
-	}
-
 	// Get all access tokens for this user
-	accessTokens, err := j.repo.GetAccessTokens(r.Context(), accessToken.UserID)
+	accessTokens, err := j.repo.GetAccessTokens(r.Context(), accessToken.User.ID)
 	if err != nil {
 		apierror(w, "error retrieving devices", http.StatusInternalServerError)
 		return
 	}
-
 	// Build device list based upon access tokens
 	var devices []JFDeviceItem
 	for _, t := range accessTokens {
-		d := j.makeJFDeviceItem(t, dbuser.Username)
+		d := j.makeJFDeviceItem(t, accessToken.User.Username)
 
 		devices = append(devices, d)
 	}
-
 	response := JFDeviceInfoResponse{
 		Items:            devices,
 		StartIndex:       0,
@@ -61,7 +52,7 @@ func (j *Jellyfin) devicesDeleteHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Get all access tokens for this user
-	accessTokens, err := j.repo.GetAccessTokens(r.Context(), accessToken.UserID)
+	accessTokens, err := j.repo.GetAccessTokens(r.Context(), accessToken.User.ID)
 	if err != nil {
 		apierror(w, "error retrieving sessions", http.StatusInternalServerError)
 		return
@@ -95,22 +86,13 @@ func (j *Jellyfin) devicesInfoHandler(w http.ResponseWriter, r *http.Request) {
 		apierror(w, "device id missing", http.StatusBadRequest)
 		return
 	}
-
-	dbuser, err := j.repo.GetUserByID(r.Context(), accessToken.UserID)
-	if err != nil {
-		apierror(w, ErrUserIDNotFound, http.StatusNotFound)
-		return
-	}
-
 	// Get all access tokens for this user
-	accessTokens, err := j.repo.GetAccessTokens(r.Context(), accessToken.UserID)
+	accessTokens, err := j.repo.GetAccessTokens(r.Context(), accessToken.User.ID)
 	if err != nil {
 		apierror(w, "error retrieving sessions", http.StatusInternalServerError)
 		return
 	}
-
 	// Find access token for the requested device id
-
 	var deviceToken model.AccessToken
 	var found bool
 	for _, t := range accessTokens {
@@ -124,8 +106,7 @@ func (j *Jellyfin) devicesInfoHandler(w http.ResponseWriter, r *http.Request) {
 		apierror(w, "Device not found", http.StatusNotFound)
 		return
 	}
-
-	device := j.makeJFDeviceItem(deviceToken, dbuser.Username)
+	device := j.makeJFDeviceItem(deviceToken, accessToken.User.Username)
 	serveJSON(device, w)
 }
 
@@ -163,7 +144,7 @@ func (j *Jellyfin) devicesOptionsHandler(w http.ResponseWriter, r *http.Request)
 func (j *Jellyfin) makeJFDeviceItem(accessToken model.AccessToken, user string) JFDeviceItem {
 	return JFDeviceItem{
 		ID:           accessToken.DeviceId,
-		LastUserID:   accessToken.UserID,
+		LastUserID:   accessToken.User.ID,
 		LastUserName: user,
 		Name:         accessToken.DeviceName,
 		AppName:      accessToken.ApplicationName,

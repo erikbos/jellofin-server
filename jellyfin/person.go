@@ -45,7 +45,7 @@ func (j *Jellyfin) personsHandler(w http.ResponseWriter, r *http.Request) {
 
 		// Populate persons list based on found person names
 		for _, name := range personNames {
-			if person, err := j.makeJFItemPerson(r.Context(), accessToken.UserID, makeJFPersonID(name)); err == nil {
+			if person, err := j.makeJFItemPerson(r.Context(), accessToken.User.ID, makeJFPersonID(name)); err == nil {
 				persons = append(persons, person)
 			}
 		}
@@ -61,7 +61,7 @@ func (j *Jellyfin) personsHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("personsHandler: found %d persons\n", len(personNames))
 		persons = make([]JFItem, 0, len(personNames))
 		for _, name := range personNames {
-			if person, err := j.makeJFItemPerson(r.Context(), accessToken.UserID, makeJFPersonID(name)); err == nil {
+			if person, err := j.makeJFItemPerson(r.Context(), accessToken.User.ID, makeJFPersonID(name)); err == nil {
 				persons = append(persons, person)
 			}
 		}
@@ -99,7 +99,7 @@ func (j *Jellyfin) personHandler(w http.ResponseWriter, r *http.Request) {
 		apierror(w, "Invalid person name", http.StatusBadRequest)
 		return
 	}
-	response, err := j.makeJFItemPerson(r.Context(), accessToken.UserID, makeJFPersonID(name))
+	response, err := j.makeJFItemPerson(r.Context(), accessToken.User.ID, makeJFPersonID(name))
 	if err != nil {
 		apierror(w, "could not create person item", http.StatusInternalServerError)
 		return

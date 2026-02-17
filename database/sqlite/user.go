@@ -83,17 +83,29 @@ func (s *SqliteRepo) UpsertUser(ctx context.Context, user *model.User) error {
 	return s.saveUserProperties(ctx, user.ID, user.Properties)
 }
 
+func (s *SqliteRepo) DeleteUser(ctx context.Context, userID string) error {
+	tx, _ := s.dbWriteHandle.BeginTxx(ctx, nil)
+	defer tx.Rollback()
+	const query = `DELETE FROM users WHERE id = ?`
+	_, err := tx.ExecContext(ctx, query, userID)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // Database keys for user properties
 const (
-	propAdmin           = "admin"
-	propPublic          = "public"
-	propDisabled        = "disabled"
-	propCanDownload     = "candownload"
-	propEnabledFolders  = "enabledfolders"
-	propOrderedViews    = "orderedviews"
-	propMyMediaExcludes = "mymediaexcludes"
-	propAllowTags       = "allowtags"
-	propBlockTags       = "blocktags"
+	propAdmin            = "admin"
+	propPublic           = "public"
+	propDisabled         = "disabled"
+	propCanDownload      = "candownload"
+	propEnableAllFolders = "enableallfolders"
+	propEnabledFolders   = "enabledfolders"
+	propOrderedViews     = "orderedviews"
+	propMyMediaExcludes  = "mymediaexcludes"
+	propAllowTags        = "allowtags"
+	propBlockTags        = "blocktags"
 )
 
 func (s *SqliteRepo) loadUserProperties(ctx context.Context, userID string) (model.UserProperties, error) {
@@ -118,6 +130,8 @@ func (s *SqliteRepo) loadUserProperties(ctx context.Context, userID string) (mod
 			props.Disabled = value == "1"
 		case propCanDownload:
 			props.BlockDownload = value == "1"
+		case propEnableAllFolders:
+			props.EnableAllFolders = value == "1"
 		case propEnabledFolders:
 			props.EnabledFolders = splitComma(value)
 		case propOrderedViews:
@@ -162,6 +176,7 @@ func (s *SqliteRepo) saveUserProperties(ctx context.Context, userID string, prop
 		{propPublic, boolToString(props.Public)},
 		{propDisabled, boolToString(props.Disabled)},
 		{propCanDownload, boolToString(props.BlockDownload)},
+		{propEnableAllFolders, boolToString(props.EnableAllFolders)},
 		{propEnabledFolders, strings.Join(props.EnabledFolders, ",")},
 		{propOrderedViews, strings.Join(props.OrderedViews, ",")},
 		{propMyMediaExcludes, strings.Join(props.MyMediaExcludes, ",")},

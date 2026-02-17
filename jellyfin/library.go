@@ -13,28 +13,6 @@ import (
 	"github.com/erikbos/jellofin-server/idhash"
 )
 
-// /Library/MediaFolders
-//
-// libraryMediaFoldersHandler returns all collections available to the user
-func (j *Jellyfin) libraryMediaFoldersHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
-		return
-	}
-	// todo: should this take EnabledFolders into account? Or is that only for the /UserViews endpoint?
-	items, err := j.makeJFCollectionRootOverview(r.Context(), accessToken.UserID)
-	if err != nil {
-		apierror(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	response := JFUserViewsResponse{
-		Items:            items,
-		TotalRecordCount: len(items),
-		StartIndex:       0,
-	}
-	serveJSON(response, w)
-}
-
 // /Library/VirtualFolders
 //
 // libraryVirtualFoldersHandler returns the available collections as virtual folders
@@ -70,37 +48,70 @@ func (j *Jellyfin) usersViewsHandler(w http.ResponseWriter, r *http.Request) {
 	if accessToken == nil {
 		return
 	}
-	items, err := j.makeJFCollectionRootOverview(r.Context(), accessToken.UserID)
+	items, err := j.makeJFCollectionRootOverview(r.Context(), accessToken.User.ID)
 	if err != nil {
 		apierror(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	// Now we need to apply the user configured order of views
-	dbuser, err := j.repo.GetUserByID(r.Context(), accessToken.UserID)
-	if err != nil {
-		apierror(w, ErrUserIDNotFound, http.StatusNotFound)
-		return
+
+	log.Printf("usersViewsHandler: EnableAllFolders: %v, EnabledFolders: %v, OrderedViews: %v, MyMediaExcludes: %v",
+		accessToken.User.Properties.EnableAllFolders, accessToken.User.Properties.EnabledFolders, accessToken.User.Properties.OrderedViews, accessToken.User.Properties.MyMediaExcludes)
+
+	for _, item := range items {
+		log.Printf("usersViewsHandler: before filtering item: %s, DisplayPreferencesID: %s", item.ID, item.DisplayPreferencesID)
 	}
+
+	// If EnableAllFolders is false, we need to filter the items based on EnabledFolders
+	if !accessToken.User.Properties.EnableAllFolders {
+		filteredItems := make([]JFItem, 0, len(items))
+		for _, item := range items {
+			if slices.Contains(accessToken.User.Properties.EnabledFolders, item.ID) {
+				filteredItems = append(filteredItems, item)
+			}
+		}
+		items = filteredItems
+
+		for _, item := range items {
+			log.Printf("usersViewsHandler: after filtering item: %s, DisplayPreferencesID: %s", item.ID, item.DisplayPreferencesID)
+		}
+	}
+
 	queryparams := r.URL.Query()
-	includeHidden := queryparams.Get("includeHidden")
+	includeHidden := queryparams.Get("includeHidden") == "true"
+
 	// If the user has configured an order of views, we need to order the items based on that.
 	// And exclude collection items unless includeHidden is true
-	if len(dbuser.Properties.OrderedViews) != 0 {
+	// Any items that are not in the user's ordered views will be added at the end.
+	if len(accessToken.User.Properties.OrderedViews) != 0 {
 		// Order the items based on user preferences, and exclude items in my media excludes
 		orderedItems := make([]JFItem, 0, len(items))
-		for _, displayPreferenceID := range dbuser.Properties.OrderedViews {
-			if includeHidden != "true" && slices.Contains(dbuser.Properties.MyMediaExcludes, displayPreferenceID) {
+		seenItems := make(map[string]struct{})
+		for _, displayPreferenceID := range accessToken.User.Properties.OrderedViews {
+			// If includeHidden is false, we need to exclude items that are in MyMediaExcludes
+			if !includeHidden && slices.Contains(accessToken.User.Properties.MyMediaExcludes, displayPreferenceID) {
 				continue
 			}
 			for _, item := range items {
 				if item.DisplayPreferencesID == displayPreferenceID {
 					orderedItems = append(orderedItems, item)
+					seenItems[item.ID] = struct{}{}
 					break
 				}
 			}
 		}
+		// Append any items that were not included in the user's ordered views at the end of the list
+		for _, item := range items {
+			if _, exists := seenItems[item.ID]; !exists {
+				orderedItems = append(orderedItems, item)
+			}
+		}
 		items = orderedItems
 	}
+
+	for _, item := range items {
+		log.Printf("usersViewsHandler: after ordering item: %s, DisplayPreferencesID: %s", item.ID, item.DisplayPreferencesID)
+	}
+
 	response := JFUserViewsResponse{
 		Items:            items,
 		TotalRecordCount: len(items),

@@ -43,7 +43,7 @@ func (j *Jellyfin) showsEpisodesHandler(w http.ResponseWriter, r *http.Request) 
 	// Create API response for all episodes of the show
 	episodes := make([]JFItem, 0)
 	for _, s := range show.Seasons {
-		if episodesOfSeason, err := j.makeJFEpisodesOverview(r.Context(), accessToken.UserID, &s); err == nil {
+		if episodesOfSeason, err := j.makeJFEpisodesOverview(r.Context(), accessToken.User.ID, &s); err == nil {
 			episodes = append(episodes, episodesOfSeason...)
 		}
 	}
@@ -85,7 +85,7 @@ func (j *Jellyfin) showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	seasons, err := j.makeJFSeasonsOverview(r.Context(), accessToken.UserID, show)
+	seasons, err := j.makeJFSeasonsOverview(r.Context(), accessToken.User.ID, show)
 	if err != nil {
 		apierror(w, "Could not generate seasons overview", http.StatusInternalServerError)
 		return
@@ -129,7 +129,7 @@ func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 	seriesID := queryparams.Get("seriesId")
 
 	// todo: pass seriesId/seasonId to filter next up items to a specific series/season
-	recentlyWatchedIDs, err := j.repo.GetRecentlyWatched(r.Context(), accessToken.UserID, true)
+	recentlyWatchedIDs, err := j.repo.GetRecentlyWatched(r.Context(), accessToken.User.ID, true)
 	if err != nil {
 		apierror(w, "Could not get recently watched items list", http.StatusInternalServerError)
 		return
@@ -143,7 +143,7 @@ func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 	items := make([]JFItem, 0, len(nextUpItemIDs))
 	for _, id := range nextUpItemIDs {
 		if _, i, s, e := j.collections.GetEpisodeByID(id); i != nil {
-			jfitem, err := j.makeJFItemEpisode(r.Context(), accessToken.UserID, e, s.ID())
+			jfitem, err := j.makeJFItemEpisode(r.Context(), accessToken.User.ID, e, s.ID())
 			if err == nil && j.applyItemFilter(&jfitem, queryparams) {
 				items = append(items, jfitem)
 			}

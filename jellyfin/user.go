@@ -1,9 +1,14 @@
 package jellyfin
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
-	"log"
+	"image"
+	"image/color"
+	"image/draw"
+	"image/png"
 	"net/http"
 	"strings"
 	"time"
@@ -27,25 +32,38 @@ func (j *Jellyfin) usersGetHandler(w http.ResponseWriter, r *http.Request) {
 	if accessToken == nil {
 		return
 	}
-	var administratorRequest bool
-	// Does access token have have admininistrator privileges?
-	dbuser, err := j.repo.GetUserByID(r.Context(), accessToken.UserID)
-	if err == nil {
-		administratorRequest = dbuser.Properties.Admin
-	}
 	// Get all users
 	users, err := j.repo.GetAllUsers(r.Context())
 	if err != nil {
 		apierror(w, "failed to get users", http.StatusInternalServerError)
 		return
 	}
+
+	queryParams := r.URL.Query()
+	filterIsHidden := queryParams.Get("isHidden")
+	filterIsDisabled := queryParams.Get("isDisabled")
+
 	response := make([]JFUser, 0, len(users))
 	for _, dbuser := range users {
 		user := j.makeJFUser(r.Context(), &dbuser)
-		// Include user if requestor has administrator privileges
-		if administratorRequest ||
-			// Include user if requestor is the user
-			accessToken.UserID == user.Id ||
+		// Apply isHidden filter if specified
+		if filterIsHidden != "" {
+			wantHidden := filterIsHidden == "true"
+			if user.Policy.IsHidden != wantHidden {
+				continue
+			}
+		}
+		// Apply isDisabled filter if specified
+		if filterIsDisabled != "" {
+			wantDisabled := filterIsDisabled == "true"
+			if user.Policy.IsDisabled != wantDisabled {
+				continue
+			}
+		}
+		// Include user if requestor is the user
+		if accessToken.User.ID == user.Id ||
+			// Include user if requestor has administrator privileges
+			accessToken.User.Properties.Admin ||
 			// Include user if user is public
 			!user.Policy.IsHidden {
 			response = append(response, user)
@@ -62,15 +80,19 @@ func (j *Jellyfin) usersPostHandler(w http.ResponseWriter, r *http.Request) {
 	if accessToken == nil {
 		return
 	}
-	vars := mux.Vars(r)
-	userID := vars["userId"]
+	queryparams := r.URL.Query()
+	userID := queryparams.Get("userId")
+	// log.Printf("usersPostHandler: accessToken.User.ID=%s, userID=%s\n", accessToken.User.ID, userID)
+	// log.Printf("usersPostHandler: Admins=%v\n", accessToken.User.Properties.Admin)
+
+	// Only allow if requester is an administrator or the user themselve
+	if !accessToken.User.Properties.Admin && accessToken.User.ID != userID {
+		apierror(w, "forbidden to update user policy", http.StatusForbidden)
+		return
+	}
 	dbuser, err := j.repo.GetUserByID(r.Context(), userID)
 	if err != nil {
 		apierror(w, ErrUserIDNotFound, http.StatusNotFound)
-		return
-	}
-	if accessToken.UserID != userID && !dbuser.Properties.Admin {
-		apierror(w, "forbidden to update user", http.StatusForbidden)
 		return
 	}
 	var req JFUser
@@ -78,7 +100,7 @@ func (j *Jellyfin) usersPostHandler(w http.ResponseWriter, r *http.Request) {
 		apierror(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-	dbuser.Username = req.Name
+	dbuser.Username = strings.ToLower(req.Name)
 	parseJFUserPolicy(req.Policy, &dbuser.Properties)
 	parseJFUserConfiguration(req.Configuration, &dbuser.Properties)
 	if err = j.repo.UpsertUser(r.Context(), dbuser); err != nil {
@@ -97,19 +119,14 @@ func (j *Jellyfin) usersMeHandler(w http.ResponseWriter, r *http.Request) {
 	if accessToken == nil {
 		return
 	}
-	dbuser, err := j.repo.GetUserByID(r.Context(), accessToken.UserID)
-	if err != nil {
-		apierror(w, ErrUserIDNotFound, http.StatusNotFound)
-		return
-	}
-	response := j.makeJFUser(r.Context(), dbuser)
+	response := j.makeJFUser(r.Context(), &accessToken.User)
 	serveJSON(response, w)
 }
 
 // GET /Users/{user}
 //
-// usersHandler returns a user
-func (j *Jellyfin) usersHandler(w http.ResponseWriter, r *http.Request) {
+// userGetHandler returns a user
+func (j *Jellyfin) userGetHandler(w http.ResponseWriter, r *http.Request) {
 	accessToken := j.getAccessTokenDetails(w, r)
 	if accessToken == nil {
 		return
@@ -121,13 +138,35 @@ func (j *Jellyfin) usersHandler(w http.ResponseWriter, r *http.Request) {
 		apierror(w, ErrUserIDNotFound, http.StatusNotFound)
 		return
 	}
-	// Only allow access to user if requestor is the user or user is public
-	if !dbuser.Properties.Public && accessToken.UserID != userID {
+	// Allow if requester is an administrator, user themselves, or user is public
+	if !accessToken.User.Properties.Admin && accessToken.User.ID != userID && !dbuser.Properties.Public {
 		apierror(w, "forbidden to access user", http.StatusForbidden)
 		return
 	}
 	response := j.makeJFUser(r.Context(), dbuser)
 	serveJSON(response, w)
+}
+
+// DELETE /Users/{user}
+//
+// userDeleteHandler deletes a user
+func (j *Jellyfin) userDeleteHandler(w http.ResponseWriter, r *http.Request) {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
+		return
+	}
+	vars := mux.Vars(r)
+	userID := vars["userid"]
+	// Only allow if requester is an administrator and not deleting themselves
+	if !accessToken.User.Properties.Admin || accessToken.User.ID == userID {
+		apierror(w, "forbidden to delete user", http.StatusForbidden)
+		return
+	}
+	if err := j.repo.DeleteUser(r.Context(), userID); err != nil {
+		apierror(w, "failed to delete user", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // GET /Users/Public
@@ -158,22 +197,23 @@ func (j *Jellyfin) usersConfigurationHandler(w http.ResponseWriter, r *http.Requ
 	}
 	vars := mux.Vars(r)
 	userID := vars["userid"]
+	// Only allow if requester is an administrator or the user themselves
+	if !accessToken.User.Properties.Admin && accessToken.User.ID != userID {
+		apierror(w, "forbidden to update user policy", http.StatusForbidden)
+		return
+	}
 	dbuser, err := j.repo.GetUserByID(r.Context(), userID)
 	if err != nil {
 		apierror(w, ErrUserIDNotFound, http.StatusNotFound)
 		return
 	}
-	if accessToken.UserID != userID && !dbuser.Properties.Admin {
-		apierror(w, "forbidden to update user configuration", http.StatusForbidden)
-		return
-	}
-	log.Printf("Looking up user by id: %s\n", userID)
+	// log.Printf("Looking up user by id: %s\n", userID)
 	var req JFUserConfiguration
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		apierror(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-	log.Printf("Updating user configuration %+v", req)
+	// log.Printf("Updating user configuration %+v", req)
 	parseJFUserConfiguration(req, &dbuser.Properties)
 	if err = j.repo.UpsertUser(r.Context(), dbuser); err != nil {
 		apierror(w, "failed to update user configuration", http.StatusInternalServerError)
@@ -192,14 +232,14 @@ func (j *Jellyfin) usersPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	vars := mux.Vars(r)
 	userID := vars["userid"]
-	log.Printf("Looking up user by id: %s\n", userID)
+	// Only allow if requester is an administrator or the user themselves
+	if !accessToken.User.Properties.Admin && accessToken.User.ID != userID {
+		apierror(w, "forbidden to update user policy", http.StatusForbidden)
+		return
+	}
 	dbuser, err := j.repo.GetUserByID(r.Context(), userID)
 	if err != nil {
 		apierror(w, ErrUserIDNotFound, http.StatusNotFound)
-		return
-	}
-	if accessToken.UserID != userID && !dbuser.Properties.Admin {
-		apierror(w, "forbidden to update user policy", http.StatusForbidden)
 		return
 	}
 	var req JFUserPolicy
@@ -207,10 +247,52 @@ func (j *Jellyfin) usersPolicyHandler(w http.ResponseWriter, r *http.Request) {
 		apierror(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-	log.Printf("Updating user policy %+v", req)
+	// log.Printf("Updating user policy %+v", req)
 	parseJFUserPolicy(req, &dbuser.Properties)
 	if err = j.repo.UpsertUser(r.Context(), dbuser); err != nil {
 		apierror(w, "failed to update user policy", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /Users/Password
+//
+// usersPasswordHandler updates user password
+func (j *Jellyfin) usersPasswordHandler(w http.ResponseWriter, r *http.Request) {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
+		return
+	}
+	queryparams := r.URL.Query()
+	userID := queryparams.Get("userId")
+	// Only allow if requester is an administrator or the user themselves
+	if !accessToken.User.Properties.Admin && accessToken.User.ID != userID {
+		apierror(w, "forbidden to update user password", http.StatusForbidden)
+		return
+	}
+	dbuser, err := j.repo.GetUserByID(r.Context(), userID)
+	if err != nil {
+		apierror(w, ErrUserIDNotFound, http.StatusNotFound)
+		return
+	}
+	var req JFUserPasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		apierror(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.NewPw == "" {
+		apierror(w, "new password is required", http.StatusBadRequest)
+		return
+	}
+	hashedPassword, err := hashPassword(req.NewPw)
+	if err != nil {
+		apierror(w, "failed to hash password", http.StatusInternalServerError)
+		return
+	}
+	dbuser.Password = hashedPassword
+	if err = j.repo.UpsertUser(r.Context(), dbuser); err != nil {
+		apierror(w, "failed to update user password", http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -255,10 +337,14 @@ func (j *Jellyfin) makeJFUser(ctx context.Context, user *model.User) JFUser {
 		HasConfiguredPassword:     true,
 		HasConfiguredEasyPassword: false,
 		EnableAutoLogin:           false,
-		LastLoginDate:             time.Now().UTC(),
-		LastActivityDate:          time.Now().UTC(),
 		Configuration:             makeJFUserConfiguration(user),
 		Policy:                    makeJFUserPolicy(user),
+	}
+	if !user.LastLogin.IsZero() {
+		u.LastLoginDate = &user.LastLogin
+	}
+	if !user.LastUsed.IsZero() {
+		u.LastActivityDate = &user.LastUsed
 	}
 	// Set imagetag if user has an image
 	if _, err := j.repo.HasImage(ctx, user.ID, ImageTypeProfile); err == nil {
@@ -288,13 +374,14 @@ func parseJFUserConfiguration(config JFUserConfiguration, props *model.UserPrope
 	props.OrderedViews = config.OrderedViews
 }
 
+// makeJFUserPolicy creates a JFUserPolicy from the user properties
 func makeJFUserPolicy(user *model.User) JFUserPolicy {
 	return JFUserPolicy{
 		AccessSchedules:                  []string{},
-		AllowedTags:                      []string{},
+		AllowedTags:                      user.Properties.AllowTags,
 		BlockedChannels:                  []string{},
 		BlockedMediaFolders:              []string{},
-		BlockedTags:                      []string{},
+		BlockedTags:                      user.Properties.BlockTags,
 		BlockUnratedItems:                []string{},
 		EnabledChannels:                  []string{},
 		EnabledDevices:                   []string{},
@@ -304,7 +391,7 @@ func makeJFUserPolicy(user *model.User) JFUserPolicy {
 		EnableMediaPlayback:              true,
 		EnableRemoteAccess:               true,
 		EnableAllDevices:                 true,
-		EnableAllFolders:                 true,
+		EnableAllFolders:                 user.Properties.EnableAllFolders,
 		AuthenticationProviderID:         "DefaultAuthenticationProvider",
 		PasswordResetProviderID:          "DefaultPasswordResetProvider",
 		SyncPlayAccess:                   "CreateAndJoinGroups",
@@ -314,7 +401,11 @@ func makeJFUserPolicy(user *model.User) JFUserPolicy {
 	}
 }
 
+// parseJFUserPolicy parses the user policy from the request and updates the user properties
 func parseJFUserPolicy(policy JFUserPolicy, props *model.UserProperties) {
+	props.AllowTags = policy.AllowedTags
+	props.BlockTags = policy.BlockedTags
+	props.EnableAllFolders = policy.EnableAllFolders
 	props.EnabledFolders = policy.EnabledFolders
 	props.BlockDownload = policy.EnableContentDownloading
 	props.Admin = policy.IsAdministrator
@@ -324,7 +415,7 @@ func parseJFUserPolicy(policy JFUserPolicy, props *model.UserProperties) {
 
 // createUser creates a new user in the database
 func (j *Jellyfin) createUser(context context.Context, username, password string) (*model.User, error) {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hashedPassword, err := hashPassword(password)
 	if err != nil {
 		return nil, err
 	}
@@ -333,10 +424,70 @@ func (j *Jellyfin) createUser(context context.Context, username, password string
 		Username: strings.ToLower(username),
 		Password: string(hashedPassword),
 		Created:  time.Now().UTC(),
-		LastUsed: time.Now().UTC(),
+		Properties: model.UserProperties{
+			Admin:  false,
+			Public: false,
+		},
 	}
 	if err = j.repo.UpsertUser(context, modelUser); err != nil {
 		return nil, err
 	}
+	// Generate and store identicon avatar for this new user
+	if avatarMetadata, avatar, err := generateIdenticon(username); err == nil {
+		_ = j.repo.StoreImage(context, modelUser.ID, ImageTypeProfile, avatarMetadata, avatar)
+	}
 	return modelUser, nil
+}
+
+// hashPassword hashes a password
+func hashPassword(password string) (string, error) {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hashedPassword), nil
+}
+
+// generateIdenticon generates a PNG avatar based on seed string
+func generateIdenticon(seed string) (model.ImageMetadata, []byte, error) {
+	const size int = 512
+
+	hash := sha256.Sum256([]byte(seed))
+	img := image.NewRGBA(image.Rect(0, 0, size, size))
+
+	// background
+	bg := color.RGBA{240, 240, 240, 255}
+	draw.Draw(img, img.Bounds(), &image.Uniform{bg}, image.Point{}, draw.Src)
+
+	// derive color
+	avatarColor := color.RGBA{R: hash[0], G: hash[1], B: hash[2], A: 255}
+
+	grid := 5        // draw 5x5 grid, mirroring left half to right
+	s := size / grid // size of each cell in the grid
+	index := 3       // Skip first 3 bytes of hash as they are used for color
+	for y := range grid {
+		for x := 0; x < (grid+1)/2; x++ {
+			if hash[index]%2 == 0 {
+				// left cell
+				rect := image.Rect(x*s, y*s, (x+1)*s, (y+1)*s)
+				draw.Draw(img, rect, &image.Uniform{avatarColor}, image.Point{}, draw.Src)
+				// mirrored right cell
+				mirrorX := grid - 1 - x
+				rectMirror := image.Rect(mirrorX*s, y*s, (mirrorX+1)*s, (y+1)*s)
+				draw.Draw(img, rectMirror, &image.Uniform{avatarColor}, image.Point{}, draw.Src)
+			}
+			index++
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		return model.ImageMetadata{}, nil, err
+	}
+	avatarMeta := model.ImageMetadata{
+		MimeType: "image/png",
+		FileSize: buf.Len(),
+		Etag:     makeImageEtag(buf.Bytes()),
+		Updated:  time.Now().UTC(),
+	}
+	return avatarMeta, buf.Bytes(), nil
 }

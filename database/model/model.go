@@ -42,6 +42,8 @@ type UserProperties struct {
 	Disabled bool
 	// Public indicates if the user is visible to others.
 	Public bool
+	// EnableAllFolders indicates if the user has access to all folders (collections) by default.
+	EnableAllFolders bool
 	// EnabledFolders is a list of collection item IDs that should be enabled for the user.
 	EnabledFolders []string
 	// OrderedViews is a list of collection displayPreferenceIDs in the order they should be displayed for the user.
@@ -56,8 +58,10 @@ type UserProperties struct {
 
 // AccessToken represents an access token for a user.
 type AccessToken struct {
-	// UserID is the ID of the user associated with the token.
-	UserID string
+	// User is the user associated with the access token.
+	User User
+	// // UserID is the ID of the user associated with the token.
+	// UserID string
 	// Token is the access token string.
 	Token string
 	// DeviceId is the unique identifier for the device.

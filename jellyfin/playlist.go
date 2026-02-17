@@ -104,7 +104,7 @@ func (j *Jellyfin) getPlaylistHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	playlistID := vars["playlist"]
 
-	playlist, err := j.repo.GetPlaylist(r.Context(), accessToken.UserID, trimPrefix(playlistID))
+	playlist, err := j.repo.GetPlaylist(r.Context(), accessToken.User.ID, trimPrefix(playlistID))
 	// log.Printf("querying playlist: %+v, %+v\n", playlist, err)
 	if err != nil {
 		apierror(w, "Playlist not found", http.StatusNotFound)
@@ -131,7 +131,7 @@ func (j *Jellyfin) getPlaylistItemsHandler(w http.ResponseWriter, r *http.Reques
 	vars := mux.Vars(r)
 	playlistID := vars["playlist"]
 
-	playlist, err := j.repo.GetPlaylist(r.Context(), accessToken.UserID, trimPrefix(playlistID))
+	playlist, err := j.repo.GetPlaylist(r.Context(), accessToken.User.ID, trimPrefix(playlistID))
 	if err != nil {
 		apierror(w, "Playlist not found", http.StatusNotFound)
 		return
@@ -141,7 +141,7 @@ func (j *Jellyfin) getPlaylistItemsHandler(w http.ResponseWriter, r *http.Reques
 	for _, itemID := range playlist.ItemIDs {
 		c, i := j.collections.GetItemByID(itemID)
 		if c != nil || i != nil {
-			jfitem, err := j.makeJFItem(r.Context(), accessToken.UserID, i, idhash.IdHash(c.Name))
+			jfitem, err := j.makeJFItem(r.Context(), accessToken.User.ID, i, idhash.IdHash(c.Name))
 			if err != nil {
 				apierror(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -175,7 +175,7 @@ func (j *Jellyfin) addPlaylistItemsHandler(w http.ResponseWriter, r *http.Reques
 		itemIDs = append(itemIDs, trimPrefix(ID))
 	}
 
-	if err := j.repo.AddItemsToPlaylist(r.Context(), accessToken.UserID, trimPrefix(playlistID), itemIDs); err != nil {
+	if err := j.repo.AddItemsToPlaylist(r.Context(), accessToken.User.ID, trimPrefix(playlistID), itemIDs); err != nil {
 		apierror(w, "Failed to add items", http.StatusInternalServerError)
 		return
 	}
@@ -235,7 +235,7 @@ func (j *Jellyfin) getPlaylistAllUsersHandler(w http.ResponseWriter, r *http.Req
 	}
 	response := []JFPlaylistAccess{
 		{
-			Users:   []string{accessToken.UserID},
+			Users:   []string{accessToken.User.ID},
 			Canedit: true,
 		},
 	}
@@ -251,7 +251,7 @@ func (j *Jellyfin) getPlaylistUsersHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	response := JFPlaylistAccess{
-		Users:   []string{accessToken.UserID},
+		Users:   []string{accessToken.User.ID},
 		Canedit: true,
 	}
 	serveJSON(response, w)

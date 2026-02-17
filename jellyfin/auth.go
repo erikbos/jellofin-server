@@ -91,7 +91,7 @@ func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http
 	// We always create a new access token on authentication
 	newToken := model.AccessToken{
 		Token:    rand.Text(),
-		UserID:   user.ID,
+		User:     *user,
 		Created:  time.Now().UTC(),
 		LastUsed: time.Now().UTC(),
 	}

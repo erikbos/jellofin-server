@@ -3,7 +3,6 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	"log"
 
 	"github.com/erikbos/jellofin-server/database/model"
 )
@@ -37,7 +36,7 @@ func (s *SqliteRepo) GetImage(ctx context.Context, itemID, imageType string) (me
 func (s *SqliteRepo) StoreImage(ctx context.Context, itemID string, imageType string, metadata model.ImageMetadata, data []byte) error {
 	const query = `REPLACE INTO images (itemid, type, mimetype, etag, updated, filesize, data) VALUES (?, ?, ?, ?, ?, ?, ?)`
 	_, err := s.dbWriteHandle.ExecContext(ctx, query, itemID, imageType, metadata.MimeType, metadata.Etag, metadata.Updated, metadata.FileSize, data)
-	log.Printf("Stored image for itemID=%s, type=%s, size=%d bytes, err: %v", itemID, imageType, metadata.FileSize, err)
+	// log.Printf("Stored image for itemID=%s, type=%s, size=%d bytes, err: %v", itemID, imageType, metadata.FileSize, err)
 	return err
 }
 

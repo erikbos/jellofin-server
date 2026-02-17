@@ -24,7 +24,7 @@ func (j *Jellyfin) studiosHandler(w http.ResponseWriter, r *http.Request) {
 	// Get all items for which we need to get studios.
 	queryparams := r.URL.Query()
 	parentID := queryparams.Get("parentId")
-	items, err := j.getJFItems(r.Context(), accessToken.UserID, parentID)
+	items, err := j.getJFItems(r.Context(), accessToken.User.ID, parentID)
 	if err != nil {
 		apierror(w, "Failed to get items", http.StatusInternalServerError)
 		return
@@ -38,7 +38,7 @@ func (j *Jellyfin) studiosHandler(w http.ResponseWriter, r *http.Request) {
 			if studio.Name != "" {
 				if _, exists := studioSet[studio.ID]; !exists {
 					studioSet[studio.ID] = struct{}{}
-					if studioItem, err := j.makeJFItemStudio(r.Context(), accessToken.UserID, studio.ID); err == nil {
+					if studioItem, err := j.makeJFItemStudio(r.Context(), accessToken.User.ID, studio.ID); err == nil {
 						studios = append(studios, studioItem)
 					}
 				}
@@ -77,7 +77,7 @@ func (j *Jellyfin) studioHandler(w http.ResponseWriter, r *http.Request) {
 		apierror(w, "Invalid studio name", http.StatusBadRequest)
 		return
 	}
-	response, err := j.makeJFItemStudio(r.Context(), accessToken.UserID, makeJFStudioID(studio))
+	response, err := j.makeJFItemStudio(r.Context(), accessToken.User.ID, makeJFStudioID(studio))
 	if err != nil {
 		apierror(w, "Studio not found", http.StatusNotFound)
 		return

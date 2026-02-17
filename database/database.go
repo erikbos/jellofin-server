@@ -30,6 +30,8 @@ type UserRepo interface {
 	GetAllUsers(ctx context.Context) (users []model.User, err error)
 	// UpsertUser upserts a user into the database.
 	UpsertUser(ctx context.Context, user *model.User) (err error)
+	// DeleteUser deletes a user from the database.
+	DeleteUser(ctx context.Context, userID string) error
 }
 
 // AccessTokenRepo defines access token operations

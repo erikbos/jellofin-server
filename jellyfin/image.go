@@ -171,7 +171,7 @@ func (j *Jellyfin) userImagePostHandler(w http.ResponseWriter, r *http.Request) 
 		apierror(w, "userId parameter is required", http.StatusBadRequest)
 		return
 	}
-	if userID != accessToken.UserID {
+	if userID != accessToken.User.ID {
 		apierror(w, "Cannot upload image for another user", http.StatusForbidden)
 		return
 	}
@@ -192,7 +192,7 @@ func (j *Jellyfin) userImageDeleteHandler(w http.ResponseWriter, r *http.Request
 		apierror(w, "userId parameter is required", http.StatusBadRequest)
 		return
 	}
-	if userID != accessToken.UserID {
+	if userID != accessToken.User.ID {
 		apierror(w, "Cannot delete image for another user", http.StatusForbidden)
 		return
 	}

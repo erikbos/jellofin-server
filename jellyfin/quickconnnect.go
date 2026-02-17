@@ -26,7 +26,7 @@ func (j *Jellyfin) quickConnectAuthorizeHandler(w http.ResponseWriter, r *http.R
 	userID := queryparams.Get("userId")
 	code := queryparams.Get("code")
 
-	if userID != accessToken.UserID {
+	if userID != accessToken.User.ID {
 		apierror(w, "userID does not match access token", http.StatusForbidden)
 		return
 	}

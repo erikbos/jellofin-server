@@ -32,7 +32,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	itemID := vars["item"]
 
-	response, err := j.makeJFItemByID(r.Context(), accessToken.UserID, itemID)
+	response, err := j.makeJFItemByID(r.Context(), accessToken.User.ID, itemID)
 	if err != nil {
 		apierror(w, err.Error(), http.StatusNotFound)
 		return
@@ -67,7 +67,7 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 		if parentID != "" {
 			// Get list of items based upon provided parentID, this means
 			// we are fetching items for a specific collection, season or series.
-			items, err = j.getJFItemsByParentID(r.Context(), accessToken.UserID, parentID)
+			items, err = j.getJFItemsByParentID(r.Context(), accessToken.User.ID, parentID)
 			if err != nil {
 				apierror(w, err.Error(), http.StatusNotFound)
 				return
@@ -85,7 +85,7 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 			// (1) Handle provided "ids", we fetch these directly by ID.
 			var itemsFetchedByIDs bool
 			if ids := queryparams.Get("ids"); ids != "" {
-				items, err = j.makeJFItemByIDs(r.Context(), accessToken.UserID, strings.Split(ids, ","))
+				items, err = j.makeJFItemByIDs(r.Context(), accessToken.User.ID, strings.Split(ids, ","))
 				if err != nil {
 					apierror(w, err.Error(), http.StatusInternalServerError)
 					return
@@ -99,7 +99,7 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 
 			// (2) Get top-level collection items if no items found by IDs
 			if !itemsFetchedByIDs {
-				items, err = j.makeJFCollectionRootOverview(r.Context(), accessToken.UserID)
+				items, err = j.makeJFCollectionRootOverview(r.Context(), accessToken.User.ID)
 				if err != nil {
 					apierror(w, err.Error(), http.StatusInternalServerError)
 					return
@@ -108,7 +108,7 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 
 			// (3) No items found so far, add all media items recursively
 			if !itemsFetchedByIDs && strings.EqualFold(queryparams.Get("recursive"), "true") {
-				allitems, err := j.getJFItemsAll(r.Context(), accessToken.UserID)
+				allitems, err := j.getJFItemsAll(r.Context(), accessToken.User.ID)
 				if err != nil {
 					apierror(w, err.Error(), http.StatusNotFound)
 					return
@@ -132,7 +132,7 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 		items = make([]JFItem, 0, len(foundItemIDs))
 		for _, id := range foundItemIDs {
 			c, i := j.collections.GetItemByID(id)
-			jfitem, err := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID)
+			jfitem, err := j.makeJFItem(r.Context(), accessToken.User.ID, i, c.ID)
 			if err != nil {
 				apierror(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -178,14 +178,14 @@ func (j *Jellyfin) usersItemsLatestHandler(w http.ResponseWriter, r *http.Reques
 	var err error
 	// Get list of items based upon provided parentID
 	if parentID != "" {
-		items, err = j.getJFItemsByParentID(r.Context(), accessToken.UserID, parentID)
+		items, err = j.getJFItemsByParentID(r.Context(), accessToken.User.ID, parentID)
 		if err != nil {
 			apierror(w, err.Error(), http.StatusNotFound)
 			return
 		}
 	} else {
 		// All items recursively
-		items, err = j.getJFItemsAll(r.Context(), accessToken.UserID)
+		items, err = j.getJFItemsAll(r.Context(), accessToken.User.ID)
 		if err != nil {
 			apierror(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -223,7 +223,7 @@ func (j *Jellyfin) searchHintsHandler(w http.ResponseWriter, r *http.Request) {
 	// Return playlist collection items if requested
 	parentID := queryparams.Get("parentId")
 	if isJFCollectionPlaylistID(parentID) {
-		response, _ := j.makeJFItemPlaylistOverview(r.Context(), accessToken.UserID)
+		response, _ := j.makeJFItemPlaylistOverview(r.Context(), accessToken.User.ID)
 		serveJSON(response, w)
 		return
 	}
@@ -242,7 +242,7 @@ func (j *Jellyfin) searchHintsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for _, i := range c.Items {
-			jfitem, err := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID)
+			jfitem, err := j.makeJFItem(r.Context(), accessToken.User.ID, i, c.ID)
 			if err != nil {
 				apierror(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -286,7 +286,7 @@ func (j *Jellyfin) usersItemsAncestorsHandler(w http.ResponseWriter, r *http.Req
 		apierror(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	root, _ := j.makeJFItemRoot(r.Context(), accessToken.UserID)
+	root, _ := j.makeJFItemRoot(r.Context(), accessToken.User.ID)
 
 	response := []JFItem{
 		collectionItem,
@@ -329,7 +329,7 @@ func (j *Jellyfin) usersItemsResumeHandler(w http.ResponseWriter, r *http.Reques
 
 	queryparams := r.URL.Query()
 
-	resumeItemIDs, err := j.repo.GetRecentlyWatched(r.Context(), accessToken.UserID, false)
+	resumeItemIDs, err := j.repo.GetRecentlyWatched(r.Context(), accessToken.User.ID, false)
 	if err != nil {
 		apierror(w, "Could not get resume items list", http.StatusInternalServerError)
 		return
@@ -338,7 +338,7 @@ func (j *Jellyfin) usersItemsResumeHandler(w http.ResponseWriter, r *http.Reques
 	items := make([]JFItem, 0, len(resumeItemIDs))
 	for _, id := range resumeItemIDs {
 		if c, i := j.collections.GetItemByID(id); c != nil && i != nil {
-			jfitem, err := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID)
+			jfitem, err := j.makeJFItem(r.Context(), accessToken.User.ID, i, c.ID)
 			if err != nil {
 				apierror(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -418,7 +418,7 @@ func (j *Jellyfin) usersItemsSimilarHandler(w http.ResponseWriter, r *http.Reque
 	items := make([]JFItem, 0, len(similarItemIDs))
 	for _, id := range similarItemIDs {
 		c, i := j.collections.GetItemByID(id)
-		jfitem, err := j.makeJFItem(r.Context(), accessToken.UserID, i, c.ID)
+		jfitem, err := j.makeJFItem(r.Context(), accessToken.User.ID, i, c.ID)
 		if err != nil {
 			apierror(w, err.Error(), http.StatusInternalServerError)
 			return

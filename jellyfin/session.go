@@ -20,20 +20,12 @@ func (j *Jellyfin) sessionsHandler(w http.ResponseWriter, r *http.Request) {
 	if accessToken == nil {
 		return
 	}
-
-	dbuser, err := j.repo.GetUserByID(r.Context(), accessToken.UserID)
-	if err != nil {
-		apierror(w, ErrUserIDNotFound, http.StatusNotFound)
-		return
-	}
-
 	// Get all access tokens for this user
-	accessTokens, err := j.repo.GetAccessTokens(r.Context(), accessToken.UserID)
+	accessTokens, err := j.repo.GetAccessTokens(r.Context(), accessToken.User.ID)
 	if err != nil {
 		apierror(w, "error retrieving sessions", http.StatusInternalServerError)
 		return
 	}
-
 	// Keep most recent access token per deviceid only, we assume older
 	// tokens for the same deviceid are stale.
 	uniqueAccessTokens := make(map[string]model.AccessToken, len(accessTokens))
@@ -43,11 +35,10 @@ func (j *Jellyfin) sessionsHandler(w http.ResponseWriter, r *http.Request) {
 			uniqueAccessTokens[t.DeviceId] = t
 		}
 	}
-
 	// Build session list based upon access tokens
 	var sessions []JFSessionInfo
 	for _, t := range uniqueAccessTokens {
-		sessions = append(sessions, *j.makeJFSessionInfo(t, dbuser.Username))
+		sessions = append(sessions, *j.makeJFSessionInfo(t, accessToken.User.Username))
 	}
 	serveJSON(sessions, w)
 }
@@ -55,7 +46,7 @@ func (j *Jellyfin) sessionsHandler(w http.ResponseWriter, r *http.Request) {
 func (j *Jellyfin) makeJFSessionInfo(accessToken model.AccessToken, username string) *JFSessionInfo {
 	s := &JFSessionInfo{
 		ID:                    sessionID,
-		UserID:                accessToken.UserID,
+		UserID:                accessToken.User.ID,
 		UserName:              username,
 		LastActivityDate:      accessToken.LastUsed,
 		RemoteEndPoint:        accessToken.RemoteAddress,

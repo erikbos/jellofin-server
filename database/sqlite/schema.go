@@ -13,6 +13,11 @@ func dbInitSchema(d *sqlx.DB) error {
 	}
 
 	schema := []string{
+		// This is needed to improve concurrent reads and writes.
+		`PRAGMA journal_mode = WAL;`,
+		// Without this foreign key constraints won't be enforced and cascade deletes won't happen.
+		`PRAGMA foreign_keys = ON;`,
+
 		`CREATE TABLE IF NOT EXISTS items (
 id TEXT NOT NULL PRIMARY KEY,
 name TEXT NOT NULL,
@@ -34,7 +39,7 @@ created DATETIME,
 lastlogin DATETIME,
 lastused DATETIME);`,
 
-		`CREATE UNIQUE INDEX IF NOT EXISTS users_name_idx ON users (LOWER(username));`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS users_name_idx ON users (username);`,
 
 		`CREATE TABLE user_properties (
 userid INTEGER NOT NULL,
