@@ -36,12 +36,12 @@ type User struct {
 type UserProperties struct {
 	// Admin indicates if the user is an administrator.
 	Admin bool
-	// BlockDownload indicates if the user is blocked from downloading content.
-	BlockDownload bool
 	// Disabled indicates if the user account is disabled.
 	Disabled bool
-	// Public indicates if the user is visible to others.
-	Public bool
+	// IsHidden indicates if the user is hidden from other users.
+	IsHidden bool
+	// EnableDownloads indicates if the user is allowed to download content.
+	EnableDownloads bool
 	// EnableAllFolders indicates if the user has access to all folders (collections) by default.
 	EnableAllFolders bool
 	// EnabledFolders is a list of collection item IDs that should be enabled for the user.
@@ -60,8 +60,6 @@ type UserProperties struct {
 type AccessToken struct {
 	// User is the user associated with the access token.
 	User User
-	// // UserID is the ID of the user associated with the token.
-	// UserID string
 	// Token is the access token string.
 	Token string
 	// DeviceId is the unique identifier for the device.

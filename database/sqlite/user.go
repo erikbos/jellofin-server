@@ -97,11 +97,11 @@ func (s *SqliteRepo) DeleteUser(ctx context.Context, userID string) error {
 // Database keys for user properties
 const (
 	propAdmin            = "admin"
-	propPublic           = "public"
 	propDisabled         = "disabled"
-	propCanDownload      = "candownload"
 	propEnableAllFolders = "enableallfolders"
 	propEnabledFolders   = "enabledfolders"
+	propEnableDownloads  = "enabledownloads"
+	propIsHidden         = "ishidden"
 	propOrderedViews     = "orderedviews"
 	propMyMediaExcludes  = "mymediaexcludes"
 	propAllowTags        = "allowtags"
@@ -115,7 +115,12 @@ func (s *SqliteRepo) loadUserProperties(ctx context.Context, userID string) (mod
 		return model.UserProperties{}, err
 	}
 	defer rows.Close()
-	props := model.UserProperties{}
+	// We set default values for a user here in case we do not have entries in db.
+	props := model.UserProperties{
+		IsHidden:         true,
+		EnableAllFolders: true,
+		EnableDownloads:  true,
+	}
 	for rows.Next() {
 		var key, value string
 		if err := rows.Scan(&key, &value); err != nil {
@@ -124,16 +129,16 @@ func (s *SqliteRepo) loadUserProperties(ctx context.Context, userID string) (mod
 		switch key {
 		case propAdmin:
 			props.Admin = value == "1"
-		case propPublic:
-			props.Public = value == "1"
+		case propEnableDownloads:
+			props.EnableDownloads = value == "1"
 		case propDisabled:
 			props.Disabled = value == "1"
-		case propCanDownload:
-			props.BlockDownload = value == "1"
 		case propEnableAllFolders:
 			props.EnableAllFolders = value == "1"
 		case propEnabledFolders:
 			props.EnabledFolders = splitComma(value)
+		case propIsHidden:
+			props.IsHidden = value == "1"
 		case propOrderedViews:
 			props.OrderedViews = splitComma(value)
 		case propMyMediaExcludes:
@@ -173,9 +178,9 @@ func (s *SqliteRepo) saveUserProperties(ctx context.Context, userID string, prop
 	// and slice values to comma-separated strings
 	properties := []struct{ key, value string }{
 		{propAdmin, boolToString(props.Admin)},
-		{propPublic, boolToString(props.Public)},
+		{propIsHidden, boolToString(props.IsHidden)},
 		{propDisabled, boolToString(props.Disabled)},
-		{propCanDownload, boolToString(props.BlockDownload)},
+		{propEnableDownloads, boolToString(props.EnableDownloads)},
 		{propEnableAllFolders, boolToString(props.EnableAllFolders)},
 		{propEnabledFolders, strings.Join(props.EnabledFolders, ",")},
 		{propOrderedViews, strings.Join(props.OrderedViews, ",")},

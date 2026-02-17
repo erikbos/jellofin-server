@@ -139,7 +139,7 @@ func (j *Jellyfin) userGetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Allow if requester is an administrator, user themselves, or user is public
-	if !accessToken.User.Properties.Admin && accessToken.User.ID != userID && !dbuser.Properties.Public {
+	if !accessToken.User.Properties.Admin && accessToken.User.ID != userID && !dbuser.Properties.IsHidden {
 		apierror(w, "forbidden to access user", http.StatusForbidden)
 		return
 	}
@@ -178,9 +178,9 @@ func (j *Jellyfin) usersPublicHandler(w http.ResponseWriter, r *http.Request) {
 		apierror(w, "failed to get users", http.StatusInternalServerError)
 		return
 	}
-	var response []JFUser
+	response := []JFUser{}
 	for _, user := range users {
-		if user.Properties.Public {
+		if !user.Properties.IsHidden {
 			response = append(response, j.makeJFUser(r.Context(), &user))
 		}
 	}
@@ -387,7 +387,7 @@ func makeJFUserPolicy(user *model.User) JFUserPolicy {
 		EnabledDevices:                   []string{},
 		EnabledFolders:                   user.Properties.EnabledFolders,
 		EnableContentDeletionFromFolders: []string{},
-		EnableContentDownloading:         !user.Properties.BlockDownload,
+		EnableContentDownloading:         user.Properties.EnableDownloads,
 		EnableMediaPlayback:              true,
 		EnableRemoteAccess:               true,
 		EnableAllDevices:                 true,
@@ -397,7 +397,7 @@ func makeJFUserPolicy(user *model.User) JFUserPolicy {
 		SyncPlayAccess:                   "CreateAndJoinGroups",
 		IsAdministrator:                  user.Properties.Admin,
 		IsDisabled:                       user.Properties.Disabled,
-		IsHidden:                         !user.Properties.Public,
+		IsHidden:                         user.Properties.IsHidden,
 	}
 }
 
@@ -407,10 +407,10 @@ func parseJFUserPolicy(policy JFUserPolicy, props *model.UserProperties) {
 	props.BlockTags = policy.BlockedTags
 	props.EnableAllFolders = policy.EnableAllFolders
 	props.EnabledFolders = policy.EnabledFolders
-	props.BlockDownload = policy.EnableContentDownloading
+	props.EnableDownloads = policy.EnableContentDownloading
 	props.Admin = policy.IsAdministrator
 	props.Disabled = policy.IsDisabled
-	props.Public = !policy.IsHidden
+	props.IsHidden = policy.IsHidden
 }
 
 // createUser creates a new user in the database
@@ -425,8 +425,8 @@ func (j *Jellyfin) createUser(context context.Context, username, password string
 		Password: string(hashedPassword),
 		Created:  time.Now().UTC(),
 		Properties: model.UserProperties{
-			Admin:  false,
-			Public: false,
+			Admin:    false,
+			IsHidden: false,
 		},
 	}
 	if err = j.repo.UpsertUser(context, modelUser); err != nil {
