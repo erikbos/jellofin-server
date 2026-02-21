@@ -114,18 +114,19 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/Users/{userid}/Views", middleware(j.usersViewsHandler))
 	r.Handle("/Users/{userid}/GroupingOptions", middleware(j.usersGroupingOptionsHandler))
 	r.Handle("/Users/{userid}/Images/{type}", http.HandlerFunc(j.usersImagesProfileHandler)).Methods("GET")
+
 	r.Handle("/Users/{userid}/Items", middleware(j.usersItemsHandler))
 	r.Handle("/Users/{userid}/Items/Intros", middleware(j.usersItemsIntrosHandler))
 	r.Handle("/Users/{userid}/Items/Latest", middleware(j.usersItemsLatestHandler))
 	r.Handle("/Users/{userid}/Items/Resume", middleware(j.usersItemsResumeHandler))
 	r.Handle("/Users/{userid}/Items/Suggestions", middleware(j.usersItemsSuggestionsHandler))
-	r.Handle("/Users/{userid}/Items/{item}", middleware(j.usersItemHandler))
+	r.Handle("/Users/{userid}/Items/{itemid}", middleware(j.usersItemHandler))
 
 	r.Handle("/UserViews", middleware(j.usersViewsHandler))
 	r.Handle("/UserViews/GroupingOptions", middleware(j.usersGroupingOptionsHandler))
 
 	r.Handle("/UserItems/Resume", middleware(j.usersItemsResumeHandler))
-	r.Handle("/UserItems/{item}/Userdata", middleware(j.usersItemUserDataHandler))
+	r.Handle("/UserItems/{itemid}/Userdata", middleware(j.usersItemUserDataHandler))
 
 	r.Handle("/DisplayPreferences/{id}", middleware(j.displayPreferencesHandler))
 
@@ -134,54 +135,57 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/Library/Refresh", middleware(j.libraryRefreshHandler)).Methods("POST")
 
 	r.Handle("/Shows/NextUp", middleware(j.showsNextUpHandler))
-	r.Handle("/Shows/{show}/Seasons", middleware(j.showsSeasonsHandler))
-	r.Handle("/Shows/{show}/Episodes", middleware(j.showsEpisodesHandler))
+	r.Handle("/Shows/{showid}/Seasons", middleware(j.showsSeasonsHandler))
+	r.Handle("/Shows/{showid}/Episodes", middleware(j.showsEpisodesHandler))
 
 	r.Handle("/Items", middleware(j.usersItemsHandler))
 	r.Handle("/Items/Counts", middleware(j.usersItemsCountsHandler))
 	r.Handle("/Items/Filters", middleware(j.usersItemsFiltersHandler))
 	r.Handle("/Items/Filters2", middleware(j.usersItemsFilters2Handler))
 	r.Handle("/Items/Latest", middleware(j.usersItemsLatestHandler))
+	r.Handle("/Items/Root", middleware(j.usersItemsRootHandler))
 	r.Handle("/Items/Suggestions", middleware(j.usersItemsSuggestionsHandler))
-	r.Handle("/Items/{item}", middleware(j.itemsDeleteHandler)).Methods("DELETE")
-	r.Handle("/Items/{item}", middleware(j.usersItemHandler))
-	r.Handle("/Items/{item}/Ancestors", middleware(j.usersItemsAncestorsHandler))
-
+	r.Handle("/Items/{itemid}", middleware(j.itemsDeleteHandler)).Methods("DELETE")
+	r.Handle("/Items/{itemid}", middleware(j.usersItemHandler))
+	r.Handle("/Items/{itemid}/Ancestors", middleware(j.usersItemsAncestorsHandler))
 	// Images can be fetched without auth, https://github.com/jellyfin/jellyfin/issues/13988
-	r.Handle("/Items/{item}/Images", http.HandlerFunc(j.itemsImagesHandler))
-	r.Handle("/Items/{item}/Images/{type}", http.HandlerFunc(j.itemsImagesGetHandler)).Methods("GET", "HEAD")
-	r.Handle("/Items/{item}/Images/{type}", http.HandlerFunc(j.itemsImagesPostHandler)).Methods("POST")
-	r.Handle("/Items/{item}/Images/{type}/{index}", http.HandlerFunc(j.itemsImagesGetHandler)).Methods("GET", "HEAD")
-	r.Handle("/Items/{item}/Images/{type}/{index}", http.HandlerFunc(j.itemsImagesPostHandler)).Methods("POST")
+	r.Handle("/Items/{itemid}/Images", http.HandlerFunc(j.itemsImagesHandler))
+	r.Handle("/Items/{itemid}/Images/{type}", http.HandlerFunc(j.itemsImagesGetHandler)).Methods("GET", "HEAD")
+	r.Handle("/Items/{itemid}/Images/{type}", http.HandlerFunc(j.itemsImagesPostHandler)).Methods("POST")
+	r.Handle("/Items/{itemid}/Images/{type}/{index}", http.HandlerFunc(j.itemsImagesGetHandler)).Methods("GET", "HEAD")
+	r.Handle("/Items/{itemid}/Images/{type}/{index}", http.HandlerFunc(j.itemsImagesPostHandler)).Methods("POST")
+	r.Handle("/Items/{itemid}/Intros", middleware(j.usersItemsIntrosHandler))
+	r.Handle("/Items/{itemid}/LocalTrailers", middleware(j.usersItemsLocalTrailersHandler))
+	r.Handle("/Items/{itemid}/PlaybackInfo", middleware(j.itemsPlaybackInfoHandler))
+	r.Handle("/Items/{itemid}/Refresh", middleware(j.usersItemsRefreshHandler)).Methods("POST")
+	r.Handle("/Items/{itemid}/RemoteImages", http.HandlerFunc(j.itemsRemoteImagesHandler))
+	r.Handle("/Items/{itemid}/RemoteImages/Providers", http.HandlerFunc(j.itemsRemoteImagesProvidersHandler))
+	r.Handle("/Items/{itemid}/Similar", middleware(j.usersItemsSimilarHandler))
+	r.Handle("/Items/{itemid}/SpecialFeatures", middleware(j.usersItemsSpecialFeaturesHandler))
+	r.Handle("/Items/{itemid}/ThemeMedia", middleware(j.usersItemsThemeMediaHandler))
 
 	r.Handle("/UserImage", http.HandlerFunc(j.userImageGetHandler)).Methods("GET", "HEAD")
 	r.Handle("/UserImage", middleware(j.userImagePostHandler)).Methods("POST")
 	r.Handle("/UserImage", middleware(j.userImageDeleteHandler)).Methods("DELETE")
 
-	r.Handle("/Items/{item}/Intros", middleware(j.usersItemsIntrosHandler))
-	r.Handle("/Items/{item}/PlaybackInfo", middleware(j.itemsPlaybackInfoHandler))
-	r.Handle("/Items/{item}/Refresh", middleware(j.usersItemsRefreshHandler)).Methods("POST")
-	r.Handle("/Items/{item}/RemoteImages", http.HandlerFunc(j.itemsRemoteImagesHandler))
-	r.Handle("/Items/{item}/RemoteImages/Providers", http.HandlerFunc(j.itemsRemoteImagesProvidersHandler))
-	r.Handle("/Items/{item}/Similar", middleware(j.usersItemsSimilarHandler))
-	r.Handle("/Items/{item}/SpecialFeatures", middleware(j.usersItemsSpecialFeaturesHandler))
-	r.Handle("/Items/{item}/ThemeMedia", middleware(j.usersItemsThemeMediaHandler))
-
 	r.Handle("/Genres", middleware(j.genresHandler))
 	r.Handle("/Genres/{name}", middleware(j.genreHandler))
+	r.Handle("/Genres/{name}/Images/{type}", http.HandlerFunc(j.GenresImagesGetHandler)).Methods("GET", "HEAD")
+	r.Handle("/Genres/{name}/Images/{type}/{index}", http.HandlerFunc(j.GenresImagesGetHandler)).Methods("GET", "HEAD")
+	r.Handle("/Genres/{name}/Images/{type}", http.HandlerFunc(j.GenresImagesPostHandler)).Methods("POST")
 
 	r.Handle("/Studios", middleware(j.studiosHandler))
 	r.Handle("/Studios/{name}", middleware(j.studioHandler))
+	r.Handle("/Studios/{name}/Images/{type}", http.HandlerFunc(j.StudiosImagesGetHandler)).Methods("GET", "HEAD")
+	r.Handle("/Studios/{name}/Images/{type}/{index}", http.HandlerFunc(j.StudiosImagesGetHandler)).Methods("GET", "HEAD")
+	r.Handle("/Studios/{name}/Images/{type}", http.HandlerFunc(j.StudiosImagesPostHandler)).Methods("POST")
 
 	r.Handle("/Search/Hints", middleware(j.searchHintsHandler))
 	r.Handle("/Movies/Recommendations", middleware(j.moviesRecommendationsHandler))
 
-	r.Handle("/MediaSegments/{item}", middleware(j.mediaSegmentsHandler))
-	r.Handle("/Videos/{item}/stream", middleware(j.videoStreamHandler))
-	r.Handle("/Videos/{item}/stream.{container}", middleware(j.videoStreamHandler))
-	// required for Vidhub to work
-	r.Handle("/videos/{item}/stream", middleware(j.videoStreamHandler))
-	r.Handle("/videos/{item}/stream.{container}", middleware(j.videoStreamHandler))
+	// Video can be fetched without auth, https://github.com/jellyfin/jellyfin/issues/13984
+	r.Handle("/MediaSegments/{itemid}", http.HandlerFunc(j.mediaSegmentsHandler))
+	r.Handle("/Videos/{itemid}/{stream}", http.HandlerFunc(j.videoStreamHandler))
 
 	r.Handle("/Persons", middleware(j.personsHandler))
 	r.Handle("/Persons/{name}", middleware(j.personHandler))
@@ -197,41 +201,34 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/Sessions/Playing/Progress", middleware(j.sessionsPlayingProgressHandler)).Methods("POST")
 	r.Handle("/Sessions/Playing/Stopped", middleware(j.sessionsPlayingStoppedHandler)).Methods("POST")
 	r.Handle("/Sessions", middleware(j.sessionsHandler))
-	r.Handle("/UserPlayedItems/{item}", middleware(j.usersPlayedItemsPostHandler)).Methods("POST")
-	r.Handle("/UserPlayedItems/{item}", middleware(j.usersPlayedItemsDeleteHandler)).Methods("DELETE")
-	r.Handle("/UserFavoriteItems/{item}", middleware(j.userFavoriteItemsPostHandler)).Methods("POST")
-	r.Handle("/UserFavoriteItems/{item}", middleware(j.userFavoriteItemsDeleteHandler)).Methods("DELETE")
-	// userdata legacy endpoints for Jellyfin <10.9
-	r.Handle("/Users/{user}/PlayedItems/{item}", middleware(j.usersPlayedItemsPostHandler)).Methods("POST")
-	r.Handle("/Users/{user}/PlayedItems/{item}", middleware(j.usersPlayedItemsDeleteHandler)).Methods("DELETE")
-	r.Handle("/Users/{user}/FavoriteItems/{item}", middleware(j.userFavoriteItemsPostHandler)).Methods("POST")
-	r.Handle("/Users/{user}/FavoriteItems/{item}", middleware(j.userFavoriteItemsDeleteHandler)).Methods("DELETE")
+	r.Handle("/UserPlayedItems/{itemid}", middleware(j.usersPlayedItemsPostHandler)).Methods("POST")
+	r.Handle("/UserPlayedItems/{itemid}", middleware(j.usersPlayedItemsDeleteHandler)).Methods("DELETE")
+	r.Handle("/UserFavoriteItems/{itemid}", middleware(j.userFavoriteItemsPostHandler)).Methods("POST")
+	r.Handle("/UserFavoriteItems/{itemid}", middleware(j.userFavoriteItemsDeleteHandler)).Methods("DELETE")
+	r.Handle("/Users/{user}/PlayedItems/{itemid}", middleware(j.usersPlayedItemsPostHandler)).Methods("POST")
+	r.Handle("/Users/{user}/PlayedItems/{itemid}", middleware(j.usersPlayedItemsDeleteHandler)).Methods("DELETE")
+	r.Handle("/Users/{user}/FavoriteItems/{itemid}", middleware(j.userFavoriteItemsPostHandler)).Methods("POST")
+	r.Handle("/Users/{user}/FavoriteItems/{itemid}", middleware(j.userFavoriteItemsDeleteHandler)).Methods("DELETE")
 
-	// playlists
 	r.Handle("/Playlists", middleware(j.createPlaylistHandler)).Methods("POST")
-	r.Handle("/Playlists/{playlist}", middleware(j.getPlaylistHandler)).Methods("GET")
-	r.Handle("/Playlists/{playlist}", middleware(j.updatePlaylistHandler)).Methods("POST")
-	r.Handle("/Playlists/{playlist}/Items", middleware(j.getPlaylistItemsHandler)).Methods("GET")
-	r.Handle("/Playlists/{playlist}/Items", middleware(j.addPlaylistItemsHandler)).Methods("POST")
-	// Infuse posts to path ending with /
-	r.Handle("/Playlists/{playlist}/Items/", middleware(j.addPlaylistItemsHandler)).Methods("POST")
-	r.Handle("/Playlists/{playlist}/Items", middleware(j.deletePlaylistItemsHandler)).Methods("DELETE")
-	r.Handle("/Playlists/{playlist}/Items/{item}/Move/{index}", middleware(j.movePlaylistItemHandler)).Methods("GET")
-	r.Handle("/Playlists/{playlist}/Users", middleware(j.getPlaylistAllUsersHandler)).Methods("GET")
-	r.Handle("/Playlists/{playlist}/Users/{user}", middleware(j.getPlaylistUsersHandler)).Methods("GET")
+	r.Handle("/Playlists/{playlistid}", middleware(j.getPlaylistHandler)).Methods("GET")
+	r.Handle("/Playlists/{playlistid}", middleware(j.updatePlaylistHandler)).Methods("POST")
+	r.Handle("/Playlists/{playlistid}/Items", middleware(j.getPlaylistItemsHandler)).Methods("GET")
+	r.Handle("/Playlists/{playlistid}/Items", middleware(j.addPlaylistItemsHandler)).Methods("POST")
+	r.Handle("/Playlists/{playlistid}/Items", middleware(j.deletePlaylistItemsHandler)).Methods("DELETE")
+	r.Handle("/Playlists/{playlistid}/Items/{itemid}/Move/{index}", middleware(j.movePlaylistItemHandler)).Methods("GET")
+	r.Handle("/Playlists/{playlistid}/Users", middleware(j.getPlaylistAllUsersHandler)).Methods("GET")
+	r.Handle("/Playlists/{playlistid}/Users/{userid}", middleware(j.getPlaylistUsersHandler)).Methods("GET")
 
-	// Branding
 	r.HandleFunc("/Branding/Configuration", j.brandingConfigurationHandler)
 	r.HandleFunc("/Branding/Css", j.brandingCssHandler)
 	r.HandleFunc("/Branding/Css.css", j.brandingCssHandler)
 
-	// Localization
 	r.HandleFunc("/Localization/Countries", j.localizationCountriesHandler)
 	r.HandleFunc("/Localization/Cultures", j.localizationCulturesHandler)
 	r.HandleFunc("/Localization/Options", j.localizationOptionsHandler)
 	r.HandleFunc("/Localization/ParentalRatings", j.localizationParentalRatingsHandler)
 
-	// SyncPlay
 	r.Handle("/SyncPlay/List", http.HandlerFunc(j.syncPlayListHandler))
 	r.Handle("/SyncPlay/New", http.HandlerFunc(j.syncPlayNewHandler))
 }

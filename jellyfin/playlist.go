@@ -70,7 +70,7 @@ func (j *Jellyfin) createPlaylistHandler(w http.ResponseWriter, r *http.Request)
 // updatePlaylistHandler updates a playlist
 func (j *Jellyfin) updatePlaylistHandler(w http.ResponseWriter, r *http.Request) {
 	// vars := mux.Vars(r)
-	// playlistID := vars["playlist"]
+	// playlistID := vars["playlistid"]
 
 	// var req struct {
 	// 	Name string `json:"Name"`
@@ -102,7 +102,7 @@ func (j *Jellyfin) getPlaylistHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vars := mux.Vars(r)
-	playlistID := vars["playlist"]
+	playlistID := vars["playlistid"]
 
 	playlist, err := j.repo.GetPlaylist(r.Context(), accessToken.User.ID, trimPrefix(playlistID))
 	// log.Printf("querying playlist: %+v, %+v\n", playlist, err)
@@ -129,7 +129,7 @@ func (j *Jellyfin) getPlaylistItemsHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	vars := mux.Vars(r)
-	playlistID := vars["playlist"]
+	playlistID := vars["playlistid"]
 
 	playlist, err := j.repo.GetPlaylist(r.Context(), accessToken.User.ID, trimPrefix(playlistID))
 	if err != nil {
@@ -167,7 +167,7 @@ func (j *Jellyfin) addPlaylistItemsHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	vars := mux.Vars(r)
-	playlistID := vars["playlist"]
+	playlistID := vars["playlistid"]
 	queryparams := r.URL.Query()
 
 	var itemIDs []string
@@ -188,7 +188,7 @@ func (j *Jellyfin) addPlaylistItemsHandler(w http.ResponseWriter, r *http.Reques
 // movePlaylistItemHandler moves an item in a playlist
 func (j *Jellyfin) movePlaylistItemHandler(w http.ResponseWriter, r *http.Request) {
 	// vars := mux.Vars(r)
-	// playlistID := vars["playlist"]
+	// playlistID := vars["playlistid"]
 	// itemID := vars["itemId"]
 	// newIndex, err := strconv.Atoi(vars["newIndex"])
 	// if err != nil {
@@ -209,7 +209,7 @@ func (j *Jellyfin) movePlaylistItemHandler(w http.ResponseWriter, r *http.Reques
 // deletePlaylistItemsHandler deletes items from a playlist
 func (j *Jellyfin) deletePlaylistItemsHandler(w http.ResponseWriter, r *http.Request) {
 	// vars := mux.Vars(r)
-	// playlistID := vars["playlist"]
+	// playlistID := vars["playlistid"]
 
 	// itemIDs := r.URL.Query()["Ids"]
 	// if len(itemIDs) == 0 {
@@ -277,7 +277,7 @@ func (j *Jellyfin) makeJFItemCollectionPlaylist(ctx context.Context, userID stri
 		ServerID:                 j.serverID,
 		ID:                       id,
 		ParentID:                 makeJFRootID(collectionRootID),
-		Etag:                     idhash.IdHash(playlistCollectionID),
+		Etag:                     idhash.Hash(playlistCollectionID),
 		DateCreated:              time.Now().UTC(),
 		PremiereDate:             time.Now().UTC(),
 		CollectionType:           collectionTypePlaylists,
@@ -298,7 +298,7 @@ func (j *Jellyfin) makeJFItemCollectionPlaylist(ctx context.Context, userID stri
 		CanDelete:                false,
 		CanDownload:              true,
 		SpecialFeatureCount:      0,
-		ImageTags:                j.makeJFImageTags(ctx, id, ImageTypePrimary),
+		ImageTags:                j.makeJFImageTags(ctx, id, imageTypePrimary),
 		// PremiereDate should be set based upon most recent item in collection
 	}
 	return response, nil
@@ -320,7 +320,7 @@ func (j *Jellyfin) makeJFItemPlaylist(ctx context.Context, userID, playlistID st
 		SortName:                 playlist.Name,
 		IsFolder:                 true,
 		Path:                     "/playlist",
-		Etag:                     idhash.IdHash(playlist.ID),
+		Etag:                     idhash.Hash(playlist.ID),
 		DateCreated:              time.Now().UTC(),
 		CanDelete:                true,
 		CanDownload:              true,

@@ -7,11 +7,6 @@ import (
 )
 
 func dbInitSchema(d *sqlx.DB) error {
-	tx, err := d.Beginx()
-	if err != nil {
-		return err
-	}
-
 	schema := []string{
 		// This is needed to improve concurrent reads and writes.
 		`PRAGMA journal_mode = WAL;`,
@@ -41,7 +36,7 @@ lastused DATETIME);`,
 
 		`CREATE UNIQUE INDEX IF NOT EXISTS users_name_idx ON users (username);`,
 
-		`CREATE TABLE user_properties (
+		`CREATE TABLE IF NOT EXISTS user_properties (
 userid INTEGER NOT NULL,
 key TEXT NOT NULL,
 value TEXT,
@@ -101,11 +96,10 @@ data BLOB NOT NULL);`,
 	}
 
 	for _, query := range schema {
-		if _, err = tx.Exec(query); err != nil {
+		if _, err := d.Exec(query); err != nil {
 			log.Printf("dbInitSchema error: %s\n", err)
-			return tx.Rollback()
+			return err
 		}
 	}
-
-	return tx.Commit()
+	return nil
 }

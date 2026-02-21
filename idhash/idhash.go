@@ -1,8 +1,11 @@
 package idhash
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"math/big"
+
+	"github.com/jxskiss/base62"
 )
 
 // Hash a string with sha256.
@@ -41,4 +44,24 @@ func IdHash(name string) string {
 	}
 
 	return id
+}
+
+// Hash returns a base62-encoded id, based upon sha256 of string.
+func Hash(s string) string {
+	return HashBytes([]byte(s))
+}
+
+// HashBytes returns a base62-encoded id, based upon sha256 of bytes.
+func HashBytes(data []byte) string {
+	sum := sha256.Sum256(data)
+	return base62.StdEncoding.EncodeToString(sum[:16])
+}
+
+// NewRandomID generates a random base62-encoded id.
+func NewRandomID() string {
+	var r [16]byte
+	if _, err := rand.Read(r[:]); err != nil {
+		panic(err)
+	}
+	return base62.StdEncoding.EncodeToString(r[:])
 }

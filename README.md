@@ -61,6 +61,7 @@ The server uses a YAML configuration file (default: `jellofin-server.yaml`). Bel
 | `port`    | int    | Port to listen on (e.g., `8096`).            |
 | `tlscert` | string | Path to TLS certificate file (optional).     |
 | `tlskey`  | string | Path to TLS private key file (optional).     |
+| `ipacl`   | string | IP allow list, If set only matching CIDRs may access the server (e.g. `127.0.0.1/32, 192.168.1.0/24`). |
 
 ---
 

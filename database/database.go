@@ -57,8 +57,9 @@ type UserDataRepo interface {
 	GetUserData(ctx context.Context, userID, itemID string) (details *model.UserData, err error)
 	// Get all favorite items of a user.
 	GetFavorites(ctx context.Context, userID string) (favoriteItemIDs []string, err error)
-	// GetRecentlyWatched returns up to 10 most recently watched items that have not been fully watched.
-	GetRecentlyWatched(ctx context.Context, userID string, includeFullyWatched bool) (resumeItemIDs []string, err error)
+	// GetRecentlyWatched returns last 10 watched items that have not been fully watched.
+	// If seriesID is provided, it returns all watched items.
+	GetRecentlyWatched(ctx context.Context, userID string, count int, includeFullyWatched bool) (resumeItemIDs []string, err error)
 	// Update stores the play state details for a user and item.
 	UpdateUserData(ctx context.Context, userID, itemID string, details *model.UserData) error
 }
@@ -94,7 +95,13 @@ type ImageRepo interface {
 func New(t string, o any) (Repository, error) {
 	switch t {
 	case "sqlite":
-		return sqlite.New(o.(*sqlite.ConfigFile))
+		switch v := o.(type) {
+		case sqlite.ConfigFile:
+			return sqlite.New(&v)
+		case *sqlite.ConfigFile:
+			return sqlite.New(v)
+		}
+		return nil, fmt.Errorf("invalid config for sqlite database")
 	default:
 		return nil, fmt.Errorf("unknown database type: %s", t)
 	}

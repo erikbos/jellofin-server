@@ -87,8 +87,9 @@ func (s *SqliteRepo) GetFavorites(ctx context.Context, userID string) ([]string,
 	return favoriteItemIDs, nil
 }
 
-// GetRecentlyWatched returns up to 10 most recently watched items that have not been fully watched.
-func (s *SqliteRepo) GetRecentlyWatched(ctx context.Context, userID string, includeFullyWatched bool) ([]string, error) {
+// GetRecentlyWatched returns last 10 watched items that have not been fully watched.
+// If seriesID is provided, it returns all watched items.
+func (s *SqliteRepo) GetRecentlyWatched(ctx context.Context, userID string, count int, includeFullyWatched bool) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -118,7 +119,7 @@ func (s *SqliteRepo) GetRecentlyWatched(ctx context.Context, userID string, incl
 
 	// No need to list all unfinished items of the past, limit to 10 most recent items.
 	var resumeItemIDs []string
-	for i := range min(len(resumeItems), 10) {
+	for i := range min(len(resumeItems), count) {
 		resumeItemIDs = append(resumeItemIDs, resumeItems[i].itemID)
 	}
 	return resumeItemIDs, nil

@@ -159,6 +159,21 @@ func (cr *CollectionRepo) GetItemByID(itemID string) (*Collection, Item) {
 	return nil, nil
 }
 
+// GetShowByID returns a show in a collection by its ID.
+func (cr *CollectionRepo) GetShowByID(showID string) (*Collection, *Show) {
+	for _, c := range cr.collections {
+		for _, i := range c.Items {
+			switch v := i.(type) {
+			case *Show:
+				if v.id == showID {
+					return &c, v
+				}
+			}
+		}
+	}
+	return nil, nil
+}
+
 // GetSeasonByID returns a season in a collection by its ID.
 func (cr *CollectionRepo) GetSeasonByID(saesonID string) (*Collection, *Show, *Season) {
 	// fixme: wooho O(n^^3) "just temporarily.."
@@ -197,9 +212,36 @@ func (cr *CollectionRepo) GetEpisodeByID(episodeID string) (*Collection, *Show, 
 	return nil, nil, nil, nil
 }
 
-// NextUp returns the nextup episodes in the collection based upon list of watched episodes
-// and optionally a seriesID to filter the nextup items to a specific series.
-func (cr *CollectionRepo) NextUp(watchedEpisodeIDs []string, seriesID string) (nextUpEpisodeIDs []string, e error) {
+// NextUpInSeries returns the nextup episode in a series based upon list of watched episodes and seriesID.
+func (cr *CollectionRepo) NextUpInSeries(watchedEpisodeIDs []string, seriesID string) (nextUpEpisodeIDs []string, e error) {
+	c, show := cr.GetShowByID(seriesID)
+	if c == nil || show == nil {
+		return []string{}, nil
+	}
+
+	// Check if any watched episodes belong to this show
+	hasWatchedEpisodes := false
+	for _, season := range show.Seasons {
+		for _, episode := range season.Episodes {
+			for _, watchedID := range watchedEpisodeIDs {
+				if episode.id == watchedID {
+					hasWatchedEpisodes = true
+				}
+			}
+		}
+	}
+	// If no episodes from this series have been watched, return first episode we can find
+	if !hasWatchedEpisodes {
+		if len(show.Seasons) > 0 && len(show.Seasons[0].Episodes) > 0 {
+			log.Printf("NextUp: returning first episode of unwatched series %s(%s)\n", show.name, show.id)
+			return []string{show.Seasons[0].Episodes[0].id}, nil
+		}
+	}
+	return []string{}, nil
+}
+
+// NextUpInCollection returns the nextup episodes in the collection based upon list of watched episodes
+func (cr *CollectionRepo) NextUpInCollection(watchedEpisodeIDs []string, seriesID string) (nextUpEpisodeIDs []string, e error) {
 	type ShowEntry struct {
 		show          *Show
 		seasonNumber  int
@@ -209,15 +251,12 @@ func (cr *CollectionRepo) NextUp(watchedEpisodeIDs []string, seriesID string) (n
 	}
 
 	// todo: look at seriesID and filter watchedEpisodeIDs to only include episodes from that series
-	// todo: in case seriesID is provided and we have not watched anything we should try to find the first episode of that series as nextup item
-
 	showMap := make(map[string]ShowEntry)
 	for _, episodeID := range watchedEpisodeIDs {
 		c, show, season, episode := cr.GetEpisodeByID(episodeID)
 		if c == nil || show == nil || season == nil || episode == nil {
 			continue
 		}
-
 		// NextUp skips everything apart from shows
 		if c.Type != CollectionTypeShows {
 			continue

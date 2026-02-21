@@ -2,8 +2,6 @@ package jellyfin
 
 import (
 	"context"
-	"encoding/base64"
-	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -102,7 +100,7 @@ func (j *Jellyfin) makeJFItemStudio(ctx context.Context, _ string, studioID stri
 		LocationType:      "FileSystem",
 		MediaType:         "Unknown",
 		ImageBlurHashes:   &JFImageBlurHashes{},
-		ImageTags:         j.makeJFImageTags(ctx, studioID, ImageTypePrimary),
+		ImageTags:         j.makeJFImageTags(ctx, studioID, imageTypePrimary),
 		BackdropImageTags: []string{},
 		UserData:          &JFUserData{},
 		LockedFields:      []string{},
@@ -123,8 +121,7 @@ func makeJFStudios(studios []string) []JFStudios {
 
 // makeJFStudioID returns an external id for a studio.
 func makeJFStudioID(studioName string) string {
-	// base64 encoded to handle special characters, as some clients have issues with % characters in IDs.
-	return itemprefix_studio + base64.RawURLEncoding.EncodeToString([]byte(studioName))
+	return encodeExternalName(itemprefix_studio, studioName)
 }
 
 // isJFStudioID checks if the provided ID is a studio ID.
@@ -134,12 +131,5 @@ func isJFStudioID(id string) bool {
 
 // decodeJFStudioID decodes a studio ID to get the original name.
 func decodeJFStudioID(studioID string) (string, error) {
-	if !strings.HasPrefix(studioID, itemprefix_studio) {
-		return "", errors.New("invalid studio ID")
-	}
-	studioBytes, err := base64.RawURLEncoding.DecodeString(trimPrefix(studioID))
-	if err != nil {
-		return "", errors.New("cannot decode studio ID")
-	}
-	return string(studioBytes), nil
+	return decodeExternalName(itemprefix_studio, studioID)
 }

@@ -3,12 +3,12 @@ package jellyfin
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 	"time"
@@ -16,11 +16,16 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/erikbos/jellofin-server/database/model"
+	"github.com/erikbos/jellofin-server/idhash"
 )
 
 const (
 	// maximum allowed size for uploaded images (40MB)
 	maxUploadSize = 40 * 1024 * 1024
+	// database key for user profile images
+	imageTypeProfile = "Profile"
+	// database key for primary iamges
+	imageTypePrimary = "Primary"
 )
 
 // /Items/rVFG3EzPthk2wowNkqUl/Images/Backdrop?tag=7cec54f0c8f362c75588e83d76fefa75
@@ -32,7 +37,7 @@ const (
 // itemsImagesGetHandler serves item images like posters, backdrops and logos
 func (j *Jellyfin) itemsImagesGetHandler(w http.ResponseWriter, r *http.Request) {
 	// handle tag-based redirects for item imagery that is external (e.g. external images of actors)
-	// for these we do not care about the provided item id
+	// for these we ignore provided item id
 	queryparams := r.URL.Query()
 	tag := queryparams.Get("tag")
 	if strings.HasPrefix(tag, tagprefix_redirect) {
@@ -42,7 +47,7 @@ func (j *Jellyfin) itemsImagesGetHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	vars := mux.Vars(r)
-	itemID := vars["item"]
+	itemID := vars["itemid"]
 	imageType := vars["type"]
 
 	switch {
@@ -51,6 +56,10 @@ func (j *Jellyfin) itemsImagesGetHandler(w http.ResponseWriter, r *http.Request)
 	case isJFCollectionFavoritesID(itemID):
 		fallthrough
 	case isJFCollectionPlaylistID(itemID):
+		fallthrough
+	case isJFGenreID(itemID):
+		fallthrough
+	case isJFStudioID(itemID):
 		j.serveItemImage(w, r, itemID, imageType)
 		return
 	case isJFPersonID(itemID):
@@ -104,12 +113,12 @@ func (j *Jellyfin) itemsImagesGetHandler(w http.ResponseWriter, r *http.Request)
 	apierror(w, "Item image not found", http.StatusNotFound)
 }
 
-// /Items/{item}/Images/{type}/{index}?tag=7cec54f0c8f362c75588e83d76fefa75
+// POST /Items/{item}/Images/{type}
 //
 // itemsImagesPostHandler stores item images like posters, backdrops and logos
 func (j *Jellyfin) itemsImagesPostHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	itemID := vars["item"]
+	itemID := vars["itemid"]
 	imageType := vars["type"]
 
 	// Validate item ID is provided
@@ -125,11 +134,6 @@ func (j *Jellyfin) itemsImagesPostHandler(w http.ResponseWriter, r *http.Request
 	j.receiveItemImage(w, r, itemID, imageType)
 }
 
-const (
-	ImageTypeProfile = "Profile"
-	ImageTypePrimary = "Primary"
-)
-
 // GET /Users/{user}/Images/{type}
 //
 // usersImagesProfileHandler handles requests for user profile images
@@ -141,7 +145,7 @@ func (j *Jellyfin) usersImagesProfileHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	// We ignore the provided image type and always use "Profile"
-	j.serveItemImage(w, r, userID, ImageTypeProfile)
+	j.serveItemImage(w, r, userID, imageTypeProfile)
 }
 
 // GET /UserImage?userId=fa2b28f1af954a71a58353b7e2da9de6&
@@ -154,7 +158,7 @@ func (j *Jellyfin) userImageGetHandler(w http.ResponseWriter, r *http.Request) {
 		apierror(w, "userId parameter is required", http.StatusBadRequest)
 		return
 	}
-	j.serveItemImage(w, r, userID, ImageTypeProfile)
+	j.serveItemImage(w, r, userID, imageTypeProfile)
 }
 
 // POST /UserImage?userId=fa2b28f1af954a71a58353b7e2da9de6&
@@ -175,7 +179,7 @@ func (j *Jellyfin) userImagePostHandler(w http.ResponseWriter, r *http.Request) 
 		apierror(w, "Cannot upload image for another user", http.StatusForbidden)
 		return
 	}
-	j.receiveItemImage(w, r, userID, ImageTypeProfile)
+	j.receiveItemImage(w, r, userID, imageTypeProfile)
 }
 
 // DELETE /UserImage?userId=fa2b28f1af954a71a58353b7e2da9de6&
@@ -196,11 +200,75 @@ func (j *Jellyfin) userImageDeleteHandler(w http.ResponseWriter, r *http.Request
 		apierror(w, "Cannot delete image for another user", http.StatusForbidden)
 		return
 	}
-	if err := j.repo.DeleteImage(r.Context(), userID, ImageTypeProfile); err != nil {
+	if err := j.repo.DeleteImage(r.Context(), userID, imageTypeProfile); err != nil {
 		apierror(w, "Failed to delete image", http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// GET /genres/{name}/images/{type}
+//
+// GenresImagesGetHandler serves genre images
+func (j *Jellyfin) GenresImagesGetHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	genre := vars["name"]
+
+	var err error
+	genre, err = url.PathUnescape(genre)
+	if err != nil {
+		apierror(w, "Invalid genre name", http.StatusBadRequest)
+		return
+	}
+	j.serveItemImage(w, r, makeJFGenreID(genre), imageTypePrimary)
+}
+
+// POST /genres/{name}/images/{type}
+//
+// GenresImagesPostHandler stores genre images
+func (j *Jellyfin) GenresImagesPostHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	genre := vars["name"]
+
+	var err error
+	genre, err = url.PathUnescape(genre)
+	if err != nil {
+		apierror(w, "Invalid genre name", http.StatusBadRequest)
+		return
+	}
+	j.receiveItemImage(w, r, makeJFGenreID(genre), imageTypePrimary)
+}
+
+// GET /studios/{name}/images/{type}
+//
+// StudiosImagesGetHandler serves studio images
+func (j *Jellyfin) StudiosImagesGetHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	studio := vars["name"]
+
+	var err error
+	studio, err = url.PathUnescape(studio)
+	if err != nil {
+		apierror(w, "Invalid studio name", http.StatusBadRequest)
+		return
+	}
+	j.serveItemImage(w, r, makeJFStudioID(studio), imageTypePrimary)
+}
+
+// POST /studios/{name}/images/{type}
+//
+// StudiosImagesPostHandler stores studio image
+func (j *Jellyfin) StudiosImagesPostHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	studio := vars["name"]
+
+	var err error
+	studio, err = url.PathUnescape(studio)
+	if err != nil {
+		apierror(w, "Invalid studio name", http.StatusBadRequest)
+		return
+	}
+	j.receiveItemImage(w, r, makeJFStudioID(studio), imageTypePrimary)
 }
 
 // /Items/{item}/Images
@@ -208,7 +276,7 @@ func (j *Jellyfin) userImageDeleteHandler(w http.ResponseWriter, r *http.Request
 // itemsImagesHandler returns a list of images for an item
 func (j *Jellyfin) itemsImagesHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	itemID := vars["item"]
+	itemID := vars["itemid"]
 	_, i := j.collections.GetItemByID(trimPrefix(itemID))
 	if i == nil {
 		apierror(w, "Item not found", http.StatusNotFound)
@@ -278,7 +346,7 @@ func (j *Jellyfin) receiveItemImage(w http.ResponseWriter, r *http.Request, user
 	metadata := model.ImageMetadata{
 		MimeType: mimeType,
 		FileSize: len(imageData),
-		Etag:     makeImageEtag(imageData),
+		Etag:     idhash.HashBytes(imageData),
 		Updated:  time.Now().UTC(),
 	}
 	if err = j.repo.StoreImage(r.Context(), userID, imageType, metadata, imageData); err != nil {
@@ -372,8 +440,4 @@ func mimeTypeByExtension(filename string) string {
 	default:
 		return "application/octet-stream"
 	}
-}
-
-func makeImageEtag(data []byte) string {
-	return fmt.Sprintf("%x", sha256.Sum256(data))[:16]
 }

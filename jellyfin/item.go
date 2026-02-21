@@ -30,7 +30,7 @@ func (j *Jellyfin) usersItemHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vars := mux.Vars(r)
-	itemID := vars["item"]
+	itemID := vars["itemid"]
 
 	response, err := j.makeJFItemByID(r.Context(), accessToken.User.ID, itemID)
 	if err != nil {
@@ -209,6 +209,18 @@ func (j *Jellyfin) usersItemsLatestHandler(w http.ResponseWriter, r *http.Reques
 	serveJSON(items, w)
 }
 
+// /Items/Root
+//
+// usersItemsRootHandler returns root level item
+func (j *Jellyfin) usersItemsRootHandler(w http.ResponseWriter, r *http.Request) {
+	accessToken := j.getAccessTokenDetails(w, r)
+	if accessToken == nil {
+		return
+	}
+	response, _ := j.makeJFItemRoot(r.Context(), accessToken.User.ID)
+	serveJSON(response, w)
+}
+
 // /Search/Hints?includeItemTypes=Episode&limit=10&searchTerm=alien
 //
 // searchHintsHandler
@@ -273,7 +285,7 @@ func (j *Jellyfin) usersItemsAncestorsHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	vars := mux.Vars(r)
-	itemID := vars["item"]
+	itemID := vars["itemid"]
 
 	c, i := j.collections.GetItemByID(itemID)
 	if i == nil {
@@ -326,10 +338,9 @@ func (j *Jellyfin) usersItemsResumeHandler(w http.ResponseWriter, r *http.Reques
 	if accessToken == nil {
 		return
 	}
-
 	queryparams := r.URL.Query()
 
-	resumeItemIDs, err := j.repo.GetRecentlyWatched(r.Context(), accessToken.User.ID, false)
+	resumeItemIDs, err := j.repo.GetRecentlyWatched(r.Context(), accessToken.User.ID, 100000, false)
 	if err != nil {
 		apierror(w, "Could not get resume items list", http.StatusInternalServerError)
 		return
@@ -382,7 +393,7 @@ func (j *Jellyfin) usersItemsSimilarHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	vars := mux.Vars(r)
-	itemID := vars["item"]
+	itemID := vars["itemid"]
 	queryparams := r.URL.Query()
 
 	// We support similar items for movies, series and episodes only.
@@ -447,6 +458,14 @@ func (j *Jellyfin) usersItemsIntrosHandler(w http.ResponseWriter, r *http.Reques
 		StartIndex:       0,
 		TotalRecordCount: 0,
 	}
+	serveJSON(response, w)
+}
+
+// /Items/{item}/LocalTrailers
+// /Users/{user}/Items/{item}/LocalTrailers
+func (j *Jellyfin) usersItemsLocalTrailersHandler(w http.ResponseWriter, r *http.Request) {
+	// Currently not implemented, return empty list
+	response := []JFItem{}
 	serveJSON(response, w)
 }
 
@@ -1030,7 +1049,7 @@ func (j *Jellyfin) itemsDeleteHandler(w http.ResponseWriter, r *http.Request) {
 // itemsPlaybackInfoHandler returns playback information about an item, including media sources
 func (j *Jellyfin) itemsPlaybackInfoHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	itemID := vars["item"]
+	itemID := vars["itemid"]
 
 	_, i := j.collections.GetItemByID(trimPrefix(itemID))
 	if i == nil {
@@ -1057,7 +1076,7 @@ func (j *Jellyfin) itemsPlaybackInfoHandler(w http.ResponseWriter, r *http.Reque
 // usersItemsThemeMediaHandler
 func (j *Jellyfin) usersItemsThemeMediaHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	itemID := vars["item"]
+	itemID := vars["itemid"]
 
 	response := JFItemThemeMediaResponse{
 		ThemeVideosResult: JFItemThemeMediaResponseResult{
@@ -1094,7 +1113,7 @@ func (j *Jellyfin) mediaSegmentsHandler(w http.ResponseWriter, r *http.Request) 
 // videoStreamHandler streams the actual video file to the client
 func (j *Jellyfin) videoStreamHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	itemID := vars["item"]
+	itemID := vars["itemid"]
 
 	c, i := j.collections.GetItemByID(trimPrefix(itemID))
 	if i == nil || i.FileName() == "" {

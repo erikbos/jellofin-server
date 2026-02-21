@@ -172,7 +172,7 @@ func (j *Jellyfin) makeJFItemRoot(ctx context.Context, userID string) (response 
 		Name:                     "Media Folders",
 		ServerID:                 j.serverID,
 		ID:                       rootID,
-		Etag:                     idhash.IdHash(collectionRootID),
+		Etag:                     idhash.Hash(collectionRootID),
 		DateCreated:              time.Now().UTC(),
 		Type:                     itemTypeUserRootFolder,
 		IsFolder:                 true,
@@ -199,7 +199,7 @@ func (j *Jellyfin) makeJFItemRoot(ctx context.Context, userID string) (response 
 		BackdropImageTags:        []string{},
 		LocationType:             "FileSystem",
 		MediaType:                "Unknown",
-		ImageTags:                j.makeJFImageTags(ctx, rootID, ImageTypePrimary),
+		ImageTags:                j.makeJFImageTags(ctx, rootID, imageTypePrimary),
 	}
 	return
 }
@@ -235,7 +235,7 @@ func (j *Jellyfin) makeJFItemCollection(ctx context.Context, collectionID string
 		ServerID:                 j.serverID,
 		ID:                       id,
 		ParentID:                 makeJFRootID(collectionRootID),
-		Etag:                     idhash.IdHash(collectionID),
+		Etag:                     idhash.Hash(collectionID),
 		DateCreated:              time.Now().UTC(),
 		PremiereDate:             time.Now().UTC(),
 		Type:                     itemTypeCollectionFolder,
@@ -256,7 +256,7 @@ func (j *Jellyfin) makeJFItemCollection(ctx context.Context, collectionID string
 		GenreItems:               makeJFGenreItems(collectionGenres),
 		ExternalUrls:             []JFExternalUrls{},
 		RemoteTrailers:           []JFRemoteTrailers{},
-		ImageTags:                j.makeJFImageTags(ctx, id, ImageTypePrimary),
+		ImageTags:                j.makeJFImageTags(ctx, id, imageTypePrimary),
 	}
 	switch c.Type {
 	case collection.CollectionTypeMovies:
@@ -283,7 +283,7 @@ func (j *Jellyfin) makeJFItemCollectionFavorites(ctx context.Context, userID str
 		ServerID:                 j.serverID,
 		ID:                       id,
 		ParentID:                 makeJFRootID(collectionRootID),
-		Etag:                     idhash.IdHash(favoritesCollectionID),
+		Etag:                     idhash.Hash(favoritesCollectionID),
 		DateCreated:              time.Now().UTC(),
 		PremiereDate:             time.Now().UTC(),
 		CollectionType:           collectionTypePlaylists,
@@ -304,7 +304,7 @@ func (j *Jellyfin) makeJFItemCollectionFavorites(ctx context.Context, userID str
 		CanDelete:                false,
 		CanDownload:              true,
 		SpecialFeatureCount:      0,
-		ImageTags:                j.makeJFImageTags(ctx, id, ImageTypePrimary),
+		ImageTags:                j.makeJFImageTags(ctx, id, imageTypePrimary),
 		// PremiereDate should be set based upon most recent item in collection
 	}
 	return response, nil

@@ -6,6 +6,7 @@ import (
 	"unicode"
 
 	"github.com/erikbos/jellofin-server/collection/metadata"
+	"github.com/erikbos/jellofin-server/idhash"
 )
 
 type Item interface {
@@ -80,6 +81,8 @@ type Movie struct {
 	folder string
 	// Posten is this movie's poster image, often "poster.jpg"
 	poster string
+	// Etag, unique id. Should change when the movie is updated, e.g. when metadata is updated or when the file is changed.
+	etag string
 	// Filename, e.g. "casablanca.mp4"
 	fileName string
 	// fileSize is the size of the video file in bytes.
@@ -91,7 +94,13 @@ type Movie struct {
 	VttSubs Subtitles
 }
 
-func (m *Movie) ID() string                { return m.id }
+func (m *Movie) ID() string { return m.id }
+func (m *Movie) Etag() string {
+	if m.etag == "" {
+		m.etag = idhash.Hash(m.id)
+	}
+	return m.etag
+}
 func (m *Movie) Name() string              { return m.name }
 func (m *Movie) SortName() string          { return m.sortName }
 func (m *Movie) Path() string              { return m.path }
@@ -156,6 +165,8 @@ type Show struct {
 	seasonAllBanner string
 	// seasonAllPoster to be used in case we do not have a season-specific poster.
 	seasonAllPoster string
+	// Etag, unique id. Should change when the show is updated, e.g. when metadata is updated or when the file is changed.
+	etag string
 	// filename of the video file, e.g. "casablanca.mp4"
 	fileName string
 	// fileSize is the size of the video file in bytes.
@@ -169,7 +180,13 @@ type Show struct {
 	Seasons Seasons
 }
 
-func (s *Show) ID() string              { return s.id }
+func (s *Show) ID() string { return s.id }
+func (s *Show) Etag() string {
+	if s.etag == "" {
+		s.etag = idhash.Hash(s.id)
+	}
+	return s.etag
+}
 func (s *Show) Name() string            { return s.name }
 func (s *Show) SortName() string        { return s.sortName }
 func (s *Show) Path() string            { return s.path }
@@ -232,11 +249,19 @@ type Season struct {
 	seasonAllBanner string
 	// seasonAllPoster to be used in case we do not have a season-specific poster.
 	seasonAllPoster string
+	// Etag, unique id. Should change when the season is updated, e.g. when metadata is updated or when the file is changed.
+	etag string
 	// Episodes contains the episodes in this season.
 	Episodes Episodes
 }
 
-func (season *Season) ID() string       { return season.id }
+func (season *Season) ID() string { return season.id }
+func (season *Season) Etag() string {
+	if season.etag == "" {
+		season.etag = idhash.Hash(season.id)
+	}
+	return season.etag
+}
 func (season *Season) Name() string     { return season.name }
 func (season *Season) SortName() string { return season.name }
 func (season *Season) Path() string     { return season.path }
@@ -319,6 +344,8 @@ type Episode struct {
 	baseName string
 	// created is the timestamp of the episode.
 	created time.Time
+	// Etag, unique id. Should change when the episode is updated, e.g. when metadata is updated or when the file is changed.
+	etag string
 	// FileName is the filename relative to show directory, e.g. "S01/casablanca.s01e01.mp4"
 	fileName string
 	// fileSize is the size of the video file in bytes.
@@ -331,7 +358,13 @@ type Episode struct {
 	VttSubs  Subtitles
 }
 
-func (e *Episode) ID() string                { return e.id }
+func (e *Episode) ID() string { return e.id }
+func (e *Episode) Etag() string {
+	if e.etag == "" {
+		e.etag = idhash.Hash(e.id)
+	}
+	return e.etag
+}
 func (e *Episode) Name() string              { return e.name }
 func (e *Episode) SortName() string          { return e.sortName }
 func (e *Episode) Path() string              { return e.path }

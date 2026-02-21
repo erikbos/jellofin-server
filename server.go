@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,6 +32,7 @@ type configFile struct {
 		Port    string
 		TlsCert string
 		TlsKey  string
+		IPACL   string
 	}
 	Appdir   string
 	Cachedir string
@@ -99,11 +101,14 @@ func main() {
 	var repo database.Repository
 	// Legacy support for Dbdir
 	if config.Dbdir != "" {
-		repo, err = database.New("sqlite", &sqlite.ConfigFile{
+		repo, err = database.New("sqlite", sqlite.ConfigFile{
 			Filename: path.Join(config.Dbdir, "tink-items.db"),
 		})
-	} else {
-		repo, err = database.New("sqlite", config.Database.Sqlite)
+	}
+	if config.Database.Sqlite.Filename != "" {
+		repo, err = database.New("sqlite", sqlite.ConfigFile{
+			Filename: config.Database.Sqlite.Filename,
+		})
 	}
 	if err != nil {
 		log.Fatalf("database.New: %s", err.Error())
@@ -174,7 +179,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	server := HttpLog(canon.Middleware(r))
+	server := HttpLog(IPACLmiddleware(config.Listen.IPACL, canon.Middleware(r)))
 
 	if config.Listen.TlsCert != "" && config.Listen.TlsKey != "" {
 		kpr, err := NewKeypairReloader(config.Listen.TlsCert, config.Listen.TlsKey)
@@ -249,4 +254,54 @@ func (kpr *keypairReloader) maybeReload() error {
 	defer kpr.certMu.Unlock()
 	kpr.cert = &newCert
 	return nil
+}
+
+// IPACLmiddleware is an HTTP middleware enforcing IP allow list, if set.
+func IPACLmiddleware(acl string, next http.Handler) http.Handler {
+	// Don't process ACL in case it's empty
+	acl = strings.TrimSpace(acl)
+	if acl == "" {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Get client ip without port
+		remote := r.RemoteAddr
+		if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+			remote = host
+		}
+		clientIP := net.ParseIP(remote)
+		if clientIP == nil {
+			http.Error(w, "403 forbidden", http.StatusForbidden)
+			return
+		}
+		allow := false
+		for e := range strings.SplitSeq(acl, ",") {
+			e := strings.TrimSpace(e)
+			if strings.Contains(e, "/") {
+				if _, cidr, err := net.ParseCIDR(e); err == nil {
+					if cidr.Contains(clientIP) {
+						allow = true
+						break
+					}
+				} else {
+					log.Printf("listen.ipacl: invalid CIDR %q: %v", e, err)
+				}
+				continue
+
+			}
+			if ip := net.ParseIP(e); ip == nil {
+				if ip.Equal(clientIP) {
+					allow = true
+					break
+				}
+			} else {
+				log.Printf("listen.ipacl: invalid IP %q", e)
+			}
+		}
+		if !allow {
+			http.Error(w, "403 forbidden", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }

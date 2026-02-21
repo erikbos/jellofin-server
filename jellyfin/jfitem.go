@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jxskiss/base62"
+
 	"github.com/erikbos/jellofin-server/collection"
 	"github.com/erikbos/jellofin-server/idhash"
 )
@@ -158,18 +160,12 @@ func (j *Jellyfin) getJFItemsByParentID(ctx context.Context, userID, parentID st
 			return items, nil
 		}
 	}
-
 	// Check if parentID is a show to generate overviews
-	if _, i := j.collections.GetItemByID(trimPrefix(parentID)); i != nil {
-		if show, ok := i.(*collection.Show); ok {
-			items, err := j.makeJFSeasonsOverview(ctx, userID, show)
-			if err != nil {
-				return []JFItem{}, errors.New("could not find parent show")
-			}
+	if _, show := j.collections.GetShowByID(trimPrefix(parentID)); show != nil {
+		if items, err := j.makeJFSeasonsOverview(ctx, userID, show); err != nil {
 			return items, nil
 		}
-		log.Printf("getJFItemsByParentID: unsupported parentID %s of type %T \n", i.ID(), i)
-		return []JFItem{}, errors.New("unable to generate items for parentID")
+		return []JFItem{}, errors.New("could not get seasons overview for show")
 	}
 	return []JFItem{}, errors.New("parentID not found")
 }
@@ -289,7 +285,7 @@ func (j *Jellyfin) makeMediaSource(item collection.Item) (mediasources []JFMedia
 	filename := item.FileName()
 	mediasource := JFMediaSources{
 		ID:                    item.ID(),
-		ETag:                  idhash.IdHash(filename),
+		ETag:                  idhash.Hash(filename),
 		Name:                  filename,
 		Path:                  filename,
 		Type:                  "Default",
@@ -370,7 +366,7 @@ func (j *Jellyfin) makeJFMediaStreams(item collection.Item) []JFMediaStreams {
 	default:
 		videostream.Codec = "unknown"
 		videostream.CodecTag = "unknown"
-		log.Printf("Item %s/%s has unknown video codec %s", item.ID(), item.FileName(), item.VideoCodec())
+		// log.Printf("Item %s/%s has unknown video codec %s", item.ID(), item.FileName(), item.VideoCodec())
 	}
 	videostream.Title = strings.ToUpper(videostream.Codec)
 	videostream.DisplayTitle = videostream.Title + " - " + videostream.VideoRange
@@ -419,7 +415,7 @@ func (j *Jellyfin) makeJFMediaStreams(item collection.Item) []JFMediaStreams {
 	default:
 		audiostream.Title = "Unknown"
 		audiostream.ChannelLayout = "unknown"
-		log.Printf("Item %s/%s has unknown audio channel configuration %d", item.ID(), item.FileName(), audiostream.Channels)
+		// log.Printf("Item %s/%s has unknown audio channel configuration %d", item.ID(), item.FileName(), audiostream.Channels)
 	}
 
 	switch strings.ToLower(item.AudioCodec()) {
@@ -429,11 +425,14 @@ func (j *Jellyfin) makeJFMediaStreams(item collection.Item) []JFMediaStreams {
 	case "aac":
 		audiostream.Codec = "aac"
 		audiostream.CodecTag = "mp4a"
+	case "eac3":
+		audiostream.Codec = "eac3"
+		audiostream.CodecTag = "ec-3"
 	case "wma":
 		audiostream.Codec = "wmapro"
 	default:
 		audiostream.Codec = "unknown"
-		log.Printf("Item %s/%s has unknown audio codec %s", item.ID(), item.FileName(), item.AudioCodec())
+		// log.Printf("Item %s/%s has unknown audio codec %s", item.ID(), item.FileName(), item.AudioCodec())
 	}
 
 	audiostream.DisplayTitle = audiostream.Title + " - " + strings.ToUpper(audiostream.Codec)
@@ -475,6 +474,25 @@ func trimPrefix(s string) string {
 		return s[i+1:]
 	}
 	return s
+}
+
+// encodeExternalName encodes a name with a prefix to create an external ID.
+// the prefix helps to determine the type of ID when receiving it from a client.
+// the name is base62 encoded to avoid special characters in the ID.
+func encodeExternalName(itemprefix, name string) string {
+	return itemprefix + base62.StdEncoding.EncodeToString([]byte(name))
+}
+
+// decodeExternalName decodes an external ID to get the original name.
+func decodeExternalName(itemprefix, id string) (string, error) {
+	if !strings.HasPrefix(id, itemprefix) {
+		return "", errors.New("invalid id")
+	}
+	b, err := base62.StdEncoding.DecodeString(trimPrefix(id))
+	if err != nil {
+		return "", errors.New("cannot decode id")
+	}
+	return string(b), nil
 }
 
 // itemIsHD checks if the provided item is HD (720p or higher)

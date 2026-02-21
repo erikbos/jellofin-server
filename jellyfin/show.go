@@ -14,7 +14,6 @@ import (
 
 	"github.com/erikbos/jellofin-server/collection"
 	"github.com/erikbos/jellofin-server/database/model"
-	"github.com/erikbos/jellofin-server/idhash"
 )
 
 // /Shows/rXlq4EHNxq4HIVQzw3o2/Episodes?UserId=2b1ec0a52b09456c9823a367d84ac9e5&ExcludeLocationTypes=Virtual&SeasonId=rXlq4EHNxq4HIVQzw3o2/1
@@ -28,18 +27,26 @@ func (j *Jellyfin) showsEpisodesHandler(w http.ResponseWriter, r *http.Request) 
 
 	vars := mux.Vars(r)
 	queryparams := r.URL.Query()
+	showID := vars["showid"]
 
-	_, i := j.collections.GetItemByID(vars["show"])
-	if i == nil {
+	// If provided a seasonID, rewrite request for a showID with a seasonID filter
+	if isJFSeasonID(showID) {
+		seasonID := trimPrefix(showID)
+		if _, show, season := j.collections.GetSeasonByID(seasonID); season != nil {
+			queryparams.Set("seasonId", showID)
+			showID = show.ID()
+		} else {
+			apierror(w, "Season not found", http.StatusNotFound)
+			return
+		}
+		log.Printf("showsEpisodesHandler: rewritten seasonID %s request to show request with season filter, showID: %s, seasonID: %s\n", vars["show"], showID, seasonID)
+	}
+
+	_, show := j.collections.GetShowByID(showID)
+	if show == nil {
 		apierror(w, "Show not found", http.StatusNotFound)
 		return
 	}
-	show, ok := i.(*collection.Show)
-	if !ok {
-		apierror(w, "Item is not a show", http.StatusInternalServerError)
-		return
-	}
-
 	// Create API response for all episodes of the show
 	episodes := make([]JFItem, 0)
 	for _, s := range show.Seasons {
@@ -73,18 +80,12 @@ func (j *Jellyfin) showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	queryparams := r.URL.Query()
 
-	showID := vars["show"]
-	_, i := j.collections.GetItemByID(showID)
-	if i == nil {
+	showID := vars["showid"]
+	_, show := j.collections.GetShowByID(showID)
+	if show == nil {
 		apierror(w, "Show not found", http.StatusNotFound)
 		return
 	}
-	show, ok := i.(*collection.Show)
-	if !ok {
-		apierror(w, "Item is not a show", http.StatusInternalServerError)
-		return
-	}
-
 	seasons, err := j.makeJFSeasonsOverview(r.Context(), accessToken.User.ID, show)
 	if err != nil {
 		apierror(w, "Could not generate seasons overview", http.StatusInternalServerError)
@@ -124,20 +125,38 @@ func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 	if accessToken == nil {
 		return
 	}
-
 	queryparams := r.URL.Query()
 	seriesID := queryparams.Get("seriesId")
 
-	// todo: pass seriesId/seasonId to filter next up items to a specific series/season
-	recentlyWatchedIDs, err := j.repo.GetRecentlyWatched(r.Context(), accessToken.User.ID, true)
-	if err != nil {
-		apierror(w, "Could not get recently watched items list", http.StatusInternalServerError)
-		return
+	var nextUpItemIDs []string
+	if seriesID != "" {
+		recentlyWatchedIDs, err := j.repo.GetRecentlyWatched(r.Context(), accessToken.User.ID, 100000, true)
+		if err != nil {
+			apierror(w, "Could not get recently watched items list", http.StatusInternalServerError)
+			return
+		}
+		// Get next up items based on recently watched items for a series
+		nextUpItemIDs, err = j.collections.NextUpInSeries(recentlyWatchedIDs, seriesID)
+		if err != nil {
+			apierror(w, "Could not get next up items list", http.StatusInternalServerError)
+			return
+		}
 	}
-	nextUpItemIDs, err := j.collections.NextUp(recentlyWatchedIDs, seriesID)
-	if err != nil {
-		apierror(w, "Could not get next up items list", http.StatusInternalServerError)
-		return
+
+	// If no next up items found for the series, or no seriesID provided
+	// get next up items based on recently watched items across all series
+	if len(nextUpItemIDs) == 0 {
+		recentlyWatchedIDs, err := j.repo.GetRecentlyWatched(r.Context(), accessToken.User.ID, 10, true)
+		if err != nil {
+			apierror(w, "Could not get recently watched items list", http.StatusInternalServerError)
+			return
+		}
+		// Get next up items based on recently watched items and optional seriesID filter
+		nextUpItemIDs, err = j.collections.NextUpInCollection(recentlyWatchedIDs, seriesID)
+		if err != nil {
+			apierror(w, "Could not get next up items list", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	items := make([]JFItem, 0, len(nextUpItemIDs))
@@ -182,7 +201,7 @@ func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, show *coll
 		GenreItems:              makeJFGenreItems(show.Metadata.Genres()),
 		Studios:                 makeJFStudios(show.Metadata.Studios()),
 		IsFolder:                true,
-		Etag:                    idhash.IdHash(show.ID()),
+		Etag:                    show.Etag(),
 		DateCreated:             show.FirstVideo().UTC(),
 		PrimaryImageAspectRatio: 0.6666666666666666,
 		CanDelete:               false,
@@ -319,7 +338,7 @@ func (j *Jellyfin) makeJFItemSeason(ctx context.Context, userID string, season *
 		ServerID:           j.serverID,
 		IsFolder:           true,
 		LocationType:       "FileSystem",
-		Etag:               idhash.IdHash(season.ID()),
+		Etag:               season.Etag(),
 		MediaType:          "Unknown",
 		ChildCount:         len(season.Episodes),
 		RecursiveItemCount: len(season.Episodes),
@@ -441,7 +460,7 @@ func (j *Jellyfin) makeJFItemEpisode(ctx context.Context, userID string, episode
 		IsFolder:          false,
 		LocationType:      "FileSystem",
 		Path:              "episode.mp4",
-		Etag:              idhash.IdHash(episode.ID()),
+		Etag:              episode.Etag(),
 		MediaType:         "Video",
 		VideoType:         "VideoFile",
 		Container:         "mov,mp4,m4a",

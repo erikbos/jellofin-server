@@ -155,6 +155,7 @@ func (j *Jellyfin) parseAuthHeader(r *http.Request) (*authSchemeValues, error) {
 	if authHeader = r.Header.Get("authorization"); authHeader != "" {
 		found = true
 	} else {
+		// todo: remove after Jellyfin 11.12 release
 		if authHeader = r.Header.Get("x-emby-authorization"); authHeader != "" {
 			found = true
 		}
@@ -214,10 +215,12 @@ func (j *Jellyfin) authmiddleware(next http.Handler) http.Handler {
 			token = embyHeader.token
 			found = true
 		}
+		// todo: remove after Jellyfin 11.12 release
 		if t := r.Header.Get("x-emby-token"); t != "" {
 			token = t
 			found = true
 		}
+		// todo: remove after Jellyfin 11.12 release
 		if t := r.Header.Get("x-mediabrowser-token"); t != "" {
 			token = t
 			found = true
@@ -227,6 +230,7 @@ func (j *Jellyfin) authmiddleware(next http.Handler) http.Handler {
 			found = true
 		}
 		// Deprecated: needed for VidhubPro & Streamyfin's embedded VLC
+		// todo: remove after Jellyfin 11.12 release
 		if t := r.URL.Query().Get("api_key"); t != "" {
 			token = t
 			found = true

@@ -15,15 +15,16 @@ func (s *SqliteRepo) GetAccessToken(ctx context.Context, token string) (*model.A
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// skip: we want to always get the latest token details from the database, as we update the last used timestamp in memory and want to make sure we have the latest value for that and other fields. if we use the cache, we might return stale data.
-	//
 	// Try our in-memory store first
-	// if at, ok := s.accessTokenCache[token]; ok {
-	// 	// Update token timestamp so we can keep track of in-use tokens
-	// 	at.LastUsed = time.Now().UTC()
-	// 	s.accessTokenCache[token] = at
-	// 	return at, nil
-	// }
+	if at, ok := s.accessTokenCache[token]; ok {
+		// Update token timestamp so we can keep track of in-use tokens
+		at.LastUsed = time.Now().UTC()
+		s.accessTokenCache[token] = at
+		// skip using this: we want to always get the latest token details from the database, as
+		// we update the last used timestamp in memory and want to make sure we have the latest value for that and other fields.
+		//  if we use the cache, we might return stale data.
+		// return at, nil
+	}
 
 	// try database
 	query := `SELECT
@@ -71,7 +72,6 @@ func (s *SqliteRepo) GetAccessToken(ctx context.Context, token string) (*model.A
 // GetAccessTokens returns all access tokens for a user.
 func (s *SqliteRepo) GetAccessTokens(ctx context.Context, userID string) ([]model.AccessToken, error) {
 	query := `SELECT
-		userid,
 		token,
 		devicename,
 		deviceid,
@@ -79,24 +79,22 @@ func (s *SqliteRepo) GetAccessTokens(ctx context.Context, userID string) ([]mode
 		applicationversion,
 		remoteaddress,
 		created,
-		lastused FROM accesstokens`
-	rows, err := s.dbReadHandle.QueryxContext(ctx, query)
+		lastused FROM accesstokens WHERE userid=?`
+	rows, err := s.dbReadHandle.QueryxContext(ctx, query, userID)
 	if err != nil {
 		log.Printf("Error retrieving access tokens from db for userID: %s: %s\n", userID, err)
 		return nil, err
 	}
 	defer rows.Close()
 
-	var tokens []model.AccessToken
+	tokens := make([]model.AccessToken, 0, 10)
 	for rows.Next() {
 		var t model.AccessToken
 		if err := rows.StructScan(&t); err != nil {
 			log.Printf("Error scanning access token row from db for userID: %s: %s\n", userID, err)
 			return nil, err
 		}
-		if t.User.ID == userID {
-			tokens = append(tokens, t)
-		}
+		tokens = append(tokens, t)
 	}
 	return tokens, nil
 }

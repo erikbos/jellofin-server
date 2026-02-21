@@ -31,8 +31,6 @@ type User struct {
 }
 
 // UserProperties represents the properties of a user.
-// unset properties will be treated as false or empty,
-// so we can use this struct to only update specific properties without affecting others.
 type UserProperties struct {
 	// Admin indicates if the user is an administrator.
 	Admin bool

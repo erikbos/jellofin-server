@@ -12,9 +12,8 @@ import (
 func (s *SqliteRepo) CreatePlaylist(ctx context.Context, newPlaylist model.Playlist) (playlistID string, err error) {
 	log.Printf("CreatePlaylist: %+v", newPlaylist)
 
-	// newPlaylist.ID = idhash.IdHash(newPlaylist.Name)
 	// every create playlist will have a unique id (=Jellyfin behaviour)
-	newPlaylist.ID = idhash.IdHash(newPlaylist.Name + time.Now().String())
+	newPlaylist.ID = idhash.NewRandomID()
 
 	tx, err := s.dbWriteHandle.Beginx()
 	if err != nil {

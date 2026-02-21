@@ -138,8 +138,8 @@ func (j *Jellyfin) userGetHandler(w http.ResponseWriter, r *http.Request) {
 		apierror(w, ErrUserIDNotFound, http.StatusNotFound)
 		return
 	}
-	// Allow if requester is an administrator, user themselves, or user is public
-	if !accessToken.User.Properties.Admin && accessToken.User.ID != userID && !dbuser.Properties.IsHidden {
+	// Allow if requester is an administrator or user themselves
+	if !accessToken.User.Properties.Admin && accessToken.User.ID != userID {
 		apierror(w, "forbidden to access user", http.StatusForbidden)
 		return
 	}
@@ -347,7 +347,7 @@ func (j *Jellyfin) makeJFUser(ctx context.Context, user *model.User) JFUser {
 		u.LastActivityDate = &user.LastUsed
 	}
 	// Set imagetag if user has an image
-	if _, err := j.repo.HasImage(ctx, user.ID, ImageTypeProfile); err == nil {
+	if _, err := j.repo.HasImage(ctx, user.ID, imageTypeProfile); err == nil {
 		u.PrimaryImageTag = user.ID
 	}
 	return u
@@ -420,13 +420,14 @@ func (j *Jellyfin) createUser(context context.Context, username, password string
 		return nil, err
 	}
 	modelUser := &model.User{
-		ID:       idhash.IdHash(username),
+		ID:       idhash.NewRandomID(),
 		Username: strings.ToLower(username),
 		Password: string(hashedPassword),
 		Created:  time.Now().UTC(),
 		Properties: model.UserProperties{
-			Admin:    false,
-			IsHidden: false,
+			IsHidden:         true,
+			EnableAllFolders: true,
+			EnableDownloads:  true,
 		},
 	}
 	if err = j.repo.UpsertUser(context, modelUser); err != nil {
@@ -434,7 +435,7 @@ func (j *Jellyfin) createUser(context context.Context, username, password string
 	}
 	// Generate and store identicon avatar for this new user
 	if avatarMetadata, avatar, err := generateIdenticon(username); err == nil {
-		_ = j.repo.StoreImage(context, modelUser.ID, ImageTypeProfile, avatarMetadata, avatar)
+		_ = j.repo.StoreImage(context, modelUser.ID, imageTypeProfile, avatarMetadata, avatar)
 	}
 	return modelUser, nil
 }
@@ -486,7 +487,7 @@ func generateIdenticon(seed string) (model.ImageMetadata, []byte, error) {
 	avatarMeta := model.ImageMetadata{
 		MimeType: "image/png",
 		FileSize: buf.Len(),
-		Etag:     makeImageEtag(buf.Bytes()),
+		Etag:     idhash.HashBytes(buf.Bytes()),
 		Updated:  time.Now().UTC(),
 	}
 	return avatarMeta, buf.Bytes(), nil

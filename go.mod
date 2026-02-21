@@ -9,6 +9,7 @@ require (
 	github.com/gorilla/handlers v1.5.2
 	github.com/gorilla/mux v1.8.1
 	github.com/jmoiron/sqlx v1.4.0
+	github.com/jxskiss/base62 v1.1.0
 	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.21.0

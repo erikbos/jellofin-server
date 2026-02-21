@@ -2,8 +2,6 @@ package jellyfin
 
 import (
 	"context"
-	"encoding/base64"
-	"errors"
 	"log"
 	"net/http"
 	"net/url"
@@ -163,6 +161,12 @@ func (j *Jellyfin) makeJFItemPerson(ctx context.Context, userID string, personID
 			Primary: tagprefix_redirect + person.PosterURL,
 		}
 	}
+	if playstate, err := j.repo.GetUserData(ctx, userID, personID); err == nil {
+		response.UserData = j.makeJFUserData(userID, personID, playstate)
+	} else {
+		response.UserData = j.makeJFUserData(userID, personID, nil)
+	}
+
 	return response, nil
 }
 
@@ -180,9 +184,9 @@ func makeSortName(name string) string {
 
 // makeJFPeople creates a list of people (actors, directors, writers) for the item
 func (j *Jellyfin) makeJFPeople(_ context.Context, m metadata.Metadata, userID string) []JFPeople {
-	if userID != "XAOVn7iqiBujnIQY8sd0" {
-		return []JFPeople{}
-	}
+	// if userID != "XAOVn7iqiBujnIQY8sd0" {
+	// 	return []JFPeople{}
+	// }
 
 	actors := m.Actors()
 	directors := m.Directors()
@@ -205,8 +209,7 @@ func (j *Jellyfin) makeJFPeople(_ context.Context, m metadata.Metadata, userID s
 
 // makeJFPersonID returns an external id for a person.
 func makeJFPersonID(name string) string {
-	// base64 encoded to handle special characters, as some clients have issues with % characters in IDs.
-	return itemprefix_person + base64.RawURLEncoding.EncodeToString([]byte(name))
+	return encodeExternalName(itemprefix_person, name)
 }
 
 // isJFPersonID checks if the provided ID is a person ID.
@@ -216,12 +219,5 @@ func isJFPersonID(id string) bool {
 
 // decodeJFPersonID decodes a person ID to get the original name.
 func decodeJFPersonID(personID string) (string, error) {
-	if !strings.HasPrefix(personID, itemprefix_person) {
-		return "", errors.New("invalid person ID")
-	}
-	nameBytes, err := base64.RawURLEncoding.DecodeString(trimPrefix(personID))
-	if err != nil {
-		return "", errors.New("cannot decode person ID")
-	}
-	return string(nameBytes), nil
+	return decodeExternalName(itemprefix_person, personID)
 }

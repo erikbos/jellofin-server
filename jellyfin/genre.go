@@ -2,8 +2,6 @@ package jellyfin
 
 import (
 	"context"
-	"encoding/base64"
-	"errors"
 	"net/http"
 	"net/url"
 	"slices"
@@ -208,7 +206,7 @@ func (j *Jellyfin) makeJFItemGenre(ctx context.Context, _, genreID string) (JFIt
 		LocationType: "FileSystem",
 		MediaType:    "Unknown",
 		ChildCount:   1,
-		ImageTags:    j.makeJFImageTags(ctx, genreID, ImageTypePrimary),
+		ImageTags:    j.makeJFImageTags(ctx, genreID, imageTypePrimary),
 	}
 
 	if genreItemCount := j.collections.GenreItemCount(); genreItemCount != nil {
@@ -221,8 +219,7 @@ func (j *Jellyfin) makeJFItemGenre(ctx context.Context, _, genreID string) (JFIt
 
 // makeJFGenreID returns an external id for a genre name.
 func makeJFGenreID(genre string) string {
-	// base64 encoded to handle special characters, as some clients have issues with % characters in IDs.
-	return itemprefix_genre + base64.RawURLEncoding.EncodeToString([]byte(genre))
+	return encodeExternalName(itemprefix_genre, genre)
 }
 
 // isJFGenreID checks if the provided ID is a genre ID.
@@ -232,12 +229,5 @@ func isJFGenreID(id string) bool {
 
 // decodeJFGenreID decodes a genre ID to get the original name.
 func decodeJFGenreID(genreID string) (string, error) {
-	if !strings.HasPrefix(genreID, itemprefix_genre) {
-		return "", errors.New("invalid genre ID")
-	}
-	genreBytes, err := base64.RawURLEncoding.DecodeString(trimPrefix(genreID))
-	if err != nil {
-		return "", errors.New("cannot decode genre ID")
-	}
-	return string(genreBytes), nil
+	return decodeExternalName(itemprefix_genre, genreID)
 }

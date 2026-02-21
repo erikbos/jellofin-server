@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/erikbos/jellofin-server/collection"
-	"github.com/erikbos/jellofin-server/idhash"
 )
 
 // /Movies/Recommendations
@@ -37,7 +36,7 @@ func (j *Jellyfin) makeJFItemMovie(ctx context.Context, userID string, movie *co
 		IsFolder:                false,
 		LocationType:            "FileSystem",
 		Path:                    "file.mp4",
-		Etag:                    idhash.IdHash(movie.ID()),
+		Etag:                    movie.Etag(),
 		MediaType:               "Video",
 		VideoType:               "VideoFile",
 		Container:               "mov,mp4,m4a",
