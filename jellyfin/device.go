@@ -10,12 +10,12 @@ import (
 //
 // devicesGetHandler returns a list of devices known to the server.
 func (j *Jellyfin) devicesGetHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
 		return
 	}
 	// Get all access tokens for this user
-	accessTokens, err := j.repo.GetAccessTokens(r.Context(), accessToken.User.ID)
+	accessTokens, err := j.repo.GetAccessTokens(r.Context(), reqCtx.User.ID)
 	if err != nil {
 		apierror(w, "error retrieving devices", http.StatusInternalServerError)
 		return
@@ -23,7 +23,7 @@ func (j *Jellyfin) devicesGetHandler(w http.ResponseWriter, r *http.Request) {
 	// Build device list based upon access tokens
 	var devices []JFDeviceItem
 	for _, t := range accessTokens {
-		d := j.makeJFDeviceItem(t, accessToken.User.Username)
+		d := j.makeJFDeviceItem(t, reqCtx.User.Username)
 
 		devices = append(devices, d)
 	}
@@ -39,8 +39,8 @@ func (j *Jellyfin) devicesGetHandler(w http.ResponseWriter, r *http.Request) {
 //
 // devicesDeleteHandler handles deleting a device for the user.
 func (j *Jellyfin) devicesDeleteHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
 		return
 	}
 
@@ -52,7 +52,7 @@ func (j *Jellyfin) devicesDeleteHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Get all access tokens for this user
-	accessTokens, err := j.repo.GetAccessTokens(r.Context(), accessToken.User.ID)
+	accessTokens, err := j.repo.GetAccessTokens(r.Context(), reqCtx.User.ID)
 	if err != nil {
 		apierror(w, "error retrieving sessions", http.StatusInternalServerError)
 		return
@@ -75,8 +75,8 @@ func (j *Jellyfin) devicesDeleteHandler(w http.ResponseWriter, r *http.Request) 
 //
 // devicesInfoHandler returns device info for the user based upon device id.
 func (j *Jellyfin) devicesInfoHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
 		return
 	}
 
@@ -87,7 +87,7 @@ func (j *Jellyfin) devicesInfoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Get all access tokens for this user
-	accessTokens, err := j.repo.GetAccessTokens(r.Context(), accessToken.User.ID)
+	accessTokens, err := j.repo.GetAccessTokens(r.Context(), reqCtx.User.ID)
 	if err != nil {
 		apierror(w, "error retrieving sessions", http.StatusInternalServerError)
 		return
@@ -106,7 +106,7 @@ func (j *Jellyfin) devicesInfoHandler(w http.ResponseWriter, r *http.Request) {
 		apierror(w, "Device not found", http.StatusNotFound)
 		return
 	}
-	device := j.makeJFDeviceItem(deviceToken, accessToken.User.Username)
+	device := j.makeJFDeviceItem(deviceToken, reqCtx.User.Username)
 	serveJSON(device, w)
 }
 
@@ -114,8 +114,8 @@ func (j *Jellyfin) devicesInfoHandler(w http.ResponseWriter, r *http.Request) {
 //
 // devicesOptionsHandler returns device options for the user.
 func (j *Jellyfin) devicesOptionsHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
 		return
 	}
 
@@ -135,7 +135,7 @@ func (j *Jellyfin) devicesOptionsHandler(w http.ResponseWriter, r *http.Request)
 	// Currently no options are supported, return empty response
 	response := DevicesOptionsReponse{
 		DeviceID:         id,
-		CustomName:       accessToken.DeviceName,
+		CustomName:       reqCtx.Token.DeviceName,
 		DisableAutoLogin: false,
 	}
 	serveJSON(response, w)
@@ -144,7 +144,7 @@ func (j *Jellyfin) devicesOptionsHandler(w http.ResponseWriter, r *http.Request)
 func (j *Jellyfin) makeJFDeviceItem(accessToken model.AccessToken, user string) JFDeviceItem {
 	return JFDeviceItem{
 		ID:           accessToken.DeviceId,
-		LastUserID:   accessToken.User.ID,
+		LastUserID:   accessToken.UserID,
 		LastUserName: user,
 		Name:         accessToken.DeviceName,
 		AppName:      accessToken.ApplicationName,

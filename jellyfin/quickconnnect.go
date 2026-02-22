@@ -17,8 +17,8 @@ func (j *Jellyfin) quickConnectEnabledHandler(w http.ResponseWriter, r *http.Req
 //
 // usersAuthenticateByNameHandler stores quickconnect code of an authenticated user.
 func (j *Jellyfin) quickConnectAuthorizeHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
 		return
 	}
 
@@ -26,7 +26,7 @@ func (j *Jellyfin) quickConnectAuthorizeHandler(w http.ResponseWriter, r *http.R
 	userID := queryparams.Get("userId")
 	code := queryparams.Get("code")
 
-	if userID != accessToken.User.ID {
+	if userID != reqCtx.User.ID {
 		apierror(w, "userID does not match access token", http.StatusForbidden)
 		return
 	}

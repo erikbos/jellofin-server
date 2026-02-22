@@ -38,10 +38,9 @@ func (s *SqliteRepo) GetAccessToken(ctx context.Context, token string) (*model.A
 		created,
 		lastused FROM accesstokens WHERE token=? LIMIT 1`
 
-	var userID string
 	var t model.AccessToken
 	row := s.dbReadHandle.QueryRowContext(ctx, query, token)
-	err := row.Scan(&userID,
+	err := row.Scan(&t.UserID,
 		&t.Token,
 		&t.DeviceName,
 		&t.DeviceId,
@@ -54,24 +53,46 @@ func (s *SqliteRepo) GetAccessToken(ctx context.Context, token string) (*model.A
 		log.Printf("Error retrieving access token from db for token: %s: %s\n", token, err)
 		return nil, model.ErrNotFound
 	}
-	// Get user details for token
-	user, err := s.GetUserByID(ctx, userID)
+	// cache it
+	t.LastUsed = time.Now().UTC()
+	s.accessTokenCache[token] = &t
+	return &t, nil
+}
+
+func (s *SqliteRepo) GetAccessTokenByDeviceID(ctx context.Context, deviceID string) (*model.AccessToken, error) {
+	query := `SELECT
+		userid,
+		token,
+		devicename,
+		deviceid,
+		applicationname,
+		applicationversion,
+		remoteaddress,
+		created,
+		lastused FROM accesstokens WHERE deviceid=? LIMIT 1`
+
+	var t model.AccessToken
+	row := s.dbReadHandle.QueryRowContext(ctx, query, deviceID)
+	err := row.Scan(&t.UserID,
+		&t.Token,
+		&t.DeviceName,
+		&t.DeviceId,
+		&t.ApplicationName,
+		&t.ApplicationVersion,
+		&t.RemoteAddress,
+		&t.Created,
+		&t.LastUsed)
 	if err != nil {
-		log.Printf("Error retrieving user for access token from db for token: %s, userID: %s: %s\n", token, userID, err)
+		log.Printf("Error retrieving access token from db for deviceID: %s: %s\n", deviceID, err)
 		return nil, model.ErrNotFound
 	}
-	// Store user details in token
-	t.User = *user
-
-	// cache it
-	// t.LastUsed = time.Now().UTC()
-	// s.accessTokenCache[token] = &t
 	return &t, nil
 }
 
 // GetAccessTokens returns all access tokens for a user.
 func (s *SqliteRepo) GetAccessTokens(ctx context.Context, userID string) ([]model.AccessToken, error) {
 	query := `SELECT
+		userid,
 		token,
 		devicename,
 		deviceid,
@@ -192,7 +213,7 @@ func (s *SqliteRepo) storeAccessToken(ctx context.Context, tx *sqlx.Tx, t model.
 		created,
 		lastused) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`
 	_, err := tx.ExecContext(ctx, query,
-		t.User.ID,
+		t.UserID,
 		t.Token,
 		t.DeviceId,
 		t.DeviceName,

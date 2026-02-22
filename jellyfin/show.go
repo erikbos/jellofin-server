@@ -20,8 +20,8 @@ import (
 //
 // generate episode overview for one season of a show
 func (j *Jellyfin) showsEpisodesHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
 		return
 	}
 
@@ -50,7 +50,7 @@ func (j *Jellyfin) showsEpisodesHandler(w http.ResponseWriter, r *http.Request) 
 	// Create API response for all episodes of the show
 	episodes := make([]JFItem, 0)
 	for _, s := range show.Seasons {
-		if episodesOfSeason, err := j.makeJFEpisodesOverview(r.Context(), accessToken.User.ID, &s); err == nil {
+		if episodesOfSeason, err := j.makeJFEpisodesOverview(r.Context(), reqCtx.User.ID, &s); err == nil {
 			episodes = append(episodes, episodesOfSeason...)
 		}
 	}
@@ -72,8 +72,8 @@ func (j *Jellyfin) showsEpisodesHandler(w http.ResponseWriter, r *http.Request) 
 //
 // showsSeasonsHandler returns a list of seasons for a specific show
 func (j *Jellyfin) showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
 		return
 	}
 
@@ -86,7 +86,7 @@ func (j *Jellyfin) showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
 		apierror(w, "Show not found", http.StatusNotFound)
 		return
 	}
-	seasons, err := j.makeJFSeasonsOverview(r.Context(), accessToken.User.ID, show)
+	seasons, err := j.makeJFSeasonsOverview(r.Context(), reqCtx.User.ID, show)
 	if err != nil {
 		apierror(w, "Could not generate seasons overview", http.StatusInternalServerError)
 		return
@@ -121,8 +121,8 @@ func (j *Jellyfin) showsSeasonsHandler(w http.ResponseWriter, r *http.Request) {
 //
 // showsNextUpHandler returns a list of next up items for the user
 func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
 		return
 	}
 	queryparams := r.URL.Query()
@@ -130,7 +130,7 @@ func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 
 	var nextUpItemIDs []string
 	if seriesID != "" {
-		recentlyWatchedIDs, err := j.repo.GetRecentlyWatched(r.Context(), accessToken.User.ID, 100000, true)
+		recentlyWatchedIDs, err := j.repo.GetRecentlyWatched(r.Context(), reqCtx.User.ID, 100000, true)
 		if err != nil {
 			apierror(w, "Could not get recently watched items list", http.StatusInternalServerError)
 			return
@@ -146,7 +146,7 @@ func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 	// If no next up items found for the series, or no seriesID provided
 	// get next up items based on recently watched items across all series
 	if len(nextUpItemIDs) == 0 {
-		recentlyWatchedIDs, err := j.repo.GetRecentlyWatched(r.Context(), accessToken.User.ID, 10, true)
+		recentlyWatchedIDs, err := j.repo.GetRecentlyWatched(r.Context(), reqCtx.User.ID, 10, true)
 		if err != nil {
 			apierror(w, "Could not get recently watched items list", http.StatusInternalServerError)
 			return
@@ -162,7 +162,7 @@ func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 	items := make([]JFItem, 0, len(nextUpItemIDs))
 	for _, id := range nextUpItemIDs {
 		if _, i, s, e := j.collections.GetEpisodeByID(id); i != nil {
-			jfitem, err := j.makeJFItemEpisode(r.Context(), accessToken.User.ID, e, s.ID())
+			jfitem, err := j.makeJFItemEpisode(r.Context(), reqCtx.User.ID, e, s.ID())
 			if err == nil && j.applyItemFilter(&jfitem, queryparams) {
 				items = append(items, jfitem)
 			}

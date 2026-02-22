@@ -820,3 +820,28 @@ type ScheduledTaskTrigger struct {
 	Type          string `json:"Type"`
 	IntervalTicks int64  `json:"IntervalTicks"`
 }
+
+type SystemInfoStorageResponse struct {
+	ProgramDataFolder      JFSystemInfoStorageFolder    `json:"ProgramDataFolder"`
+	WebFolder              JFSystemInfoStorageFolder    `json:"WebFolder"`
+	ImageCacheFolder       JFSystemInfoStorageFolder    `json:"ImageCacheFolder"`
+	CacheFolder            JFSystemInfoStorageFolder    `json:"CacheFolder"`
+	LogFolder              JFSystemInfoStorageFolder    `json:"LogFolder"`
+	InternalMetadataFolder JFSystemInfoStorageFolder    `json:"InternalMetadataFolder"`
+	TranscodingTempFolder  JFSystemInfoStorageFolder    `json:"TranscodingTempFolder"`
+	Libraries              []JFSystemInfoStorageLibrary `json:"Libraries"`
+}
+
+type JFSystemInfoStorageLibrary struct {
+	ID      string                      `json:"Id"`
+	Name    string                      `json:"Name"`
+	Folders []JFSystemInfoStorageFolder `json:"Folders"`
+}
+
+type JFSystemInfoStorageFolder struct {
+	Path        string `json:"Path"`
+	FreeSpace   int64  `json:"FreeSpace"`
+	UsedSpace   int64  `json:"UsedSpace"`
+	StorageType string `json:"StorageType"`
+	DeviceID    string `json:"DeviceId"`
+}

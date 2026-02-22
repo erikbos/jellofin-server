@@ -44,28 +44,28 @@ func (j *Jellyfin) libraryVirtualFoldersHandler(w http.ResponseWriter, r *http.R
 //
 // usersViewsHandler returns collection list in order as configured by user
 func (j *Jellyfin) usersViewsHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
 		return
 	}
-	items, err := j.makeJFCollectionRootOverview(r.Context(), accessToken.User.ID)
+	items, err := j.makeJFCollectionRootOverview(r.Context(), reqCtx.User.ID)
 	if err != nil {
 		apierror(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	log.Printf("usersViewsHandler: EnableAllFolders: %v, EnabledFolders: %v, OrderedViews: %v, MyMediaExcludes: %v",
-		accessToken.User.Properties.EnableAllFolders, accessToken.User.Properties.EnabledFolders, accessToken.User.Properties.OrderedViews, accessToken.User.Properties.MyMediaExcludes)
+		reqCtx.User.Properties.EnableAllFolders, reqCtx.User.Properties.EnabledFolders, reqCtx.User.Properties.OrderedViews, reqCtx.User.Properties.MyMediaExcludes)
 
 	for _, item := range items {
 		log.Printf("usersViewsHandler: before filtering item: %s, DisplayPreferencesID: %s", item.ID, item.DisplayPreferencesID)
 	}
 
 	// If EnableAllFolders is false, we need to filter the items based on EnabledFolders
-	if !accessToken.User.Properties.EnableAllFolders {
+	if !reqCtx.User.Properties.EnableAllFolders {
 		filteredItems := make([]JFItem, 0, len(items))
 		for _, item := range items {
-			if slices.Contains(accessToken.User.Properties.EnabledFolders, item.ID) {
+			if slices.Contains(reqCtx.User.Properties.EnabledFolders, item.ID) {
 				filteredItems = append(filteredItems, item)
 			}
 		}
@@ -82,13 +82,13 @@ func (j *Jellyfin) usersViewsHandler(w http.ResponseWriter, r *http.Request) {
 	// If the user has configured an order of views, we need to order the items based on that.
 	// And exclude collection items unless includeHidden is true
 	// Any items that are not in the user's ordered views will be added at the end.
-	if len(accessToken.User.Properties.OrderedViews) != 0 {
+	if len(reqCtx.User.Properties.OrderedViews) != 0 {
 		// Order the items based on user preferences, and exclude items in my media excludes
 		orderedItems := make([]JFItem, 0, len(items))
 		seenItems := make(map[string]struct{})
-		for _, displayPreferenceID := range accessToken.User.Properties.OrderedViews {
+		for _, displayPreferenceID := range reqCtx.User.Properties.OrderedViews {
 			// If includeHidden is false, we need to exclude items that are in MyMediaExcludes
-			if !includeHidden && slices.Contains(accessToken.User.Properties.MyMediaExcludes, displayPreferenceID) {
+			if !includeHidden && slices.Contains(reqCtx.User.Properties.MyMediaExcludes, displayPreferenceID) {
 				continue
 			}
 			for _, item := range items {
@@ -144,8 +144,8 @@ func (j *Jellyfin) usersGroupingOptionsHandler(w http.ResponseWriter, r *http.Re
 //
 // libraryRefreshHandler triggers a library refresh
 func (j *Jellyfin) libraryRefreshHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
 		return
 	}
 	// we just return 204 as we do not support this

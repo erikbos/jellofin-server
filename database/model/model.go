@@ -56,8 +56,8 @@ type UserProperties struct {
 
 // AccessToken represents an access token for a user.
 type AccessToken struct {
-	// User is the user associated with the access token.
-	User User
+	// UserID is the ID of the user associated with the access token.
+	UserID string
 	// Token is the access token string.
 	Token string
 	// DeviceId is the unique identifier for the device.

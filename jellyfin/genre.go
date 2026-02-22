@@ -15,15 +15,15 @@ import (
 //
 // genresHandler returns a list of genres for one or all collections.
 func (j *Jellyfin) genresHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
 		return
 	}
 
 	// Get all items for which we need to get genres.
 	queryparams := r.URL.Query()
 	parentID := queryparams.Get("parentId")
-	items, err := j.getJFItems(r.Context(), accessToken.User.ID, parentID)
+	items, err := j.getJFItems(r.Context(), reqCtx.User.ID, parentID)
 	if err != nil {
 		apierror(w, "Failed to get items", http.StatusInternalServerError)
 		return
@@ -36,7 +36,7 @@ func (j *Jellyfin) genresHandler(w http.ResponseWriter, r *http.Request) {
 		for _, genre := range item.GenreItems {
 			if _, exists := genreSet[genre.ID]; !exists {
 				genreSet[genre.ID] = struct{}{}
-				if genreItem, err := j.makeJFItemGenre(r.Context(), accessToken.User.ID, genre.ID); err == nil {
+				if genreItem, err := j.makeJFItemGenre(r.Context(), reqCtx.User.ID, genre.ID); err == nil {
 					genres = append(genres, genreItem)
 				}
 			}
@@ -58,8 +58,8 @@ func (j *Jellyfin) genresHandler(w http.ResponseWriter, r *http.Request) {
 //
 // genreHandler returns details of a specific genre
 func (j *Jellyfin) genreHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
 		return
 	}
 
@@ -76,7 +76,7 @@ func (j *Jellyfin) genreHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	//TOD: validate genre is actually in the collection?
-	response, err := j.makeJFItemGenre(r.Context(), accessToken.User.ID, makeJFGenreID(genre))
+	response, err := j.makeJFItemGenre(r.Context(), reqCtx.User.ID, makeJFGenreID(genre))
 	if err != nil {
 		apierror(w, "Genre not found", http.StatusNotFound)
 		return
@@ -88,15 +88,15 @@ func (j *Jellyfin) genreHandler(w http.ResponseWriter, r *http.Request) {
 //
 // usersItemsFiltersHandler returns a list of genre filter values
 func (j *Jellyfin) usersItemsFiltersHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
 		return
 	}
 
 	// Get all items for which we need to get genres.
 	queryparams := r.URL.Query()
 	parentID := queryparams.Get("parentId")
-	items, err := j.getJFItems(r.Context(), accessToken.User.ID, parentID)
+	items, err := j.getJFItems(r.Context(), reqCtx.User.ID, parentID)
 	if err != nil {
 		apierror(w, "Failed to get items", http.StatusInternalServerError)
 		return
@@ -142,15 +142,15 @@ func (j *Jellyfin) usersItemsFiltersHandler(w http.ResponseWriter, r *http.Reque
 //
 // usersItemsFilters2Handler returns a list of genre name and their id.
 func (j *Jellyfin) usersItemsFilters2Handler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
 		return
 	}
 
 	// Get all items for which we need to get genres.
 	queryparams := r.URL.Query()
 	parentID := queryparams.Get("parentId")
-	items, err := j.getJFItems(r.Context(), accessToken.User.ID, parentID)
+	items, err := j.getJFItems(r.Context(), reqCtx.User.ID, parentID)
 	if err != nil {
 		apierror(w, "Failed to get items", http.StatusInternalServerError)
 		return

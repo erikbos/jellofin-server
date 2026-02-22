@@ -28,8 +28,8 @@ const (
 //
 // usersGetHandler returns all users
 func (j *Jellyfin) usersGetHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
 		return
 	}
 	// Get all users
@@ -61,9 +61,9 @@ func (j *Jellyfin) usersGetHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		// Include user if requestor is the user
-		if accessToken.User.ID == user.Id ||
+		if reqCtx.User.ID == user.Id ||
 			// Include user if requestor has administrator privileges
-			accessToken.User.Properties.Admin ||
+			reqCtx.User.Properties.Admin ||
 			// Include user if user is public
 			!user.Policy.IsHidden {
 			response = append(response, user)
@@ -76,17 +76,17 @@ func (j *Jellyfin) usersGetHandler(w http.ResponseWriter, r *http.Request) {
 //
 // usersPostHandler updates a user
 func (j *Jellyfin) usersPostHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
 		return
 	}
 	queryparams := r.URL.Query()
 	userID := queryparams.Get("userId")
-	// log.Printf("usersPostHandler: accessToken.User.ID=%s, userID=%s\n", accessToken.User.ID, userID)
-	// log.Printf("usersPostHandler: Admins=%v\n", accessToken.User.Properties.Admin)
+	// log.Printf("usersPostHandler: reqCtx.User.ID=%s, userID=%s\n", reqCtx.User.ID, userID)
+	// log.Printf("usersPostHandler: Admins=%v\n", reqCtx.User.Properties.Admin)
 
 	// Only allow if requester is an administrator or the user themselve
-	if !accessToken.User.Properties.Admin && accessToken.User.ID != userID {
+	if !reqCtx.User.Properties.Admin && reqCtx.User.ID != userID {
 		apierror(w, "forbidden to update user policy", http.StatusForbidden)
 		return
 	}
@@ -115,11 +115,11 @@ func (j *Jellyfin) usersPostHandler(w http.ResponseWriter, r *http.Request) {
 //
 // usersMeHandler returns the current user
 func (j *Jellyfin) usersMeHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
 		return
 	}
-	response := j.makeJFUser(r.Context(), &accessToken.User)
+	response := j.makeJFUser(r.Context(), reqCtx.User)
 	serveJSON(response, w)
 }
 
@@ -127,8 +127,8 @@ func (j *Jellyfin) usersMeHandler(w http.ResponseWriter, r *http.Request) {
 //
 // userGetHandler returns a user
 func (j *Jellyfin) userGetHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
 		return
 	}
 	vars := mux.Vars(r)
@@ -139,7 +139,7 @@ func (j *Jellyfin) userGetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Allow if requester is an administrator or user themselves
-	if !accessToken.User.Properties.Admin && accessToken.User.ID != userID {
+	if !reqCtx.User.Properties.Admin && reqCtx.User.ID != userID {
 		apierror(w, "forbidden to access user", http.StatusForbidden)
 		return
 	}
@@ -151,14 +151,14 @@ func (j *Jellyfin) userGetHandler(w http.ResponseWriter, r *http.Request) {
 //
 // userDeleteHandler deletes a user
 func (j *Jellyfin) userDeleteHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
 		return
 	}
 	vars := mux.Vars(r)
 	userID := vars["userid"]
 	// Only allow if requester is an administrator and not deleting themselves
-	if !accessToken.User.Properties.Admin || accessToken.User.ID == userID {
+	if !reqCtx.User.Properties.Admin || reqCtx.User.ID == userID {
 		apierror(w, "forbidden to delete user", http.StatusForbidden)
 		return
 	}
@@ -191,14 +191,14 @@ func (j *Jellyfin) usersPublicHandler(w http.ResponseWriter, r *http.Request) {
 //
 // usersConfigurationHandler updates user configuration
 func (j *Jellyfin) usersConfigurationHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
 		return
 	}
 	vars := mux.Vars(r)
 	userID := vars["userid"]
 	// Only allow if requester is an administrator or the user themselves
-	if !accessToken.User.Properties.Admin && accessToken.User.ID != userID {
+	if !reqCtx.User.Properties.Admin && reqCtx.User.ID != userID {
 		apierror(w, "forbidden to update user policy", http.StatusForbidden)
 		return
 	}
@@ -226,14 +226,14 @@ func (j *Jellyfin) usersConfigurationHandler(w http.ResponseWriter, r *http.Requ
 //
 // usersPolicyHandler updates user policy
 func (j *Jellyfin) usersPolicyHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
 		return
 	}
 	vars := mux.Vars(r)
 	userID := vars["userid"]
 	// Only allow if requester is an administrator or the user themselves
-	if !accessToken.User.Properties.Admin && accessToken.User.ID != userID {
+	if !reqCtx.User.Properties.Admin && reqCtx.User.ID != userID {
 		apierror(w, "forbidden to update user policy", http.StatusForbidden)
 		return
 	}
@@ -260,14 +260,14 @@ func (j *Jellyfin) usersPolicyHandler(w http.ResponseWriter, r *http.Request) {
 //
 // usersPasswordHandler updates user password
 func (j *Jellyfin) usersPasswordHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
 		return
 	}
 	queryparams := r.URL.Query()
 	userID := queryparams.Get("userId")
 	// Only allow if requester is an administrator or the user themselves
-	if !accessToken.User.Properties.Admin && accessToken.User.ID != userID {
+	if !reqCtx.User.Properties.Admin && reqCtx.User.ID != userID {
 		apierror(w, "forbidden to update user password", http.StatusForbidden)
 		return
 	}
@@ -302,8 +302,8 @@ func (j *Jellyfin) usersPasswordHandler(w http.ResponseWriter, r *http.Request) 
 //
 // usersNewItemsHandler creates a new user with the provided username and password
 func (j *Jellyfin) usersNewItemsHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
 		return
 	}
 	var req JFUserNewRequest
@@ -438,6 +438,11 @@ func (j *Jellyfin) createUser(context context.Context, username, password string
 		_ = j.repo.StoreImage(context, modelUser.ID, imageTypeProfile, avatarMetadata, avatar)
 	}
 	return modelUser, nil
+}
+
+// validatePassword validates a password against a hashed password
+func validatePassword(hashedPassword, password string) error {
+	return bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
 }
 
 // hashPassword hashes a password

@@ -165,8 +165,8 @@ func (j *Jellyfin) userImageGetHandler(w http.ResponseWriter, r *http.Request) {
 //
 // userImagePostHandler uploads a user's profile image
 func (j *Jellyfin) userImagePostHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
 		return
 	}
 	queryParams := r.URL.Query()
@@ -175,7 +175,7 @@ func (j *Jellyfin) userImagePostHandler(w http.ResponseWriter, r *http.Request) 
 		apierror(w, "userId parameter is required", http.StatusBadRequest)
 		return
 	}
-	if userID != accessToken.User.ID {
+	if userID != reqCtx.User.ID {
 		apierror(w, "Cannot upload image for another user", http.StatusForbidden)
 		return
 	}
@@ -186,8 +186,8 @@ func (j *Jellyfin) userImagePostHandler(w http.ResponseWriter, r *http.Request) 
 //
 // userImageDeleteHandler deletes a user's profile image
 func (j *Jellyfin) userImageDeleteHandler(w http.ResponseWriter, r *http.Request) {
-	accessToken := j.getAccessTokenDetails(w, r)
-	if accessToken == nil {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
 		return
 	}
 	queryParams := r.URL.Query()
@@ -196,7 +196,7 @@ func (j *Jellyfin) userImageDeleteHandler(w http.ResponseWriter, r *http.Request
 		apierror(w, "userId parameter is required", http.StatusBadRequest)
 		return
 	}
-	if userID != accessToken.User.ID {
+	if userID != reqCtx.User.ID {
 		apierror(w, "Cannot delete image for another user", http.StatusForbidden)
 		return
 	}

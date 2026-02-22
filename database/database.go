@@ -38,6 +38,8 @@ type UserRepo interface {
 type AccessTokenRepo interface {
 	// Get accesstoken details by tokenid.
 	GetAccessToken(ctx context.Context, token string) (*model.AccessToken, error)
+	// GetAccessTokenByDeviceID retrieves an access token by device ID.
+	GetAccessTokenByDeviceID(ctx context.Context, deviceID string) (*model.AccessToken, error)
 	// Get all access tokens for a user.
 	GetAccessTokens(ctx context.Context, userID string) ([]model.AccessToken, error)
 	// UpsertAccessToken upserts an access token.
