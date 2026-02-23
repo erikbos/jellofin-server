@@ -31,6 +31,8 @@ type Options struct {
 	ServerPort string
 	// Indicates if we should auto-register Jellyfin users
 	AutoRegister bool
+	// Indicates if quickconnect is enabled
+	QuickConnect bool
 	// JPEG quality for posters
 	ImageQualityPoster int
 }
@@ -45,19 +47,22 @@ type Jellyfin struct {
 	serverName string
 	// Indicates if we should auto-register Jellyfin users
 	autoRegister bool
+	// Indicates if quickconnect is enabled
+	quickConnectEnabled bool
 	// JPEG quality for posters
 	imageQualityPoster int
 }
 
 func New(o *Options) *Jellyfin {
 	j := &Jellyfin{
-		collections:        o.Collections,
-		repo:               o.Repo,
-		serverID:           o.ServerID,
-		serverName:         o.ServerName,
-		imageresizer:       o.Imageresizer,
-		autoRegister:       o.AutoRegister,
-		imageQualityPoster: o.ImageQualityPoster,
+		collections:         o.Collections,
+		repo:                o.Repo,
+		serverID:            o.ServerID,
+		serverName:          o.ServerName,
+		imageresizer:        o.Imageresizer,
+		autoRegister:        o.AutoRegister,
+		quickConnectEnabled: o.QuickConnect,
+		imageQualityPoster:  o.ImageQualityPoster,
 	}
 	if j.serverID == "" {
 		if hostname, err := os.Hostname(); err == nil {
@@ -96,6 +101,7 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/Playback/BitrateTest", middleware(j.playbackBitrateTestHandler))
 
 	r.Handle("/Users/AuthenticateByName", http.HandlerFunc(j.usersAuthenticateByNameHandler)).Methods("POST")
+	r.Handle("/Users/AuthenticateWithQuickConnect", http.HandlerFunc(j.usersAuthenticateWithQuickConnectHandler)).Methods("POST")
 	r.Handle("/QuickConnect/Authorize", middleware(j.quickConnectAuthorizeHandler)).Methods("POST")
 	r.Handle("/QuickConnect/Connect", http.HandlerFunc(j.quickConnectConnectHandler))
 	r.Handle("/QuickConnect/Enabled", http.HandlerFunc(j.quickConnectEnabledHandler))

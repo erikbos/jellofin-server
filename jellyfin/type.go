@@ -176,6 +176,25 @@ type JFAuthenticateByNameResponse struct {
 	ServerId    string         `json:"ServerId"`
 }
 
+type JFQuickconnectResponse struct {
+	// AppName is the name of the app that made the connection.
+	AppName string `json:"AppName"`
+	// AppVersion is the version of the app that made the connection.
+	AppVersion string `json:"AppVersion"`
+	// Authenticated is true if the connection was authenticated, false if it was not.
+	Authenticated bool `json:"Authenticated"`
+	// Code is the quick connect code that can be used to connect to the server.
+	Code string `json:"Code"`
+	// DateAdded is the date and time when the quick connect code was added.
+	DateAdded time.Time `json:"DateAdded"`
+	// DeviceID is the ID of the device that generated the quick connect code.
+	DeviceID string `json:"DeviceId"`
+	// DeviceName is the name of the device that generated the quick connect code.
+	DeviceName string `json:"DeviceName"`
+	// Secret is the secret associated with the quick connect code.
+	Secret string `json:"Secret"`
+}
+
 type JFUsersItemsResumeResponse struct {
 	Items            []JFItem `json:"Items"`
 	TotalRecordCount int      `json:"TotalRecordCount"`
@@ -821,27 +840,27 @@ type ScheduledTaskTrigger struct {
 	IntervalTicks int64  `json:"IntervalTicks"`
 }
 
-type SystemInfoStorageResponse struct {
-	ProgramDataFolder      JFSystemInfoStorageFolder    `json:"ProgramDataFolder"`
-	WebFolder              JFSystemInfoStorageFolder    `json:"WebFolder"`
-	ImageCacheFolder       JFSystemInfoStorageFolder    `json:"ImageCacheFolder"`
-	CacheFolder            JFSystemInfoStorageFolder    `json:"CacheFolder"`
-	LogFolder              JFSystemInfoStorageFolder    `json:"LogFolder"`
-	InternalMetadataFolder JFSystemInfoStorageFolder    `json:"InternalMetadataFolder"`
-	TranscodingTempFolder  JFSystemInfoStorageFolder    `json:"TranscodingTempFolder"`
-	Libraries              []JFSystemInfoStorageLibrary `json:"Libraries"`
-}
+// type JFSystemInfoStorageResponse struct {
+// 	ProgramDataFolder      JFSystemInfoStorageFolder    `json:"ProgramDataFolder"`
+// 	WebFolder              JFSystemInfoStorageFolder    `json:"WebFolder"`
+// 	ImageCacheFolder       JFSystemInfoStorageFolder    `json:"ImageCacheFolder"`
+// 	CacheFolder            JFSystemInfoStorageFolder    `json:"CacheFolder"`
+// 	LogFolder              JFSystemInfoStorageFolder    `json:"LogFolder"`
+// 	InternalMetadataFolder JFSystemInfoStorageFolder    `json:"InternalMetadataFolder"`
+// 	TranscodingTempFolder  JFSystemInfoStorageFolder    `json:"TranscodingTempFolder"`
+// 	Libraries              []JFSystemInfoStorageLibrary `json:"Libraries"`
+// }
 
-type JFSystemInfoStorageLibrary struct {
-	ID      string                      `json:"Id"`
-	Name    string                      `json:"Name"`
-	Folders []JFSystemInfoStorageFolder `json:"Folders"`
-}
+// type JFSystemInfoStorageLibrary struct {
+// 	ID      string                      `json:"Id"`
+// 	Name    string                      `json:"Name"`
+// 	Folders []JFSystemInfoStorageFolder `json:"Folders"`
+// }
 
-type JFSystemInfoStorageFolder struct {
-	Path        string `json:"Path"`
-	FreeSpace   int64  `json:"FreeSpace"`
-	UsedSpace   int64  `json:"UsedSpace"`
-	StorageType string `json:"StorageType"`
-	DeviceID    string `json:"DeviceId"`
-}
+// type JFSystemInfoStorageFolder struct {
+// 	Path        string `json:"Path"`
+// 	FreeSpace   int64  `json:"FreeSpace"`
+// 	UsedSpace   int64  `json:"UsedSpace"`
+// 	StorageType string `json:"StorageType"`
+// 	DeviceID    string `json:"DeviceId"`
+// }

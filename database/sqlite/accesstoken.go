@@ -86,6 +86,12 @@ func (s *SqliteRepo) GetAccessTokenByDeviceID(ctx context.Context, deviceID stri
 		log.Printf("Error retrieving access token from db for deviceID: %s: %s\n", deviceID, err)
 		return nil, model.ErrNotFound
 	}
+
+	// cache it
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t.LastUsed = time.Now().UTC()
+	s.accessTokenCache[t.Token] = &t
 	return &t, nil
 }
 

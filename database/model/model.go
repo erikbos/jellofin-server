@@ -76,6 +76,21 @@ type AccessToken struct {
 	LastUsed time.Time
 }
 
+type QuickConnectCode struct {
+	// UserID is the ID of the user associated with the quick connect code.
+	UserID string
+	// DeviceID is the unique identifier for the device.
+	DeviceID string
+	// Secret is the secret for retrieving the quick connect code.
+	Secret string
+	// Authorized is true if the quick connect code is authorized by a user.
+	Authorized bool
+	// Code is the quick connect code.
+	Code string
+	// Created is the time the quick connect code was created.
+	Created time.Time
+}
+
 // Item represents a media item in the database.
 type Item struct {
 	ID         string

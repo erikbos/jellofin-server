@@ -53,6 +53,7 @@ type configFile struct {
 		ServerID           string
 		ServerName         string
 		AutoRegister       bool
+		QuickConnect       bool
 		ImageQualityPoster int
 	}
 }
@@ -158,6 +159,7 @@ func main() {
 		ServerID:           config.Jellyfin.ServerID,
 		ServerName:         config.Jellyfin.ServerName,
 		AutoRegister:       config.Jellyfin.AutoRegister,
+		QuickConnect:       config.Jellyfin.QuickConnect,
 		ImageQualityPoster: config.Jellyfin.ImageQualityPoster,
 	})
 	j.RegisterHandlers(r)

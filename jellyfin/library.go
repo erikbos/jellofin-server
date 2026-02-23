@@ -26,11 +26,16 @@ func (j *Jellyfin) libraryVirtualFoldersHandler(w http.ResponseWriter, r *http.R
 			return
 		}
 		l := JFMediaLibrary{
-			Name:               collectionItem.Name,
-			ItemId:             collectionItem.ID,
-			PrimaryImageItemId: collectionItem.ID,
-			CollectionType:     collectionItem.Type,
-			Locations:          []string{"/"},
+			Name:           collectionItem.Name,
+			ItemId:         collectionItem.ID,
+			CollectionType: collectionItem.Type,
+			Locations: []string{
+				// stub directory path
+				"/" + strings.ToLower(strings.Join(strings.Fields(collectionItem.Name), "")),
+			},
+		}
+		if _, err := j.repo.HasImage(r.Context(), collectionItem.ID, imageTypePrimary); err == nil {
+			l.PrimaryImageItemId = collectionItem.ID
 		}
 		response = append(response, l)
 	}

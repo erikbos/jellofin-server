@@ -51,6 +51,8 @@ func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http
 		return
 	}
 
+	log.Printf("usersAuthenticateByNameHandler: %+v\n", request)
+
 	if len(request.Username) == 0 || len(request.Pw) == 0 {
 		apierror(w, "username and password required", http.StatusUnauthorized)
 		return
@@ -107,17 +109,14 @@ func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http
 		}
 		log.Printf("Creating new token for user %s deviceID: %s, token: %s\n", user.Username, authHeader.deviceID, token.Token)
 	}
-
 	// Populate token details from auth header if available
 	token.LastUsed = time.Now().UTC()
 	updateTokenDetails(token, r, authHeader)
-
 	err = j.repo.UpsertAccessToken(r.Context(), *token)
 	if err != nil {
 		apierror(w, "Failed to generate access token", http.StatusInternalServerError)
 		return
 	}
-
 	response := JFAuthenticateByNameResponse{
 		AccessToken: token.Token,
 		SessionInfo: j.makeJFSessionInfo(token, user.Username),
@@ -125,6 +124,81 @@ func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http
 		User:        j.makeJFUser(r.Context(), user),
 	}
 	log.Printf("User %s authenticated successfully, deviceid: %s, client: %s, token: %s\n", user.Username, token.DeviceId, token.ApplicationName, token.Token)
+	serveJSON(response, w)
+}
+
+// POST /Users/AuthenticateWithQuickConnect
+//
+// usersAuthenticateWithQuickConnectHandler authenticates a user by quick connect code.
+func (j *Jellyfin) usersAuthenticateWithQuickConnectHandler(w http.ResponseWriter, r *http.Request) {
+	if j.quickConnectEnabled == false {
+		apierror(w, "quickconnect is not enabled", http.StatusUnauthorized)
+		return
+	}
+	// Receve scret in body as json.
+	var request struct {
+		Secret string `json:"secret"`
+	}
+	log.Printf("usersAuthenticateWithQuickConnectHandler: payload: %s\n", request.Secret)
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		log.Printf("usersAuthenticateWithQuickConnectHandler: error decoding request body: %v\n", err)
+		apierror(w, ErrInvalidJSONPayload, http.StatusUnauthorized)
+		return
+	}
+
+	// Try to get a few client details from auth header
+	authHeader, err := j.parseAuthHeader(r)
+	if err != nil || authHeader == nil {
+		log.Printf("usersAuthenticateWithQuickConnectHandler: no valid authorization header or apikey found in request: %+v", r.Header)
+		authHeader = &authSchemeValues{}
+	}
+
+	log.Printf("usersAuthenticateWithQuickConnectHandler: secret: %s\n", request.Secret)
+
+	quickCode, err := j.repo.GetQuickConnectCodeBySecret(r.Context(), request.Secret)
+	if err != nil || quickCode == nil {
+		log.Printf("usersAuthenticateWithQuickConnectHandler: quick connect code not found: %s", request.Secret)
+		apierror(w, "quickconnect code unknown", http.StatusNotFound)
+		return
+	}
+	// We only allow quick connect codes that have been authorized by the user via /QuickConnect/Authorize endpoint from their device.
+	if !quickCode.Authorized {
+		log.Printf("usersAuthenticateWithQuickConnectHandler: quick connect code not authorized: %s", request.Secret)
+		apierror(w, "quickconnect code not authorized", http.StatusUnauthorized)
+		return
+	}
+	user, err := j.repo.GetUserByID(r.Context(), quickCode.UserID)
+	if err != nil {
+		log.Printf("Error retrieving user for quick connect code from db for secret: %s, userID: %s: %s\n", request.Secret, quickCode.UserID, err)
+		apierror(w, "user not found for quickconnect code", http.StatusInternalServerError)
+		return
+	}
+	// Update user's last login and last used time
+	user.LastLogin = time.Now().UTC()
+	user.LastUsed = time.Now().UTC()
+	if err = j.repo.UpsertUser(r.Context(), user); err != nil {
+		apierror(w, "Failed to update user last login & used time", http.StatusInternalServerError)
+		return
+	}
+	// Create access token for the user
+	token := &model.AccessToken{
+		Token:   rand.Text(),
+		UserID:  user.ID,
+		Created: time.Now().UTC(),
+	}
+	updateTokenDetails(token, r, authHeader)
+	err = j.repo.UpsertAccessToken(r.Context(), *token)
+	if err != nil {
+		apierror(w, "Failed to generate access token", http.StatusInternalServerError)
+		return
+	}
+	response := JFAuthenticateByNameResponse{
+		AccessToken: token.Token,
+		SessionInfo: j.makeJFSessionInfo(token, user.Username),
+		ServerId:    j.serverID,
+		User:        j.makeJFUser(r.Context(), user),
+	}
+	log.Printf("User %s authenticated successfully with quick connect, token: %s\n", user.Username, token.Token)
 	serveJSON(response, w)
 }
 

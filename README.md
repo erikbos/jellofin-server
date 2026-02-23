@@ -99,6 +99,7 @@ Each entry defines a media collection:
 | `autoregister`       | boolean | If set to true, unknown users will be auto registered        |
 | `imagequalityposter` | int     | Poster image quality (1-100, lower = smaller).               |
 | `serverid`           | string  | Optional override for server ID (expert use!).               |
+| `quickconnect`       | boolean | If true, enable Quick Connect for client that support it.    |
 
 ---
 
@@ -133,7 +134,9 @@ collections:
 
 jellyfin:
   servername: My media server
+  imagequalityposter: 50
   autoregister: true
+  quickconnect: true
 ```
 
 ## Collection format

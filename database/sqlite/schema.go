@@ -57,6 +57,15 @@ lastused DATETIME);`,
 
 		`CREATE UNIQUE INDEX IF NOT EXISTS accesstokens_idx ON accesstokens (userid, token);`,
 
+		`CREATE TABLE IF NOT EXISTS quickconnect (
+userid TEXT NOT NULL,
+deviceid TEXT NOT NULL,
+secret TEXT NOT NULL,
+authorized BOOLEAN NOT NULL,
+code TEXT NOT NULL,
+created DATETIME NOT NULL,
+PRIMARY KEY(deviceid, secret));`,
+
 		`CREATE TABLE IF NOT EXISTS playstate (
 userid TEXT NOT NULL,
 itemid TEXT NOT NULL,

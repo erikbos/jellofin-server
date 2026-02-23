@@ -12,6 +12,7 @@ import (
 type Repository interface {
 	UserRepo
 	AccessTokenRepo
+	QuickConnectRepo
 	ItemRepo
 	UserDataRepo
 	PlaylistRepo
@@ -46,6 +47,15 @@ type AccessTokenRepo interface {
 	UpsertAccessToken(ctx context.Context, token model.AccessToken) error
 	// DeleteAccessToken upserts an access token.
 	DeleteAccessToken(ctx context.Context, token string) error
+}
+
+type QuickConnectRepo interface {
+	// GetQuickConnectCodeBySecret retrieves a quick connect code for a user by secret string.
+	GetQuickConnectCodeBySecret(ctx context.Context, secret string) (*model.QuickConnectCode, error)
+	// GetQuickConnectCodeByCode retrieves a quick connect code for a user by code string.
+	GetQuickConnectCodeByCode(ctx context.Context, code string) (*model.QuickConnectCode, error)
+	// UpsertQuickConnectCode upserts a quick connect code for a user.
+	UpsertQuickConnectCode(ctx context.Context, code model.QuickConnectCode) error
 }
 
 // ItemRepo defines item operations
@@ -108,3 +118,5 @@ func New(t string, o any) (Repository, error) {
 		return nil, fmt.Errorf("unknown database type: %s", t)
 	}
 }
+
+// cannot use sqlite.New(&v) (value of type *sqlite.SqliteRepo) as Repository value in return statement: *sqlite.SqliteRepo does not implement Repository (missing method GetQuickConnectCode)
