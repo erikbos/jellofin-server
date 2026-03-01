@@ -54,6 +54,19 @@ type UserProperties struct {
 	BlockTags []string
 }
 
+// UserPropertiesDefault returns default property values for users. To be used when creating new entities
+// and when reading from the database to set default values for missing properties.
+func UserPropertiesDefault() UserProperties {
+	return UserProperties{
+		// Users are hidden by default, so they don't show up in the public user list.
+		IsHidden: true,
+		// Users have access to all folders and can download media.
+		EnableAllFolders: true,
+		// Users can download media.
+		EnableDownloads: true,
+	}
+}
+
 // AccessToken represents an access token for a user.
 type AccessToken struct {
 	// UserID is the ID of the user associated with the access token.
@@ -130,6 +143,10 @@ type Playlist struct {
 	Name string
 	// ItemIDs is a list of item IDs contained in the playlist.
 	ItemIDs []string
+	// Created is the time the playlist was created.
+	Created time.Time
+	// LastUpdated is the last time the playlist was updated.
+	LastUpdated time.Time
 }
 
 type Person struct {

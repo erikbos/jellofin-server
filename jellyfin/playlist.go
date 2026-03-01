@@ -6,6 +6,8 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,7 +17,7 @@ import (
 	"github.com/erikbos/jellofin-server/idhash"
 )
 
-// POST /Playlists
+// POST /Playlists?ids=rVFG3EzPthk2wowNkqUl&name=MMM&userId=XAOVn7iqiBujnIQY8sd0
 //
 // createPlaylistHandler creates a new playlist
 func (j *Jellyfin) createPlaylistHandler(w http.ResponseWriter, r *http.Request) {
@@ -23,73 +25,81 @@ func (j *Jellyfin) createPlaylistHandler(w http.ResponseWriter, r *http.Request)
 	if reqCtx == nil {
 		return
 	}
-
-	var req JFCreatePlaylistRequest
-
 	queryparams := r.URL.Query()
-	req.Name = queryparams.Get("name")
-	req.UserID = queryparams.Get("userId")
-	if r.Body != nil {
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			apierror(w, ErrInvalidJSONPayload, http.StatusBadRequest)
-			return
+	// Populate request from query parameters, lower priority than POST body
+	req := JFCreatePlaylistRequest{
+		Name:   queryparams.Get("name"),
+		UserID: queryparams.Get("userId"),
+	}
+	if queryparams.Get("ids") != "" {
+		for i := range strings.SplitSeq(queryparams.Get("ids"), ",") {
+			req.Ids = append(req.Ids, trimPrefix(i))
 		}
 	}
-	if req.Name == "" || req.UserID == "" {
-		apierror(w, "Name and UserId are required", http.StatusBadRequest)
+	// POST-submitted values have priority over query parameters
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+	log.Printf("createPlaylistHandler: %+v", req)
+	if req.Name == "" || req.UserID == "" || len(req.Ids) == 0 {
+		apierror(w, "Name, UserId, and Ids are required", http.StatusBadRequest)
 		return
 	}
 
 	newPlaylist := model.Playlist{
-		Name:   req.Name,
-		UserID: req.UserID,
+		ID:          idhash.NewRandomID(),
+		Name:        req.Name,
+		UserID:      req.UserID,
+		ItemIDs:     req.Ids,
+		Created:     time.Now().UTC(),
+		LastUpdated: time.Now().UTC(),
 	}
-	if req.Ids != nil {
-		newPlaylist.ItemIDs = req.Ids
-	} else {
-		for i := range strings.SplitSeq(queryparams.Get("Ids"), ",") {
-			newPlaylist.ItemIDs = append(newPlaylist.ItemIDs, trimPrefix(i))
-		}
-	}
-	// log.Printf("newPlaylist: %+v", newPlaylist)
+	log.Printf("newPlaylist: %+v", newPlaylist)
 
-	playlistID, err := j.repo.CreatePlaylist(r.Context(), newPlaylist)
-	log.Printf("playlistID: %s, err: %v", playlistID, err)
-	if err != nil {
+	if err := j.repo.UpsertPlaylist(r.Context(), newPlaylist); err != nil {
+		log.Printf("playlistID: %s, err: %v", newPlaylist.ID, err)
 		apierror(w, "Failed to create playlist", http.StatusInternalServerError)
 		return
 	}
+	response := JFCreatePlaylistResponse{
+		Id: itemprefix_playlist + newPlaylist.ID,
+	}
 	w.WriteHeader(http.StatusCreated)
-	serveJSON(&JFCreatePlaylistResponse{
-		Id: itemprefix_playlist + playlistID,
-	}, w)
+	serveJSON(&response, w)
 }
 
 // POST /Playlists/{playlistId}
 //
 // updatePlaylistHandler updates a playlist
 func (j *Jellyfin) updatePlaylistHandler(w http.ResponseWriter, r *http.Request) {
-	// vars := mux.Vars(r)
-	// playlistID := vars["playlistid"]
+	vars := mux.Vars(r)
+	playlistID := vars["playlistid"]
 
-	// var req struct {
-	// 	Name string `json:"Name"`
-	// }
-
-	// if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-	// 	http.Error(w, "Invalid request body", http.StatusBadRequest)
-	// 	return
-	// }
-
-	// // Note: Since Jellyfin API typically creates new playlists rather than updating,
-	// // this endpoint might be used for updating playlist metadata
-	// _, err := j.db..GetPlaylist(playlistID)
-	// if err != nil {
-	// 	http.Error(w, "Playlist not found", http.StatusNotFound)
-	// 	return
-	// }
-
-	// w.WriteHeader(http.StatusNoContent)
+	var req JFCreatePlaylistRequest
+	if r.Body != nil {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			apierror(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+	}
+	playlist, err := j.repo.GetPlaylist(r.Context(), req.UserID, trimPrefix(playlistID))
+	if err != nil {
+		apierror(w, "Failed to retrieve playlist", http.StatusInternalServerError)
+		return
+	}
+	if req.Name != "" {
+		playlist.Name = req.Name
+	}
+	if req.Ids != nil {
+		playlist.ItemIDs = req.Ids
+	}
+	playlist.LastUpdated = time.Now().UTC()
+	if err := j.repo.UpsertPlaylist(r.Context(), *playlist); err != nil {
+		log.Printf("playlistID: %s, err: %v", playlist.ID, err)
+		apierror(w, "Failed to update playlist", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // GET /Playlists/{playlistId}
@@ -97,9 +107,6 @@ func (j *Jellyfin) updatePlaylistHandler(w http.ResponseWriter, r *http.Request)
 // getPlaylistHandler retrieves a playlist by ID
 func (j *Jellyfin) getPlaylistHandler(w http.ResponseWriter, r *http.Request) {
 	reqCtx := j.getRequestCtx(w, r)
-	if reqCtx == nil {
-		return
-	}
 
 	vars := mux.Vars(r)
 	playlistID := vars["playlistid"]
@@ -127,7 +134,6 @@ func (j *Jellyfin) getPlaylistItemsHandler(w http.ResponseWriter, r *http.Reques
 	if reqCtx == nil {
 		return
 	}
-
 	vars := mux.Vars(r)
 	playlistID := vars["playlistid"]
 
@@ -136,18 +142,10 @@ func (j *Jellyfin) getPlaylistItemsHandler(w http.ResponseWriter, r *http.Reques
 		apierror(w, "Playlist not found", http.StatusNotFound)
 		return
 	}
-
-	items := []JFItem{}
-	for _, itemID := range playlist.ItemIDs {
-		c, i := j.collections.GetItemByID(itemID)
-		if c != nil || i != nil {
-			jfitem, err := j.makeJFItem(r.Context(), reqCtx.User.ID, i, idhash.IdHash(c.Name))
-			if err != nil {
-				apierror(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			items = append(items, jfitem)
-		}
+	items, err := j.makeJFItemByIDs(r.Context(), reqCtx.User.ID, playlist.ItemIDs)
+	if err != nil {
+		apierror(w, "Failed to retrieve playlist items", http.StatusInternalServerError)
+		return
 	}
 	response := UserItemsResponse{
 		Items:            items,
@@ -165,21 +163,62 @@ func (j *Jellyfin) addPlaylistItemsHandler(w http.ResponseWriter, r *http.Reques
 	if reqCtx == nil {
 		return
 	}
+	vars := mux.Vars(r)
+	playlistID := vars["playlistid"]
 
+	var req JFCreatePlaylistRequest
+	if r.Body != nil {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			apierror(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+	}
+	playlist, err := j.repo.GetPlaylist(r.Context(), reqCtx.User.ID, trimPrefix(playlistID))
+	if err != nil {
+		apierror(w, "Playlist not found", http.StatusNotFound)
+		return
+	}
+	// Remove all items we already have in the playlist from the request, so we don't add duplicates
+	uniqueItemIDs := []string{}
+	for _, ID := range req.Ids {
+		if !slices.Contains(playlist.ItemIDs, ID) {
+			uniqueItemIDs = append(uniqueItemIDs, ID)
+		}
+	}
+	if err := j.repo.AddItemsToPlaylist(r.Context(), playlist.ID, uniqueItemIDs); err != nil {
+		apierror(w, "Failed to add items", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /Playlists/{playlistId}/Items
+//
+// deletePlaylistItemsHandler deletes items from a playlist
+func (j *Jellyfin) deletePlaylistItemsHandler(w http.ResponseWriter, r *http.Request) {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
+		return
+	}
 	vars := mux.Vars(r)
 	playlistID := vars["playlistid"]
 	queryparams := r.URL.Query()
 
-	var itemIDs []string
-	for ID := range strings.SplitSeq(queryparams.Get("Ids"), ",") {
-		itemIDs = append(itemIDs, trimPrefix(ID))
-	}
-
-	if err := j.repo.AddItemsToPlaylist(r.Context(), reqCtx.User.ID, trimPrefix(playlistID), itemIDs); err != nil {
-		apierror(w, "Failed to add items", http.StatusInternalServerError)
+	playlist, err := j.repo.GetPlaylist(r.Context(), reqCtx.User.ID, trimPrefix(playlistID))
+	if err != nil {
+		apierror(w, "Playlist not found", http.StatusNotFound)
 		return
 	}
-
+	// Remove item IDs from the playlist if they are present
+	var itemsToDelete []string
+	for ID := range strings.SplitSeq(queryparams.Get("entryIds"), ",") {
+		if slices.Contains(playlist.ItemIDs, ID) {
+			itemsToDelete = append(itemsToDelete, ID)
+		}
+	}
+	if len(itemsToDelete) > 0 {
+		j.repo.DeleteItemsFromPlaylist(r.Context(), playlist.ID, itemsToDelete)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -187,42 +226,25 @@ func (j *Jellyfin) addPlaylistItemsHandler(w http.ResponseWriter, r *http.Reques
 //
 // movePlaylistItemHandler moves an item in a playlist
 func (j *Jellyfin) movePlaylistItemHandler(w http.ResponseWriter, r *http.Request) {
-	// vars := mux.Vars(r)
-	// playlistID := vars["playlistid"]
-	// itemID := vars["itemId"]
-	// newIndex, err := strconv.Atoi(vars["newIndex"])
-	// if err != nil {
-	// 	http.Error(w, "Invalid newIndex", http.StatusBadRequest)
-	// 	return
-	// }
-
-	// if err := j.db..MovePlaylistItem(playlistID, itemID, newIndex); err != nil {
-	// 	http.Error(w, "Failed to move item", http.StatusInternalServerError)
-	// 	return
-	// }
-
-	// w.WriteHeader(http.StatusNoContent)
-}
-
-// DELETE /Playlists/{playlistId}/Items
-//
-// deletePlaylistItemsHandler deletes items from a playlist
-func (j *Jellyfin) deletePlaylistItemsHandler(w http.ResponseWriter, r *http.Request) {
-	// vars := mux.Vars(r)
-	// playlistID := vars["playlistid"]
-
-	// itemIDs := r.URL.Query()["Ids"]
-	// if len(itemIDs) == 0 {
-	// 	http.Error(w, "Ids parameter required", http.StatusBadRequest)
-	// 	return
-	// }
-
-	// if err := j.db..DeleteItemsFromPlaylist(playlistID, itemIDs); err != nil {
-	// 	http.Error(w, "Failed to delete items", http.StatusInternalServerError)
-	// 	return
-	// }
-
-	// w.WriteHeader(http.StatusNoContent)
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
+		return
+	}
+	vars := mux.Vars(r)
+	playlistID := vars["playlistid"]
+	playlist, err := j.repo.GetPlaylist(r.Context(), reqCtx.User.ID, trimPrefix(playlistID))
+	if err != nil {
+		apierror(w, "Playlist not found", http.StatusNotFound)
+		return
+	}
+	itemID := vars["itemId"]
+	newIndex, err := strconv.Atoi(vars["newIndex"])
+	if err != nil {
+		http.Error(w, "Invalid newIndex", http.StatusBadRequest)
+		return
+	}
+	log.Printf("movePlaylistItemHandler: playlistID: %s, itemID: %s, newIndex: %d not implemented", playlist.ID, itemID, newIndex)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // GET /Playlists/{playlistId}/Users
@@ -260,6 +282,8 @@ func (j *Jellyfin) getPlaylistUsersHandler(w http.ResponseWriter, r *http.Reques
 // makeJFItemCollectionPlaylist creates a top level collection item with items for each playlists of the user
 func (j *Jellyfin) makeJFItemCollectionPlaylist(ctx context.Context, userID string) (JFItem, error) {
 	var itemCount int
+
+	log.Printf("makeJFItemCollectionPlaylist: userID: %s", userID)
 
 	// Get total item count across all playlists
 	if playlistIDs, err := j.repo.GetPlaylists(ctx, userID); err == nil {
@@ -311,15 +335,16 @@ func (j *Jellyfin) makeJFItemPlaylist(ctx context.Context, userID, playlistID st
 		return JFItem{}, errors.New("could not find playlist")
 	}
 
+	id := makeJFPlaylistID(playlist.ID)
 	response := JFItem{
 		Type:                     itemTypePlaylist,
-		ID:                       makeJFPlaylistID(playlist.ID),
+		ID:                       id,
 		ParentID:                 makeJFCollectionPlaylistID(playlistCollectionID),
 		ServerID:                 j.serverID,
 		Name:                     playlist.Name,
 		SortName:                 playlist.Name,
 		IsFolder:                 true,
-		Path:                     "/playlist",
+		Path:                     "/playlist/" + strings.ToLower(strings.Join(strings.Fields(playlist.Name), "")),
 		Etag:                     idhash.Hash(playlist.ID),
 		DateCreated:              time.Now().UTC(),
 		CanDelete:                true,
@@ -331,6 +356,7 @@ func (j *Jellyfin) makeJFItemPlaylist(ctx context.Context, userID, playlistID st
 		MediaType:                "Video",
 		DisplayPreferencesID:     makeJFDisplayPreferencesID(playlistCollectionID),
 		EnableMediaSourceDisplay: true,
+		ImageTags:                j.makeJFImageTags(ctx, id, imageTypePrimary),
 	}
 	return response, nil
 }

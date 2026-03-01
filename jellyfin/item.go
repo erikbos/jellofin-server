@@ -526,6 +526,9 @@ func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
 				if includeType == "Episode" && i.Type == itemTypeEpisode {
 					keepItem = true
 				}
+				if includeType == "Playlist" && i.Type == itemTypePlaylist {
+					keepItem = true
+				}
 			}
 		}
 		if !keepItem {
@@ -549,6 +552,9 @@ func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
 					keepItem = false
 				}
 				if excludeType == "Episode" && i.Type == itemTypeEpisode {
+					keepItem = false
+				}
+				if excludeType == "Playlist" && i.Type == itemTypePlaylist {
 					keepItem = false
 				}
 			}

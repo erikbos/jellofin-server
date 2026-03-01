@@ -78,12 +78,12 @@ type UserDataRepo interface {
 
 // PlaylistRepo defines playlist DB operations
 type PlaylistRepo interface {
-	CreatePlaylist(ctx context.Context, p model.Playlist) (playlistID string, err error)
-	GetPlaylists(ctx context.Context, userID string) (playlistIDs []string, err error)
 	GetPlaylist(ctx context.Context, userID, playlistID string) (*model.Playlist, error)
-	AddItemsToPlaylist(ctx context.Context, userID, playlistID string, itemIDs []string) error
+	GetPlaylists(ctx context.Context, userID string) (playlistIDs []string, err error)
+	UpsertPlaylist(ctx context.Context, p model.Playlist) (err error)
+	AddItemsToPlaylist(ctx context.Context, playlistID string, itemIDs []string) error
 	DeleteItemsFromPlaylist(ctx context.Context, playlistID string, itemIDs []string) error
-	MovePlaylistItem(ctx context.Context, playlistID string, itemID string, newIndex int) error
+	// DeletePlaylist(ctx context.Context, userID, playlistID string) error
 }
 
 // PersonRepo defines person DB operations

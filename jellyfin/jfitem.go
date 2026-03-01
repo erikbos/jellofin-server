@@ -182,6 +182,10 @@ func (j *Jellyfin) getJFItemsAll(ctx context.Context, userID string) ([]JFItem, 
 			items = append(items, jfitem)
 		}
 	}
+	// We do this as some clients require playlists via /Items?ids=a,b,c
+	if playListCollections, err := j.makeJFItemPlaylistOverview(ctx, userID); err == nil {
+		items = append(items, playListCollections...)
+	}
 	return items, nil
 }
 

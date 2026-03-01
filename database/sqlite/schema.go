@@ -78,17 +78,19 @@ timestamp DATETIME);`,
 
 		`CREATE UNIQUE INDEX IF NOT EXISTS userid_itemid_idx ON playstate (userid, itemid);`,
 
-		`CREATE TABLE IF NOT EXISTS playlist (
+		`CREATE TABLE IF NOT EXISTS playlists (
 id TEXT NOT NULL PRIMARY KEY,
 name TEXT NOT NULL,
 userid TEXT NOT NULL,
-timestamp DATETIME);`,
+created DATETIME,
+lastupdated DATETIME);`,
 
-		`CREATE TABLE IF NOT EXISTS playlist_item (
+		`CREATE TABLE IF NOT EXISTS playlist_items (
 playlistid TEXT NOT NULL,
 itemid TEXT NOT NULL,
 itemorder INTEGER NOT NULL,
-timestamp DATETIME,
+created DATETIME,
+lastupdated DATETIME,
 PRIMARY KEY (playlistid, itemid),
 FOREIGN KEY (playlistid) REFERENCES playlists(id));`,
 

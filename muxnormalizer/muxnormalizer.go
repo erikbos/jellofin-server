@@ -141,29 +141,37 @@ func (n *Normalizer) normalizeQueryParameters(rawQuery string) string {
 	queryparameters, _ := url.ParseQuery(rawQuery)
 	newValues := url.Values{}
 
-	for queryParamName, values := range queryparameters {
-		k := strings.ToLower(queryParamName)
+	for name, values := range queryparameters {
+		k := strings.ToLower(name)
 		// Remove unwanted params
-		if _, remove := removeParams[k]; remove {
+		if _, remove := queryParameterRemove[k]; remove {
 			continue
 		}
 		// Rename if needed
-		if newName, ok := queryParameters[k]; ok {
-			queryParamName = newName
+		if newName, ok := queryParameterNames[k]; ok {
+			name = newName
 		}
+		// Normalize values if needed
+		for i, v := range values {
+			if normalizedValue, ok := queryParameterValues[strings.ToLower(v)]; ok {
+				values[i] = normalizedValue
+			}
+		}
+		// Re-add queryparameters with normalized name and values
 		for _, v := range values {
-			newValues.Add(queryParamName, v)
+			newValues.Add(name, v)
 		}
 	}
 	return newValues.Encode()
 }
 
 // These are the query parameters we rename
-var queryParameters = map[string]string{
+var queryParameterNames = map[string]string{
 	"api_key":                 "api_key",
 	"apikey":                  "apiKey",
 	"appearsinitemid":         "appearsInItemId",
 	"code":                    "code",
+	"entryids":                "entryIds",
 	"excludeitemids":          "excludeItemIds",
 	"filters":                 "filters",
 	"genreids":                "genreIds",
@@ -205,7 +213,13 @@ var queryParameters = map[string]string{
 }
 
 // These are the query parameters we remove
-var removeParams = map[string]struct{}{
+var queryParameterRemove = map[string]struct{}{
 	// field parameter is ignored as we always return full API response object
 	"fields": {},
+}
+
+// These are the query parameter values we rename
+var queryParameterValues = map[string]string{
+	"true":  "true",
+	"false": "false",
 }

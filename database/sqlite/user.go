@@ -115,13 +115,8 @@ func (s *SqliteRepo) loadUserProperties(ctx context.Context, userID string) (mod
 		return model.UserProperties{}, err
 	}
 	defer rows.Close()
-	// We set default values for a user here in case we do not have entries in db.
-	// jellyfin/user.go:createUser() has the same default values, so if we change defaults there, we should also change them here.
-	props := model.UserProperties{
-		IsHidden:         true,
-		EnableAllFolders: true,
-		EnableDownloads:  true,
-	}
+	// Set default values in case we do not have entries in db.
+	props := model.UserPropertiesDefault()
 	for rows.Next() {
 		var key, value string
 		if err := rows.Scan(&key, &value); err != nil {

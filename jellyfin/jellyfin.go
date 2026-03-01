@@ -3,9 +3,7 @@ package jellyfin
 import (
 	"log"
 	"net/http"
-	"net/url"
 	"os"
-	"strings"
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
@@ -80,7 +78,7 @@ func New(o *Options) *Jellyfin {
 func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r := s.UseEncodedPath()
 
-	r.Use(normalizeJellyfinRequest)
+	// r.Use(normalizeJellyfinRequest)
 
 	// middleware for endpoints to check valid auth token
 	middleware := func(handler http.HandlerFunc) http.Handler {
@@ -154,6 +152,7 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 	r.Handle("/Items/{itemid}", middleware(j.itemsDeleteHandler)).Methods("DELETE")
 	r.Handle("/Items/{itemid}", middleware(j.usersItemHandler))
 	r.Handle("/Items/{itemid}/Ancestors", middleware(j.usersItemsAncestorsHandler))
+	// r.Handle("/Items/{itemid}/Download", middleware(j.usersItemsDownloadHandler))
 	// Images can be fetched without auth, https://github.com/jellyfin/jellyfin/issues/13988
 	r.Handle("/Items/{itemid}/Images", http.HandlerFunc(j.itemsImagesHandler))
 	r.Handle("/Items/{itemid}/Images/{type}", http.HandlerFunc(j.itemsImagesGetHandler)).Methods("GET", "HEAD")
@@ -244,25 +243,25 @@ func (j *Jellyfin) RegisterHandlers(s *mux.Router) {
 //
 // Note: this middleware runs too late to be able to fix path issues:
 // normalizing r.URL.Path is handled in server.go
-func normalizeJellyfinRequest(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Lowercase query parameter names. This is to handle incorrect naming of query parameters.
-		// E.g. ParentId should have been parentId, SeasonId -> seasonId
-		newParams := url.Values{}
-		for key, values := range r.URL.Query() {
-			// Skip adding "fields" as we return full api response on every reply,
-			// and it tends to clutters log entries
-			if key == "fields" {
-				continue
-			}
-			for _, value := range values {
-				newKey := strings.ToLower(string(key[0])) + key[1:]
-				newParams.Add(newKey, value)
-			}
-		}
-		r.URL.RawQuery = newParams.Encode()
+// func normalizeJellyfinRequest(next http.Handler) http.Handler {
+// 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// 		// Lowercase query parameter names. This is to handle incorrect naming of query parameters.
+// 		// E.g. ParentId should have been parentId, SeasonId -> seasonId
+// 		newParams := url.Values{}
+// 		for key, values := range r.URL.Query() {
+// 			// Skip adding "fields" as we return full api response on every reply,
+// 			// and it tends to clutters log entries
+// 			if key == "fields" {
+// 				continue
+// 			}
+// 			for _, value := range values {
+// 				newKey := strings.ToLower(string(key[0])) + key[1:]
+// 				newParams.Add(newKey, value)
+// 			}
+// 		}
+// 		r.URL.RawQuery = newParams.Encode()
 
-		// Call the next handler
-		next.ServeHTTP(w, r)
-	})
-}
+// 		// Call the next handler
+// 		next.ServeHTTP(w, r)
+// 	})
+// }

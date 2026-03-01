@@ -420,15 +420,11 @@ func (j *Jellyfin) createUser(context context.Context, username, password string
 		return nil, err
 	}
 	modelUser := &model.User{
-		ID:       idhash.NewRandomID(),
-		Username: strings.ToLower(username),
-		Password: string(hashedPassword),
-		Created:  time.Now().UTC(),
-		Properties: model.UserProperties{
-			IsHidden:         true,
-			EnableAllFolders: true,
-			EnableDownloads:  true,
-		},
+		ID:         idhash.NewRandomID(),
+		Username:   strings.ToLower(username),
+		Password:   string(hashedPassword),
+		Created:    time.Now().UTC(),
+		Properties: model.UserPropertiesDefault(),
 	}
 	if err = j.repo.UpsertUser(context, modelUser); err != nil {
 		return nil, err
