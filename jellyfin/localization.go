@@ -1,6 +1,8 @@
 package jellyfin
 
-import "net/http"
+import (
+	"net/http"
+)
 
 // /Localization/Cultures
 func (j *Jellyfin) localizationCulturesHandler(w http.ResponseWriter, r *http.Request) {
@@ -13,7 +15,6 @@ func (j *Jellyfin) localizationCulturesHandler(w http.ResponseWriter, r *http.Re
 			TwoLetterISOLanguageName:    "en",
 		},
 	}
-	j.cache1h(w)
 	serveJSON(response, w)
 }
 
@@ -25,22 +26,25 @@ func (j *Jellyfin) localizationOptionsHandler(w http.ResponseWriter, r *http.Req
 			Value: "en-US",
 		},
 	}
-	j.cache1h(w)
 	serveJSON(response, w)
 }
 
-// Localization/ParentalRatings
+// /Localization/ParentalRatings
+//
+// localizationParentalRatingsHandler serves the parental ratings for the media items.
 func (j *Jellyfin) localizationParentalRatingsHandler(w http.ResponseWriter, r *http.Request) {
-	response := []JFLocalizationParentalRatings{
-		{
-			Name:  "Unrated",
-			Value: 0,
-		},
+	ratings := GetAllParentalRatings()
+	response := make([]ParentalRatingsItem, 0, len(ratings))
+	for _, v := range ratings {
+		entry := ParentalRatingsItem{
+			Name: v.Name,
+			RatingScore: &ParentalRatingsItemScore{
+				Score:    v.Score,
+				SubScore: v.SubScore,
+			},
+			Value: v.Score,
+		}
+		response = append(response, entry)
 	}
-	j.cache1h(w)
 	serveJSON(response, w)
-}
-
-func (j *Jellyfin) cache1h(w http.ResponseWriter) {
-	w.Header().Set("cache-control", "max-age=3600")
 }

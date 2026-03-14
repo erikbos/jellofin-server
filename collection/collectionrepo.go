@@ -81,8 +81,9 @@ func (cr *CollectionRepo) Init() {
 // Background keeps scanning the repository for content changes continously.
 func (cr *CollectionRepo) Background(ctx context.Context) {
 	for {
+		log.Printf("Background collection update..")
 		// scan all collections with delay
-		cr.updateCollections(1500 * time.Millisecond)
+		cr.updateCollections(500 * time.Millisecond)
 		// Rebuild search index to ensure any new items are included
 		cr.BuildSearchIndex(ctx)
 	}

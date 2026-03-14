@@ -62,9 +62,9 @@ func (j *Jellyfin) usersViewsHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("usersViewsHandler: EnableAllFolders: %v, EnabledFolders: %v, OrderedViews: %v, MyMediaExcludes: %v",
 		reqCtx.User.Properties.EnableAllFolders, reqCtx.User.Properties.EnabledFolders, reqCtx.User.Properties.OrderedViews, reqCtx.User.Properties.MyMediaExcludes)
 
-	for _, item := range items {
-		log.Printf("usersViewsHandler: before filtering item: %s, DisplayPreferencesID: %s", item.ID, item.DisplayPreferencesID)
-	}
+	// for _, item := range items {
+	// 	log.Printf("usersViewsHandler: before filtering item: %s, DisplayPreferencesID: %s", item.ID, item.DisplayPreferencesID)
+	// }
 
 	// If EnableAllFolders is false, we need to filter the items based on EnabledFolders
 	if !reqCtx.User.Properties.EnableAllFolders {
@@ -76,9 +76,9 @@ func (j *Jellyfin) usersViewsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		items = filteredItems
 
-		for _, item := range items {
-			log.Printf("usersViewsHandler: after filtering item: %s, DisplayPreferencesID: %s", item.ID, item.DisplayPreferencesID)
-		}
+		// for _, item := range items {
+		// 	log.Printf("usersViewsHandler: after filtering item: %s, DisplayPreferencesID: %s", item.ID, item.DisplayPreferencesID)
+		// }
 	}
 
 	queryparams := r.URL.Query()
@@ -113,9 +113,9 @@ func (j *Jellyfin) usersViewsHandler(w http.ResponseWriter, r *http.Request) {
 		items = orderedItems
 	}
 
-	for _, item := range items {
-		log.Printf("usersViewsHandler: after ordering item: %s, DisplayPreferencesID: %s", item.ID, item.DisplayPreferencesID)
-	}
+	// for _, item := range items {
+	// 	log.Printf("usersViewsHandler: after ordering item: %s, DisplayPreferencesID: %s", item.ID, item.DisplayPreferencesID)
+	// }
 
 	response := JFUserViewsResponse{
 		Items:            items,

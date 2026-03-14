@@ -283,7 +283,7 @@ func (j *Jellyfin) getPlaylistUsersHandler(w http.ResponseWriter, r *http.Reques
 func (j *Jellyfin) makeJFItemCollectionPlaylist(ctx context.Context, userID string) (JFItem, error) {
 	var itemCount int
 
-	log.Printf("makeJFItemCollectionPlaylist: userID: %s", userID)
+	// log.Printf("makeJFItemCollectionPlaylist: userID: %s", userID)
 
 	// Get total item count across all playlists
 	if playlistIDs, err := j.repo.GetPlaylists(ctx, userID); err == nil {

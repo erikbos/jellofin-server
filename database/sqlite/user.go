@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"log"
+	"strconv"
 	"strings"
 
 	"github.com/erikbos/jellofin-server/database/model"
@@ -96,16 +97,18 @@ func (s *SqliteRepo) DeleteUser(ctx context.Context, userID string) error {
 
 // Database keys for user properties
 const (
-	propAdmin            = "admin"
-	propDisabled         = "disabled"
-	propEnableAllFolders = "enableallfolders"
-	propEnabledFolders   = "enabledfolders"
-	propEnableDownloads  = "enabledownloads"
-	propIsHidden         = "ishidden"
-	propOrderedViews     = "orderedviews"
-	propMyMediaExcludes  = "mymediaexcludes"
-	propAllowTags        = "allowtags"
-	propBlockTags        = "blocktags"
+	propAdmin             = "admin"
+	propDisabled          = "disabled"
+	propEnableAllFolders  = "enableallfolders"
+	propEnabledFolders    = "enabledfolders"
+	propEnableDownloads   = "enabledownloads"
+	propIsHidden          = "ishidden"
+	propOrderedViews      = "orderedviews"
+	propMyMediaExcludes   = "mymediaexcludes"
+	propAllowTags         = "allowtags"
+	propBlockTags         = "blocktags"
+	propMaxParentalRating = "maxparentalrating"
+	propBlockUnratedItems = "blockunrateditems"
 )
 
 func (s *SqliteRepo) loadUserProperties(ctx context.Context, userID string) (model.UserProperties, error) {
@@ -143,6 +146,10 @@ func (s *SqliteRepo) loadUserProperties(ctx context.Context, userID string) (mod
 			props.AllowTags = splitComma(value)
 		case propBlockTags:
 			props.BlockTags = splitComma(value)
+		case propMaxParentalRating:
+			props.MaxParentalRating, _ = strconv.Atoi(value)
+		case propBlockUnratedItems:
+			props.BlockUnratedItems = splitComma(value)
 		default:
 			log.Printf("Unknown user property key: %s\n", key)
 		}
@@ -183,6 +190,8 @@ func (s *SqliteRepo) saveUserProperties(ctx context.Context, userID string, prop
 		{propMyMediaExcludes, strings.Join(props.MyMediaExcludes, ",")},
 		{propAllowTags, strings.Join(props.AllowTags, ",")},
 		{propBlockTags, strings.Join(props.BlockTags, ",")},
+		{propMaxParentalRating, strconv.Itoa(props.MaxParentalRating)},
+		{propBlockUnratedItems, strings.Join(props.BlockUnratedItems, ",")},
 	}
 	for _, item := range properties {
 		// log.Printf("Saving user property for userID: %s, key: %s, value: %s\n", userID, item.key, item.value)

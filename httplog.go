@@ -47,7 +47,7 @@ func HttpLog(handle http.Handler) http.HandlerFunc {
 			return
 		}
 
-		if writer.status > 206 {
+		if writer.status >= 400 {
 			log.Printf("\n")
 		}
 
@@ -61,7 +61,7 @@ func HttpLog(handle http.Handler) http.HandlerFunc {
 			strconv.Quote(request.Header.Get("User-Agent")),
 			latency.Milliseconds())
 
-		if writer.status > 206 {
+		if writer.status >= 400 {
 			log.Printf("\n")
 		}
 	}

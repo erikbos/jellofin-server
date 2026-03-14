@@ -150,12 +150,14 @@ type JFUserPolicy struct {
 	// IsDisabled is true if the user is disabled.
 	IsDisabled bool `json:"IsDisabled"`
 	// IsHidden is true if the user is hidden, /Users/Public does not list hidden users.
-	IsHidden                   bool   `json:"IsHidden"`
-	LoginAttemptsBeforeLockout int    `json:"LoginAttemptsBeforeLockout"`
-	MaxActiveSessions          int    `json:"MaxActiveSessions"`
-	PasswordResetProviderID    string `json:"PasswordResetProviderId"`
-	RemoteClientBitrateLimit   int    `json:"RemoteClientBitrateLimit"`
-	SyncPlayAccess             string `json:"SyncPlayAccess"`
+	IsHidden                   bool `json:"IsHidden"`
+	LoginAttemptsBeforeLockout int  `json:"LoginAttemptsBeforeLockout"`
+	MaxActiveSessions          int  `json:"MaxActiveSessions"`
+	// MaxParentalRating is the maximum parental rating allowed for the user.
+	MaxParentalRating        int    `json:"MaxParentalRating"`
+	PasswordResetProviderID  string `json:"PasswordResetProviderId"`
+	RemoteClientBitrateLimit int    `json:"RemoteClientBitrateLimit"`
+	SyncPlayAccess           string `json:"SyncPlayAccess"`
 }
 
 type JFUserPasswordRequest struct {
@@ -324,6 +326,8 @@ type JFItem struct {
 	Chapters                 []JFChapter        `json:"Chapters,omitempty"`
 	ParentLogoItemId         string             `json:"ParentLogoItemId,omitempty"`
 	RecursiveItemCount       int                `json:"RecursiveItemCount,omitempty"`
+	MovieCount               int                `json:"MovieCount,omitempty"`
+	SeriesCount              int                `json:"SeriesCount,omitempty"`
 }
 
 type JFExternalUrls struct {
@@ -838,6 +842,17 @@ type ScheduledTaskLastExecutionResult struct {
 type ScheduledTaskTrigger struct {
 	Type          string `json:"Type"`
 	IntervalTicks int64  `json:"IntervalTicks"`
+}
+
+type ParentalRatingsItem struct {
+	Name        string                    `json:"Name"`
+	RatingScore *ParentalRatingsItemScore `json:"RatingScore"`
+	Value       int                       `json:"Value"`
+}
+
+type ParentalRatingsItemScore struct {
+	Score    int `json:"score"`
+	SubScore int `json:"subScore"`
 }
 
 // type JFSystemInfoStorageResponse struct {

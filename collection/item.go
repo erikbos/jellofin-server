@@ -34,6 +34,8 @@ type Item interface {
 	FileName() string
 	// FileSize returns the size of the video file in bytes.
 	FileSize() int64
+	// Etag returns the unique identifier for the item, which should change when the item is updated, e.g. when metadata is updated or when the file is changed.
+	Etag() string
 	// Duration returns the duration of the video.
 	Duration() time.Duration
 

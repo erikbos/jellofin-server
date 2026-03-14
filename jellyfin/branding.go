@@ -28,6 +28,5 @@ func (j *Jellyfin) localizationCountriesHandler(w http.ResponseWriter, r *http.R
 			TwoLetterISORegionName:   "US",
 		},
 	}
-	j.cache1h(w)
 	serveJSON(response, w)
 }

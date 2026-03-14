@@ -382,7 +382,7 @@ func makeJFUserPolicy(user *model.User) JFUserPolicy {
 		BlockedChannels:                  []string{},
 		BlockedMediaFolders:              []string{},
 		BlockedTags:                      user.Properties.BlockTags,
-		BlockUnratedItems:                []string{},
+		BlockUnratedItems:                user.Properties.BlockUnratedItems,
 		EnabledChannels:                  []string{},
 		EnabledDevices:                   []string{},
 		EnabledFolders:                   user.Properties.EnabledFolders,
@@ -398,6 +398,7 @@ func makeJFUserPolicy(user *model.User) JFUserPolicy {
 		IsAdministrator:                  user.Properties.Admin,
 		IsDisabled:                       user.Properties.Disabled,
 		IsHidden:                         user.Properties.IsHidden,
+		MaxParentalRating:                user.Properties.MaxParentalRating,
 	}
 }
 
@@ -411,6 +412,8 @@ func parseJFUserPolicy(policy JFUserPolicy, props *model.UserProperties) {
 	props.Admin = policy.IsAdministrator
 	props.Disabled = policy.IsDisabled
 	props.IsHidden = policy.IsHidden
+	props.MaxParentalRating = policy.MaxParentalRating
+	props.BlockUnratedItems = policy.BlockUnratedItems
 }
 
 // createUser creates a new user in the database

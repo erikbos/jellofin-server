@@ -12,7 +12,6 @@ import (
 	"github.com/jxskiss/base62"
 
 	"github.com/erikbos/jellofin-server/collection"
-	"github.com/erikbos/jellofin-server/idhash"
 )
 
 const (
@@ -162,7 +161,7 @@ func (j *Jellyfin) getJFItemsByParentID(ctx context.Context, userID, parentID st
 	}
 	// Check if parentID is a show to generate overviews
 	if _, show := j.collections.GetShowByID(trimPrefix(parentID)); show != nil {
-		if items, err := j.makeJFSeasonsOverview(ctx, userID, show); err != nil {
+		if items, err := j.makeJFSeasonsOverview(ctx, userID, show); err == nil {
 			return items, nil
 		}
 		return []JFItem{}, errors.New("could not get seasons overview for show")
@@ -289,7 +288,7 @@ func (j *Jellyfin) makeMediaSource(item collection.Item) (mediasources []JFMedia
 	filename := item.FileName()
 	mediasource := JFMediaSources{
 		ID:                    item.ID(),
-		ETag:                  idhash.Hash(filename),
+		ETag:                  item.Etag(),
 		Name:                  filename,
 		Path:                  filename,
 		Type:                  "Default",
@@ -469,6 +468,7 @@ const (
 	itemprefix_genre                = "genre_"
 	itemprefix_studio               = "studio_"
 	itemprefix_person               = "person_"
+	itemprefix_year                 = "year_"
 	itemprefix_displaypreferences   = "dp_"
 )
 

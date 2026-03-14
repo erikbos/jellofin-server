@@ -51,7 +51,7 @@ func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	log.Printf("usersAuthenticateByNameHandler: %+v\n", request)
+	// log.Printf("usersAuthenticateByNameHandler: %+v\n", request)
 
 	if len(request.Username) == 0 || len(request.Pw) == 0 {
 		apierror(w, "username and password required", http.StatusUnauthorized)
@@ -97,7 +97,7 @@ func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http
 	var token *model.AccessToken
 	existingToken, err := j.repo.GetAccessTokenByDeviceID(r.Context(), authHeader.deviceID)
 	if err == nil && existingToken != nil {
-		log.Printf("Existing access token found for user %s deviceID: %s, token: %s\n", user.Username, authHeader.deviceID, existingToken.Token)
+		// log.Printf("Existing access token found for user %s deviceID: %s, token: %s\n", user.Username, authHeader.deviceID, existingToken.Token)
 		token = existingToken
 	} else {
 		//Create a new access token authentication
@@ -107,7 +107,7 @@ func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http
 			Created: time.Now().UTC(),
 			// Remaining fields will be populated by updateTokenDetails()
 		}
-		log.Printf("Creating new token for user %s deviceID: %s, token: %s\n", user.Username, authHeader.deviceID, token.Token)
+		// log.Printf("Creating new token for user %s deviceID: %s, token: %s\n", user.Username, authHeader.deviceID, token.Token)
 	}
 	// Populate token details from auth header if available
 	token.LastUsed = time.Now().UTC()

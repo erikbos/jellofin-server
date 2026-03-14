@@ -52,6 +52,10 @@ type UserProperties struct {
 	AllowTags []string
 	// BlockTags is a list of tags that are blocked for the user.
 	BlockTags []string
+	// MaxParentalRating is the maximum parental rating allowed for the user.
+	MaxParentalRating int
+	// BlockUnratedItems contains Itemtypes that are not allow in case rating is unknown.
+	BlockUnratedItems []string
 }
 
 // UserPropertiesDefault returns default property values for users. To be used when creating new entities

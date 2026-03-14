@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -17,6 +18,8 @@ const (
 	TicsToSeconds             = 10000000
 	ErrFailedToUpdateUserData = "Failed to update userdata"
 	ErrInvalidJSONPayload     = "Invalid JSON payload"
+	ErrInvalidUserID          = "Forbidden, provided userID does not match authenticated user"
+	ErrInvalidPositionTicks   = "Invalid positionTicks value"
 )
 
 // /UserItems/1d57ee2251656c5fb9a05becdf0e62a3/Userdata
@@ -49,10 +52,8 @@ func (j *Jellyfin) usersPlayedItemsPostHandler(w http.ResponseWriter, r *http.Re
 	if reqCtx == nil {
 		return
 	}
-
 	vars := mux.Vars(r)
 	itemID := vars["itemid"]
-
 	if err := j.userDataUpdate(r.Context(), reqCtx.User.ID, itemID, 0, true); err != nil {
 		apierror(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
 		return
@@ -80,7 +81,86 @@ func (j *Jellyfin) usersPlayedItemsDeleteHandler(w http.ResponseWriter, r *http.
 	w.WriteHeader(http.StatusOK)
 }
 
+// POST /PlayingItems/{itemid}
+//
+// playingItemsHandler is called when an item starts playing.
+// all state is provided as query parameters
+func (j *Jellyfin) playingItemsHandler(w http.ResponseWriter, r *http.Request) {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
+		return
+	}
+	queryParams := r.URL.Query()
+	if reqCtx.User.ID != queryParams.Get("userId") {
+		apierror(w, ErrInvalidUserID, http.StatusBadRequest)
+		return
+	}
+	vars := mux.Vars(r)
+	itemID := vars["itemid"]
+	if err := j.userDataUpdate(r.Context(), reqCtx.User.ID, itemID, 0, false); err != nil {
+		apierror(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /PlayingItems/{itemid}/Progress
+//
+// playingItemsProgressHandler is called periodically while an item is playing to report progress.
+func (j *Jellyfin) playingItemsProgressHandler(w http.ResponseWriter, r *http.Request) {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
+		return
+	}
+	queryParams := r.URL.Query()
+	if reqCtx.User.ID != queryParams.Get("userId") {
+		apierror(w, ErrInvalidUserID, http.StatusBadRequest)
+		return
+	}
+	positionTicks, err := strconv.ParseInt(queryParams.Get("positionTicks"), 10, 64)
+	if err != nil {
+		apierror(w, ErrInvalidPositionTicks, http.StatusBadRequest)
+		return
+	}
+	vars := mux.Vars(r)
+	itemID := vars["itemid"]
+	if err := j.userDataUpdate(r.Context(), reqCtx.User.ID, itemID, positionTicks, false); err != nil {
+		apierror(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
+		return
+	}
+}
+
+// DELETE /PlayingItems/{itemid}
+//
+// playingItemsDeleteHandler is called when an item stops playing.
+func (j *Jellyfin) playingItemsDeleteHandler(w http.ResponseWriter, r *http.Request) {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
+		return
+	}
+	queryParams := r.URL.Query()
+	if reqCtx.User.ID != queryParams.Get("userId") {
+		apierror(w, ErrInvalidUserID, http.StatusBadRequest)
+		return
+	}
+	// we only care about capturing latest position when the item is stopped
+	positionTicks, err := strconv.ParseInt(queryParams.Get("positionTicks"), 10, 64)
+	if err != nil {
+		apierror(w, ErrInvalidPositionTicks, http.StatusBadRequest)
+		return
+	}
+	vars := mux.Vars(r)
+	itemID := vars["itemid"]
+	if err := j.userDataUpdate(r.Context(), reqCtx.User.ID, itemID, positionTicks, false); err != nil {
+		apierror(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // /Sessions/Playing
+//
+// sessionsPlayingHandler is called when an item starts playing.
 func (j *Jellyfin) sessionsPlayingHandler(w http.ResponseWriter, r *http.Request) {
 	reqCtx := j.getRequestCtx(w, r)
 	if reqCtx == nil {
@@ -102,6 +182,8 @@ func (j *Jellyfin) sessionsPlayingHandler(w http.ResponseWriter, r *http.Request
 }
 
 // /Sessions/Playing/Progress
+//
+// sessionsPlayingProgressHandler is called periodically while an item is playing to report progress.
 func (j *Jellyfin) sessionsPlayingProgressHandler(w http.ResponseWriter, r *http.Request) {
 	reqCtx := j.getRequestCtx(w, r)
 	if reqCtx == nil {
@@ -123,6 +205,8 @@ func (j *Jellyfin) sessionsPlayingProgressHandler(w http.ResponseWriter, r *http
 }
 
 // /Sessions/Playing/Stopped
+//
+// sessionsPlayingStoppedHandler is called when an item stops playing.
 func (j *Jellyfin) sessionsPlayingStoppedHandler(w http.ResponseWriter, r *http.Request) {
 	reqCtx := j.getRequestCtx(w, r)
 	if reqCtx == nil {
