@@ -364,6 +364,29 @@ func (c *CollectionRepo) GetStatistics() Statistics {
 	return details
 }
 
+// GetAllPersonNames returns a list of all person names across all collections
+func (c *CollectionRepo) GetAllPersonNames(ctx context.Context) ([]string, error) {
+	personNames := make(map[string]struct{})
+	for _, col := range c.GetCollections() {
+		for _, i := range col.Items {
+			for _, p := range i.Actors() {
+				personNames[p] = struct{}{}
+			}
+			for _, p := range i.Directors() {
+				personNames[p] = struct{}{}
+			}
+			for _, p := range i.Writers() {
+				personNames[p] = struct{}{}
+			}
+		}
+	}
+	names := make([]string, 0, len(personNames))
+	for name := range personNames {
+		names = append(names, name)
+	}
+	return names, nil
+}
+
 // GenreItemCount returns number of items per genre.
 func (c *CollectionRepo) GenreItemCount() map[string]int {
 	genreCount := make(map[string]int)

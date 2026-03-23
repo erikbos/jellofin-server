@@ -25,7 +25,7 @@ func (s *SqliteRepo) loadQuickConnectCode(scanner sqlScanner) (*model.QuickConne
 		&t.Secret,
 		&t.Authorized,
 		&t.Code,
-		&t.Created); err != nil {
+		&t.CreatedAt); err != nil {
 		return nil, model.ErrNotFound
 	}
 	return &t, nil
@@ -42,6 +42,6 @@ func (s *SqliteRepo) UpsertQuickConnectCode(ctx context.Context, code model.Quic
 		code.Secret,
 		code.Authorized,
 		code.Code,
-		code.Created)
+		code.CreatedAt)
 	return err
 }

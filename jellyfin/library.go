@@ -17,10 +17,17 @@ import (
 //
 // libraryVirtualFoldersHandler returns the available collections as virtual folders
 func (j *Jellyfin) libraryVirtualFoldersHandler(w http.ResponseWriter, r *http.Request) {
-	response := []JFMediaLibrary{}
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
+		return
+	}
+
 	// todo: should this take EnabledFolders into account? Or is that only for the /UserViews endpoint?
-	for _, c := range j.collections.GetCollections() {
-		collectionItem, err := j.makeJFItemCollection(r.Context(), c.ID)
+
+	collections := j.collections.GetCollections()
+	response := make([]JFMediaLibrary, 0, len(collections))
+	for _, c := range collections {
+		collectionItem, err := j.makeJFItemCollection(r.Context(), reqCtx.User.ID, c.ID)
 		if err != nil {
 			apierror(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -129,9 +136,15 @@ func (j *Jellyfin) usersViewsHandler(w http.ResponseWriter, r *http.Request) {
 //
 // usersGroupingOptionsHandler returns the available collections as grouping options
 func (j *Jellyfin) usersGroupingOptionsHandler(w http.ResponseWriter, r *http.Request) {
-	collections := []JFCollection{}
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
+		return
+	}
+
+	collections := j.collections.GetCollections()
+	response := make([]JFCollection, 0, len(collections))
 	for _, c := range j.collections.GetCollections() {
-		collectionItem, err := j.makeJFItemCollection(r.Context(), c.ID)
+		collectionItem, err := j.makeJFItemCollection(r.Context(), reqCtx.User.ID, c.ID)
 		if err != nil {
 			apierror(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -140,9 +153,9 @@ func (j *Jellyfin) usersGroupingOptionsHandler(w http.ResponseWriter, r *http.Re
 			Name: collectionItem.Name,
 			ID:   collectionItem.ID,
 		}
-		collections = append(collections, collection)
+		response = append(response, collection)
 	}
-	serveJSON(collections, w)
+	serveJSON(response, w)
 }
 
 // POST /Library/Refresh
@@ -205,6 +218,7 @@ func (j *Jellyfin) makeJFItemRoot(ctx context.Context, userID string) (response 
 		LocationType:             "FileSystem",
 		MediaType:                "Unknown",
 		ImageTags:                j.makeJFImageTags(ctx, rootID, imageTypePrimary),
+		UserData:                 j.makeJFUserData(userID, rootID, nil),
 	}
 	return
 }
@@ -213,7 +227,7 @@ func (j *Jellyfin) makeJFItemRoot(ctx context.Context, userID string) (response 
 func (j *Jellyfin) makeJFCollectionRootOverview(ctx context.Context, userID string) ([]JFItem, error) {
 	items := make([]JFItem, 0)
 	for _, c := range j.collections.GetCollections() {
-		if item, err := j.makeJFItemCollection(ctx, c.ID); err == nil {
+		if item, err := j.makeJFItemCollection(ctx, userID, c.ID); err == nil {
 			items = append(items, item)
 		}
 	}
@@ -228,7 +242,7 @@ func (j *Jellyfin) makeJFCollectionRootOverview(ctx context.Context, userID stri
 }
 
 // makeJFItemCollection creates a JFItem representing a collection.
-func (j *Jellyfin) makeJFItemCollection(ctx context.Context, collectionID string) (JFItem, error) {
+func (j *Jellyfin) makeJFItemCollection(ctx context.Context, userID, collectionID string) (JFItem, error) {
 	c := j.collections.GetCollection(collectionID)
 	if c == nil {
 		return JFItem{}, errors.New("collection not found")
@@ -262,6 +276,7 @@ func (j *Jellyfin) makeJFItemCollection(ctx context.Context, collectionID string
 		ExternalUrls:             []JFExternalUrls{},
 		RemoteTrailers:           []JFRemoteTrailers{},
 		ImageTags:                j.makeJFImageTags(ctx, id, imageTypePrimary),
+		UserData:                 j.makeJFUserData(userID, id, nil),
 	}
 	switch c.Type {
 	case collection.CollectionTypeMovies:
@@ -310,6 +325,7 @@ func (j *Jellyfin) makeJFItemCollectionFavorites(ctx context.Context, userID str
 		CanDownload:              true,
 		SpecialFeatureCount:      0,
 		ImageTags:                j.makeJFImageTags(ctx, id, imageTypePrimary),
+		UserData:                 j.makeJFUserData(userID, id, nil),
 		// PremiereDate should be set based upon most recent item in collection
 	}
 	return response, nil

@@ -293,7 +293,7 @@ func (j *Jellyfin) usersItemsAncestorsHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	collectionItem, err := j.makeJFItemCollection(r.Context(), c.ID)
+	collectionItem, err := j.makeJFItemCollection(r.Context(), reqCtx.User.ID, c.ID)
 	if err != nil {
 		apierror(w, err.Error(), http.StatusNotFound)
 		return
@@ -821,25 +821,25 @@ func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
 
 	// Filter based upon isPlayed status
 	if filterPlayed := strings.ToLower(queryparams.Get("isPlayed")); filterPlayed != "" {
-		// Allow item if it was played
-		if filterPlayed == "true" && i.UserData != nil && i.UserData.Played {
-			return true
+		// Reject item if it is not marked as played.
+		if filterPlayed == "true" && i.UserData != nil && !i.UserData.Played {
+			return false
 		}
-		// Allow item if it was not played
+		// Reject item if it is marked as played.
 		if filterPlayed == "false" && i.UserData != nil && i.UserData.Played {
-			return true
+			return false
 		}
 	}
 
 	// Filter based upon isFavorite status
 	if filterFavorite := strings.ToLower(queryparams.Get("isFavorite")); filterFavorite != "" {
-		// Allow item if it should be favorite
-		if filterFavorite == "true" && i.UserData.IsFavorite {
-			return true
+		// Reject item if it is not marked as favorite.
+		if filterFavorite == "true" && i.UserData != nil && !i.UserData.IsFavorite {
+			return false
 		}
-		// Allow item if it not should be a favorite
-		if filterFavorite == "false" && !i.UserData.IsFavorite {
-			return true
+		// Reject item if it is marked as favorite.
+		if filterFavorite == "false" && i.UserData != nil && i.UserData.IsFavorite {
+			return false
 		}
 	}
 
@@ -847,12 +847,9 @@ func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
 	if filters := queryparams.Get("filters"); filters != "" {
 		for itemFilter := range strings.SplitSeq(filters, ",") {
 			// Do we have to skip item in case favorites are requested?
-			if itemFilter == "IsFavorite" || itemFilter == "IsFavoriteOrLikes" {
-				// Allow item if it is a favorite
-				if i.UserData != nil && i.UserData.IsFavorite {
-					return true
-				}
-				// Not a favorite, so skip item
+			if (itemFilter == "IsFavorite" || itemFilter == "IsFavoriteOrLikes") &&
+				// Reject item if it is not marked as favorite.
+				i.UserData != nil && !i.UserData.IsFavorite {
 				return false
 			}
 		}
@@ -1054,6 +1051,11 @@ func (j *Jellyfin) itemsDeleteHandler(w http.ResponseWriter, r *http.Request) {
 //
 // itemsPlaybackInfoHandler returns playback information about an item, including media sources
 func (j *Jellyfin) itemsPlaybackInfoHandler(w http.ResponseWriter, r *http.Request) {
+	reqCtx := j.getRequestCtx(w, r)
+	if reqCtx == nil {
+		return
+	}
+
 	vars := mux.Vars(r)
 	itemID := vars["itemid"]
 
@@ -1067,12 +1069,14 @@ func (j *Jellyfin) itemsPlaybackInfoHandler(w http.ResponseWriter, r *http.Reque
 		apierror(w, "Could not find item", http.StatusNotFound)
 		return
 	}
-
+	session, err := j.sessionTable.Create(reqCtx.Token)
+	if err != nil {
+		apierror(w, "Failed to create user session", http.StatusInternalServerError)
+		return
+	}
 	response := JFPlaybackInfoResponse{
-		MediaSources: mediaSource,
-		// TODO this static id should be generated based upon authenticated user
-		// this id is used when submitting playstate via /Sessions/Playing endpoints
-		PlaySessionID: sessionID,
+		MediaSources:  mediaSource,
+		PlaySessionID: session.ID,
 	}
 	serveJSON(response, w)
 }

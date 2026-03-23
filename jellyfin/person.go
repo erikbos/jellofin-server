@@ -51,7 +51,7 @@ func (j *Jellyfin) personsHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Return all persons if no search term
 	if searchTerm == "" {
-		personNames, err := j.GetAllPersonNames(r.Context())
+		personNames, err := j.collections.GetAllPersonNames(r.Context())
 		if err != nil {
 			apierror(w, "Failed to get person names", http.StatusInternalServerError)
 			return
@@ -149,7 +149,7 @@ func (j *Jellyfin) makeJFItemPerson(ctx context.Context, userID string, personID
 	// Populate response with details from database
 	response.Name = person.Name
 	response.Overview = person.Bio
-	response.DateCreated = person.Created
+	response.DateCreated = person.CreatedAt
 	response.PremiereDate = person.DateOfBirth
 	if person.PlaceOfBirth != "" {
 		response.ProductionLocations = []string{

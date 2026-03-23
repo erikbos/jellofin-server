@@ -11,7 +11,7 @@ import (
 func (s *SqliteRepo) HasImage(ctx context.Context, itemID, imageType string) (model.ImageMetadata, error) {
 	const query = `SELECT mimetype, etag, updated, filesize FROM images WHERE itemid = ? AND type = ? LIMIT 1`
 	var metadata model.ImageMetadata
-	err := s.dbReadHandle.QueryRowContext(ctx, query, itemID, imageType).Scan(&metadata.MimeType, &metadata.Etag, &metadata.Updated, &metadata.FileSize)
+	err := s.dbReadHandle.QueryRowContext(ctx, query, itemID, imageType).Scan(&metadata.MimeType, &metadata.Etag, &metadata.UpdatedAt, &metadata.FileSize)
 	if err != nil {
 		return model.ImageMetadata{}, err
 	}
@@ -21,7 +21,7 @@ func (s *SqliteRepo) HasImage(ctx context.Context, itemID, imageType string) (mo
 // GetImage retrieves image data for the given itemID and type
 func (s *SqliteRepo) GetImage(ctx context.Context, itemID, imageType string) (metadata model.ImageMetadata, data []byte, err error) {
 	const query = `SELECT mimetype, etag, updated, filesize, data FROM images WHERE itemid = ? AND type = ?`
-	err = s.dbReadHandle.QueryRowContext(ctx, query, itemID, imageType).Scan(&metadata.MimeType, &metadata.Etag, &metadata.Updated, &metadata.FileSize, &data)
+	err = s.dbReadHandle.QueryRowContext(ctx, query, itemID, imageType).Scan(&metadata.MimeType, &metadata.Etag, &metadata.UpdatedAt, &metadata.FileSize, &data)
 	if err == sql.ErrNoRows {
 		return model.ImageMetadata{}, nil, model.ErrNotFound
 	}
@@ -35,7 +35,7 @@ func (s *SqliteRepo) GetImage(ctx context.Context, itemID, imageType string) (me
 // StoreImage stores image data for the given itemID and type
 func (s *SqliteRepo) StoreImage(ctx context.Context, itemID string, imageType string, metadata model.ImageMetadata, data []byte) error {
 	const query = `REPLACE INTO images (itemid, type, mimetype, etag, updated, filesize, data) VALUES (?, ?, ?, ?, ?, ?, ?)`
-	_, err := s.dbWriteHandle.ExecContext(ctx, query, itemID, imageType, metadata.MimeType, metadata.Etag, metadata.Updated, metadata.FileSize, data)
+	_, err := s.dbWriteHandle.ExecContext(ctx, query, itemID, imageType, metadata.MimeType, metadata.Etag, metadata.UpdatedAt, metadata.FileSize, data)
 	// log.Printf("Stored image for itemID=%s, type=%s, size=%d bytes, err: %v", itemID, imageType, metadata.FileSize, err)
 	return err
 }

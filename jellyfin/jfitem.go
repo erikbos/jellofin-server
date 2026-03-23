@@ -188,29 +188,6 @@ func (j *Jellyfin) getJFItemsAll(ctx context.Context, userID string) ([]JFItem, 
 	return items, nil
 }
 
-// GetAllPersonNames returns a list of all person names across all collections
-func (j *Jellyfin) GetAllPersonNames(ctx context.Context) ([]string, error) {
-	personNames := make(map[string]struct{})
-	for _, c := range j.collections.GetCollections() {
-		for _, i := range c.Items {
-			for _, p := range i.Actors() {
-				personNames[p] = struct{}{}
-			}
-			for _, p := range i.Directors() {
-				personNames[p] = struct{}{}
-			}
-			for _, p := range i.Writers() {
-				personNames[p] = struct{}{}
-			}
-		}
-	}
-	names := make([]string, 0, len(personNames))
-	for name := range personNames {
-		names = append(names, name)
-	}
-	return names, nil
-}
-
 // makeJFItemByIDs creates a list of items based on the provided itemIDs
 func (j *Jellyfin) makeJFItemByIDs(ctx context.Context, userID string, itemIDs []string) ([]JFItem, error) {
 	items := make([]JFItem, 0, len(itemIDs))
@@ -234,7 +211,7 @@ func (j *Jellyfin) makeJFItemByID(ctx context.Context, userID, itemID string) (J
 	case isJFCollectionPlaylistID(itemID):
 		return j.makeJFItemCollectionPlaylist(ctx, userID)
 	case isJFCollectionID(itemID):
-		return j.makeJFItemCollection(ctx, trimPrefix(itemID))
+		return j.makeJFItemCollection(ctx, userID, trimPrefix(itemID))
 	case isJFPlaylistID(itemID):
 		return j.makeJFItemPlaylist(ctx, userID, trimPrefix(itemID))
 	case isJFPersonID(itemID):

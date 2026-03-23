@@ -102,28 +102,34 @@ func (j *Jellyfin) usersAuthenticateByNameHandler(w http.ResponseWriter, r *http
 	} else {
 		//Create a new access token authentication
 		token = &model.AccessToken{
-			Token:   rand.Text(),
-			UserID:  user.ID,
-			Created: time.Now().UTC(),
+			Token:     rand.Text(),
+			UserID:    user.ID,
+			CreatedAt: time.Now().UTC(),
 			// Remaining fields will be populated by updateTokenDetails()
 		}
 		// log.Printf("Creating new token for user %s deviceID: %s, token: %s\n", user.Username, authHeader.deviceID, token.Token)
 	}
 	// Populate token details from auth header if available
-	token.LastUsed = time.Now().UTC()
+	token.LastUsedAt = time.Now().UTC()
 	updateTokenDetails(token, r, authHeader)
 	err = j.repo.UpsertAccessToken(r.Context(), *token)
 	if err != nil {
 		apierror(w, "Failed to generate access token", http.StatusInternalServerError)
 		return
 	}
+
+	newSession, err := j.sessionTable.Create(token)
+	if err != nil {
+		apierror(w, "Failed to create user session", http.StatusInternalServerError)
+		return
+	}
 	response := JFAuthenticateByNameResponse{
 		AccessToken: token.Token,
-		SessionInfo: j.makeJFSessionInfo(token, user.Username),
+		SessionInfo: j.makeJFSessionInfo(r.Context(), newSession),
 		ServerId:    j.serverID,
 		User:        j.makeJFUser(r.Context(), user),
 	}
-	log.Printf("User %s authenticated successfully, deviceid: %s, client: %s, token: %s\n", user.Username, token.DeviceId, token.ApplicationName, token.Token)
+	log.Printf("User %s authenticated successfully, deviceid: %s, client: %s, token: %s\n", user.Username, token.DeviceID, token.ApplicationName, token.Token)
 	serveJSON(response, w)
 }
 
@@ -182,9 +188,9 @@ func (j *Jellyfin) usersAuthenticateWithQuickConnectHandler(w http.ResponseWrite
 	}
 	// Create access token for the user
 	token := &model.AccessToken{
-		Token:   rand.Text(),
-		UserID:  user.ID,
-		Created: time.Now().UTC(),
+		Token:     rand.Text(),
+		UserID:    user.ID,
+		CreatedAt: time.Now().UTC(),
 	}
 	updateTokenDetails(token, r, authHeader)
 	err = j.repo.UpsertAccessToken(r.Context(), *token)
@@ -192,9 +198,15 @@ func (j *Jellyfin) usersAuthenticateWithQuickConnectHandler(w http.ResponseWrite
 		apierror(w, "Failed to generate access token", http.StatusInternalServerError)
 		return
 	}
+	newSession, err := j.sessionTable.Create(token)
+	if err != nil {
+		apierror(w, "Failed to create user session", http.StatusInternalServerError)
+		return
+	}
+
 	response := JFAuthenticateByNameResponse{
 		AccessToken: token.Token,
-		SessionInfo: j.makeJFSessionInfo(token, user.Username),
+		SessionInfo: j.makeJFSessionInfo(r.Context(), newSession),
 		ServerId:    j.serverID,
 		User:        j.makeJFUser(r.Context(), user),
 	}
@@ -211,8 +223,8 @@ func updateTokenDetails(t *model.AccessToken, r *http.Request, authHeader *authS
 			t.DeviceName = authHeader.device
 			changed = true
 		}
-		if authHeader.deviceID != t.DeviceId {
-			t.DeviceId = authHeader.deviceID
+		if authHeader.deviceID != t.DeviceID {
+			t.DeviceID = authHeader.deviceID
 			changed = true
 		}
 		if authHeader.client != t.ApplicationName {
@@ -363,9 +375,13 @@ func (j *Jellyfin) authmiddleware(next http.Handler) http.Handler {
 // if not found sends an HTTP unauthorized error
 func (j *Jellyfin) getRequestCtx(w http.ResponseWriter, r *http.Request) *requestContext {
 	// Ctx should have been populated by authmiddleware()
-	if details, ok := r.Context().Value(requestContextKey).(*requestContext); ok {
-		return details
+	reqCtx, ok := r.Context().Value(requestContextKey).(*requestContext)
+	if !ok {
+		apierror(w, "access token not found", http.StatusUnauthorized)
+		return nil
 	}
-	apierror(w, "access token not found", http.StatusUnauthorized)
-	return nil
+	// Create session table entry for any API traffic
+	_, _ = j.sessionTable.Create(reqCtx.Token)
+
+	return reqCtx
 }

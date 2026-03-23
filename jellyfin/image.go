@@ -344,10 +344,10 @@ func (j *Jellyfin) receiveItemImage(w http.ResponseWriter, r *http.Request, user
 		}
 	}
 	metadata := model.ImageMetadata{
-		MimeType: mimeType,
-		FileSize: len(imageData),
-		Etag:     idhash.HashBytes(imageData),
-		Updated:  time.Now().UTC(),
+		MimeType:  mimeType,
+		FileSize:  len(imageData),
+		Etag:      idhash.HashBytes(imageData),
+		UpdatedAt: time.Now().UTC(),
 	}
 	if err = j.repo.StoreImage(r.Context(), userID, imageType, metadata, imageData); err != nil {
 		apierror(w, "Failed to store image", http.StatusInternalServerError)
@@ -378,8 +378,8 @@ func (j *Jellyfin) serveItemImage(w http.ResponseWriter, r *http.Request, itemID
 	w.Header().Set("etag", metadata.Etag)
 	w.Header().Set("content-type", metadata.MimeType)
 	w.Header().Set("content-length", fmt.Sprintf("%d", metadata.FileSize))
-	w.Header().Set("last-modified", metadata.Updated.Format(http.TimeFormat))
-	http.ServeContent(w, r, "", metadata.Updated, bytes.NewReader(imageData))
+	w.Header().Set("last-modified", metadata.UpdatedAt.Format(http.TimeFormat))
+	http.ServeContent(w, r, "", metadata.UpdatedAt, bytes.NewReader(imageData))
 }
 
 // serveImageFile serves an image file from the filesystem

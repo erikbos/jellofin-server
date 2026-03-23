@@ -47,12 +47,12 @@ func (j *Jellyfin) createPlaylistHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	newPlaylist := model.Playlist{
-		ID:          idhash.NewRandomID(),
-		Name:        req.Name,
-		UserID:      req.UserID,
-		ItemIDs:     req.Ids,
-		Created:     time.Now().UTC(),
-		LastUpdated: time.Now().UTC(),
+		ID:        idhash.NewRandomID(),
+		Name:      req.Name,
+		UserID:    req.UserID,
+		ItemIDs:   req.Ids,
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
 	}
 	log.Printf("newPlaylist: %+v", newPlaylist)
 
@@ -93,7 +93,7 @@ func (j *Jellyfin) updatePlaylistHandler(w http.ResponseWriter, r *http.Request)
 	if req.Ids != nil {
 		playlist.ItemIDs = req.Ids
 	}
-	playlist.LastUpdated = time.Now().UTC()
+	playlist.UpdatedAt = time.Now().UTC()
 	if err := j.repo.UpsertPlaylist(r.Context(), *playlist); err != nil {
 		log.Printf("playlistID: %s, err: %v", playlist.ID, err)
 		apierror(w, "Failed to update playlist", http.StatusInternalServerError)
@@ -323,6 +323,7 @@ func (j *Jellyfin) makeJFItemCollectionPlaylist(ctx context.Context, userID stri
 		CanDownload:              true,
 		SpecialFeatureCount:      0,
 		ImageTags:                j.makeJFImageTags(ctx, id, imageTypePrimary),
+		UserData:                 j.makeJFUserData(userID, id, nil),
 		// PremiereDate should be set based upon most recent item in collection
 	}
 	return response, nil
@@ -357,6 +358,7 @@ func (j *Jellyfin) makeJFItemPlaylist(ctx context.Context, userID, playlistID st
 		DisplayPreferencesID:     makeJFDisplayPreferencesID(playlistCollectionID),
 		EnableMediaSourceDisplay: true,
 		ImageTags:                j.makeJFImageTags(ctx, id, imageTypePrimary),
+		UserData:                 j.makeJFUserData(userID, id, nil),
 	}
 	return response, nil
 }

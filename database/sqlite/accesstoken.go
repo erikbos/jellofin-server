@@ -18,7 +18,7 @@ func (s *SqliteRepo) GetAccessToken(ctx context.Context, token string) (*model.A
 	// Try our in-memory store first
 	if at, ok := s.accessTokenCache[token]; ok {
 		// Update token timestamp so we can keep track of in-use tokens
-		at.LastUsed = time.Now().UTC()
+		at.LastUsedAt = time.Now().UTC()
 		s.accessTokenCache[token] = at
 		// skip using this: we want to always get the latest token details from the database, as
 		// we update the last used timestamp in memory and want to make sure we have the latest value for that and other fields.
@@ -37,26 +37,17 @@ func (s *SqliteRepo) GetAccessToken(ctx context.Context, token string) (*model.A
 		remoteaddress,
 		created,
 		lastused FROM accesstokens WHERE token=? LIMIT 1`
-
-	var t model.AccessToken
-	row := s.dbReadHandle.QueryRowContext(ctx, query, token)
-	err := row.Scan(&t.UserID,
-		&t.Token,
-		&t.DeviceName,
-		&t.DeviceId,
-		&t.ApplicationName,
-		&t.ApplicationVersion,
-		&t.RemoteAddress,
-		&t.Created,
-		&t.LastUsed)
+	t, err := s.loadAccessToken(s.dbReadHandle.QueryRowContext(ctx, query, token))
 	if err != nil {
 		log.Printf("Error retrieving access token from db for token: %s: %s\n", token, err)
 		return nil, model.ErrNotFound
 	}
+
 	// cache it
-	t.LastUsed = time.Now().UTC()
-	s.accessTokenCache[token] = &t
-	return &t, nil
+	t.LastUsedAt = time.Now().UTC()
+	s.accessTokenCache[token] = t
+
+	return t, nil
 }
 
 func (s *SqliteRepo) GetAccessTokenByDeviceID(ctx context.Context, deviceID string) (*model.AccessToken, error) {
@@ -70,18 +61,7 @@ func (s *SqliteRepo) GetAccessTokenByDeviceID(ctx context.Context, deviceID stri
 		remoteaddress,
 		created,
 		lastused FROM accesstokens WHERE deviceid=? LIMIT 1`
-
-	var t model.AccessToken
-	row := s.dbReadHandle.QueryRowContext(ctx, query, deviceID)
-	err := row.Scan(&t.UserID,
-		&t.Token,
-		&t.DeviceName,
-		&t.DeviceId,
-		&t.ApplicationName,
-		&t.ApplicationVersion,
-		&t.RemoteAddress,
-		&t.Created,
-		&t.LastUsed)
+	t, err := s.loadAccessToken(s.dbReadHandle.QueryRowContext(ctx, query, deviceID))
 	if err != nil {
 		log.Printf("Error retrieving access token from db for deviceID: %s: %s\n", deviceID, err)
 		return nil, model.ErrNotFound
@@ -90,23 +70,16 @@ func (s *SqliteRepo) GetAccessTokenByDeviceID(ctx context.Context, deviceID stri
 	// cache it
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	t.LastUsed = time.Now().UTC()
-	s.accessTokenCache[t.Token] = &t
-	return &t, nil
+
+	t.LastUsedAt = time.Now().UTC()
+	s.accessTokenCache[t.Token] = t
+
+	return t, nil
 }
 
 // GetAccessTokens returns all access tokens for a user.
 func (s *SqliteRepo) GetAccessTokens(ctx context.Context, userID string) ([]model.AccessToken, error) {
-	query := `SELECT
-		userid,
-		token,
-		devicename,
-		deviceid,
-		applicationname,
-		applicationversion,
-		remoteaddress,
-		created,
-		lastused FROM accesstokens WHERE userid=?`
+	query := `SELECT userid, token, devicename,	deviceid, applicationname, applicationversion, remoteaddress, created, lastused FROM accesstokens WHERE userid=?`
 	rows, err := s.dbReadHandle.QueryxContext(ctx, query, userID)
 	if err != nil {
 		log.Printf("Error retrieving access tokens from db for userID: %s: %s\n", userID, err)
@@ -114,16 +87,32 @@ func (s *SqliteRepo) GetAccessTokens(ctx context.Context, userID string) ([]mode
 	}
 	defer rows.Close()
 
-	tokens := make([]model.AccessToken, 0, 10)
+	var tokens []model.AccessToken
 	for rows.Next() {
-		var t model.AccessToken
-		if err := rows.StructScan(&t); err != nil {
-			log.Printf("Error scanning access token row from db for userID: %s: %s\n", userID, err)
-			return nil, err
+		if token, err := s.loadAccessToken(rows); err == nil {
+			tokens = append(tokens, *token)
+		} else {
+			log.Printf("Error loading access token from db: %s\n", err)
 		}
-		tokens = append(tokens, t)
 	}
-	return tokens, nil
+	return tokens, rows.Err()
+}
+
+func (s *SqliteRepo) loadAccessToken(scanner sqlScanner) (*model.AccessToken, error) {
+	var t model.AccessToken
+	if err := scanner.Scan(
+		&t.UserID,
+		&t.Token,
+		&t.DeviceName,
+		&t.DeviceID,
+		&t.ApplicationName,
+		&t.ApplicationVersion,
+		&t.RemoteAddress,
+		&t.CreatedAt,
+		&t.LastUsedAt); err != nil {
+		return nil, model.ErrNotFound
+	}
+	return &t, nil
 }
 
 // UpsertAccessToken upserts a token.
@@ -195,7 +184,7 @@ func (s *SqliteRepo) writeChangedAccessTokensToDB(ctx context.Context) error {
 	defer tx.Rollback()
 
 	for _, value := range s.accessTokenCache {
-		if value.LastUsed.After(s.accessTokenCacheSyncTime) {
+		if value.LastUsedAt.After(s.accessTokenCacheSyncTime) {
 			if err := s.storeAccessToken(ctx, tx, *value); err != nil {
 				return err
 			}
@@ -221,13 +210,13 @@ func (s *SqliteRepo) storeAccessToken(ctx context.Context, tx *sqlx.Tx, t model.
 	_, err := tx.ExecContext(ctx, query,
 		t.UserID,
 		t.Token,
-		t.DeviceId,
+		t.DeviceID,
 		t.DeviceName,
 		t.ApplicationName,
 		t.ApplicationVersion,
 		t.RemoteAddress,
-		t.Created,
-		t.LastUsed)
+		t.CreatedAt,
+		t.LastUsedAt)
 
 	// if err != nil {
 	// 	log.Printf("Error storing access token to db for userID: %s, token: %s: %s\n", t.UserID, t.Token, err)

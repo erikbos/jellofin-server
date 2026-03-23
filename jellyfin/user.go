@@ -426,7 +426,7 @@ func (j *Jellyfin) createUser(context context.Context, username, password string
 		ID:         idhash.NewRandomID(),
 		Username:   strings.ToLower(username),
 		Password:   string(hashedPassword),
-		Created:    time.Now().UTC(),
+		CreatedAt:  time.Now().UTC(),
 		Properties: model.UserPropertiesDefault(),
 	}
 	if err = j.repo.UpsertUser(context, modelUser); err != nil {
@@ -489,10 +489,10 @@ func generateIdenticon(seed string) (model.ImageMetadata, []byte, error) {
 		return model.ImageMetadata{}, nil, err
 	}
 	avatarMeta := model.ImageMetadata{
-		MimeType: "image/png",
-		FileSize: buf.Len(),
-		Etag:     idhash.HashBytes(buf.Bytes()),
-		Updated:  time.Now().UTC(),
+		MimeType:  "image/png",
+		FileSize:  buf.Len(),
+		Etag:      idhash.HashBytes(buf.Bytes()),
+		UpdatedAt: time.Now().UTC(),
 	}
 	return avatarMeta, buf.Bytes(), nil
 }

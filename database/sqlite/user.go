@@ -50,7 +50,7 @@ func (s *SqliteRepo) loadUser(scanner sqlScanner) (*model.User, error) {
 		&user.ID,
 		&user.Username,
 		&user.Password,
-		&user.Created,
+		&user.CreatedAt,
 		&user.LastLogin,
 		&user.LastUsed); err != nil {
 		return nil, model.ErrNotFound
@@ -70,7 +70,7 @@ func (s *SqliteRepo) UpsertUser(ctx context.Context, user *model.User) error {
 		user.ID,
 		user.Username,
 		user.Password,
-		user.Created,
+		user.CreatedAt,
 		user.LastLogin,
 		user.LastUsed)
 	if err != nil {
@@ -109,6 +109,7 @@ const (
 	propBlockTags         = "blocktags"
 	propMaxParentalRating = "maxparentalrating"
 	propBlockUnratedItems = "blockunrateditems"
+	propMaxActiveSessions = "maxactivesessions"
 )
 
 func (s *SqliteRepo) loadUserProperties(ctx context.Context, userID string) (model.UserProperties, error) {
@@ -150,6 +151,8 @@ func (s *SqliteRepo) loadUserProperties(ctx context.Context, userID string) (mod
 			props.MaxParentalRating, _ = strconv.Atoi(value)
 		case propBlockUnratedItems:
 			props.BlockUnratedItems = splitComma(value)
+		case propMaxActiveSessions:
+			props.MaxActiveSessions, _ = strconv.Atoi(value)
 		default:
 			log.Printf("Unknown user property key: %s\n", key)
 		}
@@ -192,6 +195,7 @@ func (s *SqliteRepo) saveUserProperties(ctx context.Context, userID string, prop
 		{propBlockTags, strings.Join(props.BlockTags, ",")},
 		{propMaxParentalRating, strconv.Itoa(props.MaxParentalRating)},
 		{propBlockUnratedItems, strings.Join(props.BlockUnratedItems, ",")},
+		{propMaxActiveSessions, strconv.Itoa(props.MaxActiveSessions)},
 	}
 	for _, item := range properties {
 		// log.Printf("Saving user property for userID: %s, key: %s, value: %s\n", userID, item.key, item.value)

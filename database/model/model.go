@@ -22,8 +22,8 @@ type User struct {
 	Password string
 	// Properties of the user
 	Properties UserProperties
-	// Created is the time the user was created.
-	Created time.Time
+	// CreatedAt is the time the user was created.
+	CreatedAt time.Time
 	// LastLogin is the last time the user logged in.
 	LastLogin time.Time
 	// LastUsed is the last time the user was active.
@@ -56,6 +56,8 @@ type UserProperties struct {
 	MaxParentalRating int
 	// BlockUnratedItems contains Itemtypes that are not allow in case rating is unknown.
 	BlockUnratedItems []string
+	// MaxActiveSessions is the maximum number of active sessions allowed for the user.
+	MaxActiveSessions int
 }
 
 // UserPropertiesDefault returns default property values for users. To be used when creating new entities
@@ -77,8 +79,8 @@ type AccessToken struct {
 	UserID string
 	// Token is the access token string.
 	Token string
-	// DeviceId is the unique identifier for the device.
-	DeviceId string
+	// DeviceID is the unique identifier for the device.
+	DeviceID string
 	// DeviceName is the name of the device.
 	DeviceName string
 	// ApplicationName is the name of the application.
@@ -87,10 +89,10 @@ type AccessToken struct {
 	ApplicationVersion string
 	// RemoteAddress is the remote address of the client.
 	RemoteAddress string
-	// Created is the time the token was created.
-	Created time.Time
-	// LastUsed is the last time the token was used.
-	LastUsed time.Time
+	// CreatedAt is the time the token was created.
+	CreatedAt time.Time
+	// LastUsedAt is the last time the token was used.
+	LastUsedAt time.Time
 }
 
 type QuickConnectCode struct {
@@ -104,8 +106,8 @@ type QuickConnectCode struct {
 	Authorized bool
 	// Code is the quick connect code.
 	Code string
-	// Created is the time the quick connect code was created.
-	Created time.Time
+	// CreatedAt is the time the quick connect code was created.
+	CreatedAt time.Time
 }
 
 // Item represents a media item in the database.
@@ -147,10 +149,10 @@ type Playlist struct {
 	Name string
 	// ItemIDs is a list of item IDs contained in the playlist.
 	ItemIDs []string
-	// Created is the time the playlist was created.
-	Created time.Time
-	// LastUpdated is the last time the playlist was updated.
-	LastUpdated time.Time
+	// CreatedAt is the time the playlist was created.
+	CreatedAt time.Time
+	// UpdatedAt is the last time the playlist was updated.
+	UpdatedAt time.Time
 }
 
 type Person struct {
@@ -166,10 +168,10 @@ type Person struct {
 	PosterURL string
 	// Bio is a short biography of the person.
 	Bio string
-	// Created is the time the person was created.
-	Created time.Time
-	// LastUpdated is the last time the person was updated.
-	LastUpdated time.Time
+	// CreatedAt is the time the person was created.
+	CreatedAt time.Time
+	// UpdatedAt is the last time the person was updated.
+	UpdatedAt time.Time
 }
 
 type ImageMetadata struct {
@@ -179,6 +181,6 @@ type ImageMetadata struct {
 	FileSize int
 	// Etag is a unique identifier for the image content, used for caching.
 	Etag string
-	// Updated is the time the image was last received and stored.
-	Updated time.Time
+	// UpdatedAt is the time the image was last received and stored.
+	UpdatedAt time.Time
 }

@@ -83,7 +83,7 @@ func (j *Jellyfin) studioHandler(w http.ResponseWriter, r *http.Request) {
 	serveJSON(response, w)
 }
 
-func (j *Jellyfin) makeJFItemStudio(ctx context.Context, _ string, studioID string) (JFItem, error) {
+func (j *Jellyfin) makeJFItemStudio(ctx context.Context, userID string, studioID string) (JFItem, error) {
 	studio, err := decodeJFStudioID(studioID)
 	if err != nil {
 		return JFItem{}, err
@@ -102,8 +102,8 @@ func (j *Jellyfin) makeJFItemStudio(ctx context.Context, _ string, studioID stri
 		ImageBlurHashes:   &JFImageBlurHashes{},
 		ImageTags:         j.makeJFImageTags(ctx, studioID, imageTypePrimary),
 		BackdropImageTags: []string{},
-		UserData:          &JFUserData{},
 		LockedFields:      []string{},
+		UserData:          j.makeJFUserData(userID, studioID, nil),
 	}
 	return response, nil
 }

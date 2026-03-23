@@ -47,7 +47,7 @@ func (j *Jellyfin) quickConnectAuthorizeHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 	// If code is too old we cannot authorize it
-	if time.Since(quickCode.Created) > quickCodeValidDuration {
+	if time.Since(quickCode.CreatedAt) > quickCodeValidDuration {
 		log.Printf("quick connect code expired: %s", code)
 		apierror(w, "quickconnect code expired", http.StatusNotFound)
 		return
@@ -95,10 +95,10 @@ func (j *Jellyfin) quickConnectInitiateHandler(w http.ResponseWriter, r *http.Re
 	}
 	d, _ := j.parseAuthHeader(r)
 	quickCode := model.QuickConnectCode{
-		Code:     fmt.Sprintf("%06d", rand.Intn(1000000)),
-		Created:  time.Now().UTC(),
-		DeviceID: d.deviceID,
-		Secret:   idhash.NewRandomID(),
+		Code:      fmt.Sprintf("%06d", rand.Intn(1000000)),
+		CreatedAt: time.Now().UTC(),
+		DeviceID:  d.deviceID,
+		Secret:    idhash.NewRandomID(),
 	}
 	if err := j.repo.UpsertQuickConnectCode(r.Context(), quickCode); err != nil {
 		log.Printf("error upserting quick connect code: %v", err)
@@ -114,7 +114,7 @@ func (j *Jellyfin) makeJFQuickConnectResponse(code model.QuickConnectCode, d *au
 		Code:          code.Code,
 		Secret:        code.Secret,
 		Authenticated: code.Authorized,
-		DateAdded:     code.Created,
+		DateAdded:     code.CreatedAt,
 		AppName:       d.client,
 		AppVersion:    d.clientVersion,
 		DeviceID:      d.deviceID,

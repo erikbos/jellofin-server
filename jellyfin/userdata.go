@@ -97,6 +97,9 @@ func (j *Jellyfin) playingItemsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	vars := mux.Vars(r)
 	itemID := vars["itemid"]
+
+	j.sessionTable.UpdateStatus(reqCtx.User.ID, reqCtx.Token.DeviceID, itemID, false)
+
 	if err := j.userDataUpdate(r.Context(), reqCtx.User.ID, itemID, 0, false); err != nil {
 		apierror(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
 		return
@@ -124,6 +127,9 @@ func (j *Jellyfin) playingItemsProgressHandler(w http.ResponseWriter, r *http.Re
 	}
 	vars := mux.Vars(r)
 	itemID := vars["itemid"]
+
+	j.sessionTable.UpdateStatus(reqCtx.User.ID, reqCtx.Token.DeviceID, itemID, false)
+
 	if err := j.userDataUpdate(r.Context(), reqCtx.User.ID, itemID, positionTicks, false); err != nil {
 		apierror(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
 		return
@@ -151,6 +157,9 @@ func (j *Jellyfin) playingItemsDeleteHandler(w http.ResponseWriter, r *http.Requ
 	}
 	vars := mux.Vars(r)
 	itemID := vars["itemid"]
+
+	j.sessionTable.UpdateStatus(reqCtx.User.ID, reqCtx.Token.DeviceID, itemID, false)
+
 	if err := j.userDataUpdate(r.Context(), reqCtx.User.ID, itemID, positionTicks, false); err != nil {
 		apierror(w, ErrFailedToUpdateUserData, http.StatusInternalServerError)
 		return
@@ -172,6 +181,8 @@ func (j *Jellyfin) sessionsPlayingHandler(w http.ResponseWriter, r *http.Request
 		apierror(w, ErrInvalidJSONPayload, http.StatusBadRequest)
 		return
 	}
+	j.sessionTable.UpdateStatus(reqCtx.User.ID, reqCtx.Token.DeviceID, request.ItemId, request.IsPaused)
+
 	// log.Printf("\nsessionsPlayingHandler UserID: %s, ItemId: %s, Progress: %d seconds\n\n",
 	// 	reqCtx.User.ID, request.ItemId, request.PositionTicks/TicsToSeconds)
 	if err := j.userDataUpdate(r.Context(), reqCtx.User.ID, request.ItemId, request.PositionTicks, false); err != nil {
@@ -195,6 +206,8 @@ func (j *Jellyfin) sessionsPlayingProgressHandler(w http.ResponseWriter, r *http
 		apierror(w, ErrInvalidJSONPayload, http.StatusBadRequest)
 		return
 	}
+	j.sessionTable.UpdateStatus(reqCtx.User.ID, reqCtx.Token.DeviceID, request.ItemId, request.IsPaused)
+
 	// log.Printf("\nsessionsPlayingProgressHandler UserID: %s, ItemId: %s, Progress: %d seconds\n\n",
 	// 	reqCtx.User.ID, request.ItemId, request.PositionTicks/TicsToSeconds)
 	if err := j.userDataUpdate(r.Context(), reqCtx.User.ID, request.ItemId, request.PositionTicks, false); err != nil {
@@ -218,6 +231,9 @@ func (j *Jellyfin) sessionsPlayingStoppedHandler(w http.ResponseWriter, r *http.
 		apierror(w, ErrInvalidJSONPayload, http.StatusBadRequest)
 		return
 	}
+	// Zero out itemid in session as playing has stopped
+	j.sessionTable.UpdateStatus(reqCtx.User.ID, reqCtx.Token.DeviceID, "", false)
+
 	// log.Printf("\nsessionsPlayingStoppedHandler UserID: %s, ItemId: %s, Progress: %d seconds, canSeek: %t\n\n",
 	// 	reqCtx.User.ID, request.ItemId, request.PositionTicks/TicsToSeconds, request.CanSeek)
 	if err := j.userDataUpdate(r.Context(), reqCtx.User.ID, request.ItemId, request.PositionTicks, false); err != nil {

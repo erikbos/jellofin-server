@@ -12,7 +12,7 @@ func (s *SqliteRepo) GetPlaylist(ctx context.Context, userID, playlistID string)
 	query := `SELECT id, name, userid, created, lastupdated FROM playlists WHERE userid=? AND id=? LIMIT 1`
 	row := s.dbReadHandle.QueryRowContext(ctx, query, userID, playlistID)
 	var playlist model.Playlist
-	if err := row.Scan(&playlist.ID, &playlist.Name, &playlist.UserID, &playlist.Created, &playlist.LastUpdated); err != nil {
+	if err := row.Scan(&playlist.ID, &playlist.Name, &playlist.UserID, &playlist.CreatedAt, &playlist.UpdatedAt); err != nil {
 		return nil, model.ErrNotFound
 	}
 
@@ -62,7 +62,7 @@ func (s *SqliteRepo) UpsertPlaylist(ctx context.Context, newPlaylist model.Playl
 
 	const query = `REPLACE INTO playlists (id, name, userid, created, lastupdated) VALUES (?, ?, ?, ?, ?)`
 	if _, err := tx.ExecContext(ctx, query,
-		newPlaylist.ID, newPlaylist.Name, newPlaylist.UserID, newPlaylist.Created, newPlaylist.LastUpdated); err != nil {
+		newPlaylist.ID, newPlaylist.Name, newPlaylist.UserID, newPlaylist.CreatedAt, newPlaylist.UpdatedAt); err != nil {
 		return err
 	}
 
@@ -70,7 +70,7 @@ func (s *SqliteRepo) UpsertPlaylist(ctx context.Context, newPlaylist model.Playl
 	for _, itemID := range newPlaylist.ItemIDs {
 		const query = `REPLACE INTO playlist_items (playlistid, itemid, itemorder, created, lastupdated) VALUES (?, ?, ?, ?, ?)`
 		if _, err := tx.ExecContext(ctx, query,
-			newPlaylist.ID, itemID, order, newPlaylist.Created, newPlaylist.LastUpdated); err != nil {
+			newPlaylist.ID, itemID, order, newPlaylist.CreatedAt, newPlaylist.UpdatedAt); err != nil {
 			return err
 		}
 		order++

@@ -36,9 +36,14 @@ type Options struct {
 }
 
 type Jellyfin struct {
-	collections  *collection.CollectionRepo
-	repo         database.Repository
+	// collections is used to retrieve media items for API responses
+	collections *collection.CollectionRepo
+	// repo is used to access the database for user and session management
+	repo database.Repository
+	// imageresizer is used to resize images for API responses
 	imageresizer *imageresize.Resizer
+	// sessionTable tracks active sessions, keyed by user ID and remote address
+	sessionTable *SessionTable
 	// Unique ID of this server, used in API responses
 	serverID string
 	// serverName is name of server returned in info responses
@@ -55,9 +60,10 @@ func New(o *Options) *Jellyfin {
 	j := &Jellyfin{
 		collections:         o.Collections,
 		repo:                o.Repo,
+		imageresizer:        o.Imageresizer,
+		sessionTable:        NewSessionTable(),
 		serverID:            o.ServerID,
 		serverName:          o.ServerName,
-		imageresizer:        o.Imageresizer,
 		autoRegister:        o.AutoRegister,
 		quickConnectEnabled: o.QuickConnect,
 		imageQualityPoster:  o.ImageQualityPoster,

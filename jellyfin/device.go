@@ -58,7 +58,7 @@ func (j *Jellyfin) devicesDeleteHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	for _, t := range accessTokens {
-		if t.DeviceId == id {
+		if t.DeviceID == id {
 			err := j.repo.DeleteAccessToken(r.Context(), t.Token)
 			if err != nil {
 				apierror(w, "error deleting device", http.StatusInternalServerError)
@@ -96,7 +96,7 @@ func (j *Jellyfin) devicesInfoHandler(w http.ResponseWriter, r *http.Request) {
 	var deviceToken model.AccessToken
 	var found bool
 	for _, t := range accessTokens {
-		if t.DeviceId == id {
+		if t.DeviceID == id {
 			deviceToken = t
 			found = true
 			break
@@ -143,7 +143,7 @@ func (j *Jellyfin) devicesOptionsHandler(w http.ResponseWriter, r *http.Request)
 
 func (j *Jellyfin) makeJFDeviceItem(accessToken model.AccessToken, user string) JFDeviceItem {
 	return JFDeviceItem{
-		ID:           accessToken.DeviceId,
+		ID:           accessToken.DeviceID,
 		LastUserID:   accessToken.UserID,
 		LastUserName: user,
 		Name:         accessToken.DeviceName,
@@ -155,6 +155,6 @@ func (j *Jellyfin) makeJFDeviceItem(accessToken model.AccessToken, user string) 
 			SupportsMediaControl:         false,
 			SupportsPersistentIdentifier: true,
 		},
-		DateLastActivity: accessToken.LastUsed,
+		DateLastActivity: accessToken.LastUsedAt,
 	}
 }
