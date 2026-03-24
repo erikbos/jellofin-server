@@ -66,8 +66,8 @@ func (j *Jellyfin) usersViewsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("usersViewsHandler: EnableAllFolders: %v, EnabledFolders: %v, OrderedViews: %v, MyMediaExcludes: %v",
-		reqCtx.User.Properties.EnableAllFolders, reqCtx.User.Properties.EnabledFolders, reqCtx.User.Properties.OrderedViews, reqCtx.User.Properties.MyMediaExcludes)
+	// log.Printf("usersViewsHandler: EnableAllFolders: %v, EnabledFolders: %v, OrderedViews: %v, MyMediaExcludes: %v",
+	// 	reqCtx.User.Properties.EnableAllFolders, reqCtx.User.Properties.EnabledFolders, reqCtx.User.Properties.OrderedViews, reqCtx.User.Properties.MyMediaExcludes)
 
 	// for _, item := range items {
 	// 	log.Printf("usersViewsHandler: before filtering item: %s, DisplayPreferencesID: %s", item.ID, item.DisplayPreferencesID)

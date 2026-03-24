@@ -80,7 +80,6 @@ func (j *Jellyfin) makeJFSessionInfo(ctx context.Context, s *sessionEntry) *JFSe
 	dbuser, err := j.repo.GetUserByID(ctx, s.UserID)
 	if err == nil {
 		jfsession.UserName = dbuser.Username
-		jfsession.LastActivityDate = dbuser.LastUsed
 	}
 
 	// Set imagetag if user has an image
@@ -201,8 +200,8 @@ func (st *SessionTable) GetAll() []sessionEntry {
 
 // Create adds or updates a session entry based upon the provided access token
 func (st *SessionTable) Create(t *model.AccessToken) (*sessionEntry, error) {
-	st.mu.RLock()
-	defer st.mu.RUnlock()
+	st.mu.Lock()
+	defer st.mu.Unlock()
 
 	sessionID := makeSessionTableKey(t.UserID, t.DeviceID)
 	session, exists := st.sessions[sessionID]
