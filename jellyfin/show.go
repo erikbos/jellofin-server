@@ -162,7 +162,7 @@ func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 	items := make([]JFItem, 0, len(nextUpItemIDs))
 	for _, id := range nextUpItemIDs {
 		if _, i, s, e := j.collections.GetEpisodeByID(id); i != nil {
-			jfitem, err := j.makeJFItemEpisode(r.Context(), reqCtx.User.ID, e, s.ID())
+			jfitem, err := j.makeJFItemEpisode(r.Context(), reqCtx.User.ID, e, s.ID(), false)
 			if err == nil && j.applyItemFilter(&jfitem, queryparams) {
 				items = append(items, jfitem)
 			}
@@ -187,7 +187,7 @@ func (j *Jellyfin) showsNextUpHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // makeJFItemShow makes show item
-func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, show *collection.Show, parentID string) (JFItem, error) {
+func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, show *collection.Show, parentID string, _ bool) (JFItem, error) {
 	response := JFItem{
 		Type:                    itemTypeShow,
 		ID:                      show.ID(),
@@ -196,7 +196,6 @@ func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, show *coll
 		Name:                    show.Name(),
 		OriginalTitle:           show.Name(),
 		SortName:                show.SortName(),
-		ForcedSortName:          show.SortName(),
 		Genres:                  show.Metadata.Genres(),
 		GenreItems:              makeJFGenreItems(show.Metadata.Genres()),
 		Studios:                 makeJFStudios(show.Metadata.Studios()),
@@ -204,8 +203,8 @@ func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, show *coll
 		Etag:                    show.Etag(),
 		DateCreated:             show.FirstVideo().UTC(),
 		PrimaryImageAspectRatio: 0.6666666666666666,
-		CanDelete:               false,
-		CanDownload:             true,
+		CanDelete:               boolPtr(false),
+		CanDownload:             boolPtr(true),
 		PlayAccess:              "Full",
 		ImageTags: &JFImageTags{
 			Primary:  show.ID(),
@@ -307,7 +306,7 @@ func (j *Jellyfin) makeJFItemShow(ctx context.Context, userID string, show *coll
 func (j *Jellyfin) makeJFSeasonsOverview(ctx context.Context, userID string, show *collection.Show) ([]JFItem, error) {
 	seasons := make([]JFItem, 0, len(show.Seasons))
 	for _, s := range show.Seasons {
-		if jfitem, err := j.makeJFItemSeason(ctx, userID, &s, show.ID()); err == nil {
+		if jfitem, err := j.makeJFItemSeason(ctx, userID, &s, show.ID(), false); err == nil {
 			seasons = append(seasons, jfitem)
 		}
 	}
@@ -322,7 +321,7 @@ func (j *Jellyfin) makeJFSeasonsOverview(ctx context.Context, userID string, sho
 }
 
 // makeJFItemSeason makes a season item
-func (j *Jellyfin) makeJFItemSeason(ctx context.Context, userID string, season *collection.Season, _ string) (JFItem, error) {
+func (j *Jellyfin) makeJFItemSeason(ctx context.Context, userID string, season *collection.Season, _ string, fulldetails bool) (JFItem, error) {
 	_, show, season := j.collections.GetSeasonByID(season.ID())
 	if season == nil {
 		return JFItem{}, errors.New("could not find season")
@@ -344,8 +343,8 @@ func (j *Jellyfin) makeJFItemSeason(ctx context.Context, userID string, season *
 		RecursiveItemCount: len(season.Episodes),
 		DateCreated:        time.Now().UTC(),
 		PremiereDate:       time.Now().UTC(),
-		CanDelete:          false,
-		CanDownload:        true,
+		CanDelete:          boolPtr(false),
+		CanDownload:        boolPtr(true),
 		PlayAccess:         "Full",
 		ImageTags: &JFImageTags{
 			Primary: makeJFSeasonID(season.ID()),
@@ -428,7 +427,7 @@ func makeSeasonName(seasonNo int) string {
 func (j *Jellyfin) makeJFEpisodesOverview(ctx context.Context, userID string, season *collection.Season) ([]JFItem, error) {
 	episodes := make([]JFItem, 0, len(season.Episodes))
 	for _, e := range season.Episodes {
-		if episode, err := j.makeJFItemEpisode(ctx, userID, &e, season.ID()); err == nil {
+		if episode, err := j.makeJFItemEpisode(ctx, userID, &e, season.ID(), true); err == nil {
 			episodes = append(episodes, episode)
 		}
 	}
@@ -436,7 +435,7 @@ func (j *Jellyfin) makeJFEpisodesOverview(ctx context.Context, userID string, se
 }
 
 // makeJFItemEpisode makes an episode item
-func (j *Jellyfin) makeJFItemEpisode(ctx context.Context, userID string, episode *collection.Episode, _ string) (JFItem, error) {
+func (j *Jellyfin) makeJFItemEpisode(ctx context.Context, userID string, episode *collection.Episode, _ string, fulldetails bool) (JFItem, error) {
 	_, show, season, episode := j.collections.GetEpisodeByID(episode.ID())
 	if episode == nil {
 		return JFItem{}, errors.New("could not find episode")
@@ -466,8 +465,8 @@ func (j *Jellyfin) makeJFItemEpisode(ctx context.Context, userID string, episode
 		Container:         "mov,mp4,m4a",
 		DateCreated:       episode.Created().UTC(),
 		HasSubtitles:      true,
-		CanDelete:         false,
-		CanDownload:       true,
+		CanDelete:         boolPtr(false),
+		CanDownload:       boolPtr(true),
 		PlayAccess:        "Full",
 		Width:             episode.VideoWidth(),
 		Height:            episode.VideoHeight(),
@@ -517,14 +516,20 @@ func (j *Jellyfin) makeJFItemEpisode(ctx context.Context, userID string, episode
 		response.PremiereDate = episode.Created().UTC()
 	}
 
-	response.MediaSources = j.makeMediaSource(episode)
-	response.MediaStreams = response.MediaSources[0].MediaStreams
-
 	if playstate, err := j.repo.GetUserData(ctx, userID, episode.ID()); err == nil {
 		response.UserData = j.makeJFUserData(userID, episode.ID(), playstate)
 	} else {
 		response.UserData = j.makeJFUserData(userID, episode.ID(), nil)
 	}
+
+	if !fulldetails {
+		return response, nil
+	}
+
+	// Optional full details, please note: fields that can be filtered should have been set earlier as ApplyItemFilter() depends on their presence.
+	response.MediaSources = j.makeMediaSource(episode)
+	response.MediaStreams = response.MediaSources[0].MediaStreams
+
 	return response, nil
 }
 

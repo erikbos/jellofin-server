@@ -15,8 +15,6 @@ import (
 )
 
 const (
-	// Top-level root ID, parent IDof all collections
-	collectionRootID = "e9d5075a555c1cbc394eec4cef295274"
 	// ID of dynamically generated Playlist collection
 	playlistCollectionID = "2f0340563593c4d98b97c9bfa21ce23c"
 	// ID of dynamically generated favorites collection
@@ -138,7 +136,7 @@ func (j *Jellyfin) getJFItemsByParentID(ctx context.Context, userID, parentID st
 		}
 		items := make([]JFItem, 0, len(c.Items))
 		for _, i := range c.Items {
-			jfitem, err := j.makeJFItem(ctx, userID, i, c.ID)
+			jfitem, err := j.makeJFItem(ctx, userID, i, c.ID, false)
 			if err != nil {
 				return []JFItem{}, err
 			}
@@ -174,7 +172,7 @@ func (j *Jellyfin) getJFItemsAll(ctx context.Context, userID string) ([]JFItem, 
 	items := make([]JFItem, 0)
 	for _, c := range j.collections.GetCollections() {
 		for _, i := range c.Items {
-			jfitem, err := j.makeJFItem(ctx, userID, i, c.ID)
+			jfitem, err := j.makeJFItem(ctx, userID, i, c.ID, false)
 			if err != nil {
 				return []JFItem{}, err
 			}
@@ -215,7 +213,7 @@ func (j *Jellyfin) makeJFItemByID(ctx context.Context, userID, itemID string) (J
 	case isJFPlaylistID(itemID):
 		return j.makeJFItemPlaylist(ctx, userID, trimPrefix(itemID))
 	case isJFPersonID(itemID):
-		return j.makeJFItemPerson(ctx, userID, itemID)
+		return j.makeJFItemPerson(ctx, userID, itemID, true)
 	case isJFGenreID(itemID):
 		return j.makeJFItemGenre(ctx, userID, itemID)
 	case isJFStudioID(itemID):
@@ -227,20 +225,20 @@ func (j *Jellyfin) makeJFItemByID(ctx context.Context, userID, itemID string) (J
 	if i == nil {
 		return JFItem{}, errors.New("item not found")
 	}
-	return j.makeJFItem(ctx, userID, i, c.ID)
+	return j.makeJFItem(ctx, userID, i, c.ID, true)
 }
 
 // makeJFItem make movie or show from provided item
-func (j *Jellyfin) makeJFItem(ctx context.Context, userID string, item collection.Item, parentID string) (JFItem, error) {
+func (j *Jellyfin) makeJFItem(ctx context.Context, userID string, item collection.Item, parentID string, fulldetails bool) (JFItem, error) {
 	switch i := item.(type) {
 	case *collection.Movie:
-		return j.makeJFItemMovie(ctx, userID, i, parentID)
+		return j.makeJFItemMovie(ctx, userID, i, parentID, fulldetails)
 	case *collection.Show:
-		return j.makeJFItemShow(ctx, userID, i, parentID)
+		return j.makeJFItemShow(ctx, userID, i, parentID, fulldetails)
 	case *collection.Season:
-		return j.makeJFItemSeason(ctx, userID, i, parentID)
+		return j.makeJFItemSeason(ctx, userID, i, parentID, fulldetails)
 	case *collection.Episode:
-		return j.makeJFItemEpisode(ctx, userID, i, parentID)
+		return j.makeJFItemEpisode(ctx, userID, i, parentID, fulldetails)
 	}
 	log.Printf("makeJFItem: item %s has unknown type %T", item.ID(), item)
 	return JFItem{}, fmt.Errorf("item %s unknown type %T", item.ID(), item)
@@ -433,7 +431,6 @@ func makeRuntimeTicks(d time.Duration) int64 {
 
 const (
 	itemprefix_separator            = "_"
-	itemprefix_user                 = "u_"
 	itemprefix_root                 = "root_"
 	itemprefix_collection           = "collection_"
 	itemprefix_collection_favorites = "collectionfavorites_"
@@ -445,14 +442,15 @@ const (
 	itemprefix_genre                = "genre_"
 	itemprefix_studio               = "studio_"
 	itemprefix_person               = "person_"
+	itemprefix_artist               = "artist_"
 	itemprefix_year                 = "year_"
 	itemprefix_displaypreferences   = "dp_"
 )
 
 // trimPrefix removes the type prefix from an item id.
 func trimPrefix(s string) string {
-	if i := strings.Index(s, itemprefix_separator); i != -1 {
-		return s[i+1:]
+	if _, after, ok := strings.Cut(s, itemprefix_separator); ok {
+		return after
 	}
 	return s
 }
@@ -477,11 +475,15 @@ func decodeExternalName(itemprefix, id string) (string, error) {
 }
 
 // itemIsHD checks if the provided item is HD (720p or higher)
-func itemIsHD(item collection.Item) bool {
-	return item.VideoHeight() >= 720
+func itemIsHD(item collection.Item) *bool {
+	return boolPtr(item.VideoHeight() >= 720)
 }
 
 // itemIs4K checks if the provided item is 4K (2160p or higher)
-func itemIs4K(item collection.Item) bool {
-	return item.VideoHeight() >= 1500
+func itemIs4K(item collection.Item) *bool {
+	return boolPtr(item.VideoHeight() >= 1500)
+}
+
+func boolPtr(b bool) *bool {
+	return &b
 }

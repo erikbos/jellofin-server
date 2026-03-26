@@ -36,14 +36,15 @@ func (j *Jellyfin) personsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		personNames, err := j.collections.SearchPerson(r.Context(), searchTerm)
 		if personNames == nil || err != nil {
+			log.Printf("personsHandler: search error: %v, %v\n", personNames, err)
 			apierror(w, "Search index not available", http.StatusInternalServerError)
 			return
 		}
-		log.Printf("personsHandler: search found %d matching items\n", len(personNames))
+		// log.Printf("personsHandler: search found %d matching items\n", len(personNames))
 
-		// Populate persons list based on found person names
+		// Populate persons list based on found person names, no person details required.
 		for _, name := range personNames {
-			if person, err := j.makeJFItemPerson(r.Context(), reqCtx.User.ID, makeJFPersonID(name)); err == nil {
+			if person, err := j.makeJFItemPerson(r.Context(), reqCtx.User.ID, makeJFPersonID(name), false); err == nil {
 				persons = append(persons, person)
 			}
 		}
@@ -56,10 +57,10 @@ func (j *Jellyfin) personsHandler(w http.ResponseWriter, r *http.Request) {
 			apierror(w, "Failed to get person names", http.StatusInternalServerError)
 			return
 		}
-		log.Printf("personsHandler: found %d persons\n", len(personNames))
+		// log.Printf("personsHandler: found %d persons\n", len(personNames))
 		persons = make([]JFItem, 0, len(personNames))
 		for _, name := range personNames {
-			if person, err := j.makeJFItemPerson(r.Context(), reqCtx.User.ID, makeJFPersonID(name)); err == nil {
+			if person, err := j.makeJFItemPerson(r.Context(), reqCtx.User.ID, makeJFPersonID(name), false); err == nil {
 				persons = append(persons, person)
 			}
 		}
@@ -97,7 +98,7 @@ func (j *Jellyfin) personHandler(w http.ResponseWriter, r *http.Request) {
 		apierror(w, "Invalid person name", http.StatusBadRequest)
 		return
 	}
-	response, err := j.makeJFItemPerson(r.Context(), reqCtx.User.ID, makeJFPersonID(name))
+	response, err := j.makeJFItemPerson(r.Context(), reqCtx.User.ID, makeJFPersonID(name), true)
 	if err != nil {
 		apierror(w, "could not create person item", http.StatusInternalServerError)
 		return
@@ -106,7 +107,7 @@ func (j *Jellyfin) personHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // makeJFItemPerson creates a JFItem representing a person
-func (j *Jellyfin) makeJFItemPerson(ctx context.Context, userID string, personID string) (JFItem, error) {
+func (j *Jellyfin) makeJFItemPerson(ctx context.Context, userID string, personID string, fulldetails bool) (JFItem, error) {
 	name, err := decodeJFPersonID(personID)
 	if err != nil {
 		return JFItem{}, err
@@ -139,6 +140,16 @@ func (j *Jellyfin) makeJFItemPerson(ctx context.Context, userID string, personID
 		ChildCount: 1,
 	}
 
+	if playstate, err := j.repo.GetUserData(ctx, userID, personID); err == nil {
+		response.UserData = j.makeJFUserData(userID, personID, playstate)
+	} else {
+		response.UserData = j.makeJFUserData(userID, personID, nil)
+	}
+
+	if !fulldetails {
+		return response, nil
+	}
+
 	person, err := j.repo.GetPersonByName(ctx, name, userID)
 	if err != nil {
 		// If we do not have details on this person, we just return a basic response with just the name.
@@ -160,11 +171,6 @@ func (j *Jellyfin) makeJFItemPerson(ctx context.Context, userID string, personID
 		response.ImageTags = &JFImageTags{
 			Primary: tagprefix_redirect + person.PosterURL,
 		}
-	}
-	if playstate, err := j.repo.GetUserData(ctx, userID, personID); err == nil {
-		response.UserData = j.makeJFUserData(userID, personID, playstate)
-	} else {
-		response.UserData = j.makeJFUserData(userID, personID, nil)
 	}
 
 	return response, nil

@@ -1,7 +1,5 @@
 package collection
 
-import "slices"
-
 type Collection struct {
 	// Unique identifier for the collection. Hash of the collection name, or taken from configfile.
 	ID string
@@ -33,17 +31,4 @@ func (c *Collection) GetHlsServer() string {
 
 func (c *Collection) GetDataDir() string {
 	return c.Directory
-}
-
-// Return list of genres from collection.
-func (c *Collection) Genres() []string {
-	var collectionGenres []string
-	for _, i := range c.Items {
-		for _, genre := range i.Genres() {
-			if !slices.Contains(collectionGenres, genre) {
-				collectionGenres = append(collectionGenres, genre)
-			}
-		}
-	}
-	return collectionGenres
 }

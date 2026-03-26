@@ -300,7 +300,7 @@ func (j *Jellyfin) makeJFItemCollectionPlaylist(ctx context.Context, userID stri
 		Name:                     "Playlists",
 		ServerID:                 j.serverID,
 		ID:                       id,
-		ParentID:                 makeJFRootID(collectionRootID),
+		ParentID:                 j.makeJFRootID(),
 		Etag:                     idhash.Hash(playlistCollectionID),
 		DateCreated:              time.Now().UTC(),
 		PremiereDate:             time.Now().UTC(),
@@ -308,7 +308,7 @@ func (j *Jellyfin) makeJFItemCollectionPlaylist(ctx context.Context, userID stri
 		SortName:                 collectionTypePlaylists,
 		Type:                     itemTypeUserView,
 		IsFolder:                 true,
-		EnableMediaSourceDisplay: true,
+		EnableMediaSourceDisplay: boolPtr(true),
 		ChildCount:               itemCount,
 		DisplayPreferencesID:     makeJFDisplayPreferencesID(playlistCollectionID),
 		ExternalUrls:             []JFExternalUrls{},
@@ -319,8 +319,8 @@ func (j *Jellyfin) makeJFItemCollectionPlaylist(ctx context.Context, userID stri
 		Path:                     "/collection",
 		LockData:                 false,
 		MediaType:                "Unknown",
-		CanDelete:                false,
-		CanDownload:              true,
+		CanDelete:                boolPtr(false),
+		CanDownload:              boolPtr(true),
 		SpecialFeatureCount:      0,
 		ImageTags:                j.makeJFImageTags(ctx, id, imageTypePrimary),
 		UserData:                 j.makeJFUserData(userID, id, nil),
@@ -348,15 +348,15 @@ func (j *Jellyfin) makeJFItemPlaylist(ctx context.Context, userID, playlistID st
 		Path:                     "/playlist/" + strings.ToLower(strings.Join(strings.Fields(playlist.Name), "")),
 		Etag:                     idhash.Hash(playlist.ID),
 		DateCreated:              time.Now().UTC(),
-		CanDelete:                true,
-		CanDownload:              true,
+		CanDelete:                boolPtr(true),
+		CanDownload:              boolPtr(true),
 		PlayAccess:               "Full",
 		RecursiveItemCount:       len(playlist.ItemIDs),
 		ChildCount:               len(playlist.ItemIDs),
 		LocationType:             "FileSystem",
 		MediaType:                "Video",
 		DisplayPreferencesID:     makeJFDisplayPreferencesID(playlistCollectionID),
-		EnableMediaSourceDisplay: true,
+		EnableMediaSourceDisplay: boolPtr(true),
 		ImageTags:                j.makeJFImageTags(ctx, id, imageTypePrimary),
 		UserData:                 j.makeJFUserData(userID, id, nil),
 	}
@@ -392,7 +392,7 @@ func (j *Jellyfin) makeJFItemPlaylistItemList(ctx context.Context, userID, playl
 	for _, itemID := range playlist.ItemIDs {
 		c, i := j.collections.GetItemByID(itemID)
 		if i != nil {
-			item, err := j.makeJFItem(ctx, userID, i, c.ID)
+			item, err := j.makeJFItem(ctx, userID, i, c.ID, false)
 			if err != nil {
 				return []JFItem{}, err
 			}

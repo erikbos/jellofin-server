@@ -132,7 +132,7 @@ func (j *Jellyfin) usersItemsHandler(w http.ResponseWriter, r *http.Request) {
 		items = make([]JFItem, 0, len(foundItemIDs))
 		for _, id := range foundItemIDs {
 			c, i := j.collections.GetItemByID(id)
-			jfitem, err := j.makeJFItem(r.Context(), reqCtx.User.ID, i, c.ID)
+			jfitem, err := j.makeJFItem(r.Context(), reqCtx.User.ID, i, c.ID, false)
 			if err != nil {
 				apierror(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -254,7 +254,7 @@ func (j *Jellyfin) searchHintsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for _, i := range c.Items {
-			jfitem, err := j.makeJFItem(r.Context(), reqCtx.User.ID, i, c.ID)
+			jfitem, err := j.makeJFItem(r.Context(), reqCtx.User.ID, i, c.ID, false)
 			if err != nil {
 				apierror(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -349,7 +349,7 @@ func (j *Jellyfin) usersItemsResumeHandler(w http.ResponseWriter, r *http.Reques
 	items := make([]JFItem, 0, len(resumeItemIDs))
 	for _, id := range resumeItemIDs {
 		if c, i := j.collections.GetItemByID(id); c != nil && i != nil {
-			jfitem, err := j.makeJFItem(r.Context(), reqCtx.User.ID, i, c.ID)
+			jfitem, err := j.makeJFItem(r.Context(), reqCtx.User.ID, i, c.ID, false)
 			if err != nil {
 				apierror(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -429,7 +429,7 @@ func (j *Jellyfin) usersItemsSimilarHandler(w http.ResponseWriter, r *http.Reque
 	items := make([]JFItem, 0, len(similarItemIDs))
 	for _, id := range similarItemIDs {
 		c, i := j.collections.GetItemByID(id)
-		jfitem, err := j.makeJFItem(r.Context(), reqCtx.User.ID, i, c.ID)
+		jfitem, err := j.makeJFItem(r.Context(), reqCtx.User.ID, i, c.ID, false)
 		if err != nil {
 			apierror(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -585,9 +585,9 @@ func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
 	if isHD := queryparams.Get("isHd"); isHD != "" {
 		switch strings.ToLower(isHD) {
 		case "true":
-			return i.IsHD
+			return *i.IsHD
 		case "false":
-			return !i.IsHD
+			return !*i.IsHD
 		}
 	}
 
@@ -595,9 +595,9 @@ func (j *Jellyfin) applyItemFilter(i *JFItem, queryparams url.Values) bool {
 	if is4K := queryparams.Get("is4K"); is4K != "" {
 		switch strings.ToLower(is4K) {
 		case "true":
-			return i.Is4K
+			return *i.Is4K
 		case "false":
-			return !i.Is4K
+			return !*i.Is4K
 		}
 	}
 

@@ -17,7 +17,7 @@ func (j *Jellyfin) moviesRecommendationsHandler(w http.ResponseWriter, r *http.R
 }
 
 // makeJFItem make movie item
-func (j *Jellyfin) makeJFItemMovie(ctx context.Context, userID string, movie *collection.Movie, parentID string) (response JFItem, e error) {
+func (j *Jellyfin) makeJFItemMovie(ctx context.Context, userID string, movie *collection.Movie, parentID string, fulldetails bool) (response JFItem, e error) {
 	response = JFItem{
 		Type:                    itemTypeMovie,
 		ID:                      movie.ID(),
@@ -26,7 +26,6 @@ func (j *Jellyfin) makeJFItemMovie(ctx context.Context, userID string, movie *co
 		Name:                    movie.Name(),
 		OriginalTitle:           movie.Name(),
 		SortName:                movie.SortName(),
-		ForcedSortName:          movie.SortName(),
 		Genres:                  movie.Metadata.Genres(),
 		GenreItems:              makeJFGenreItems(movie.Metadata.Genres()),
 		Studios:                 makeJFStudios(movie.Metadata.Studios()),
@@ -42,8 +41,8 @@ func (j *Jellyfin) makeJFItemMovie(ctx context.Context, userID string, movie *co
 		Container:               "mov,mp4,m4a",
 		DateCreated:             movie.Created().UTC(),
 		PrimaryImageAspectRatio: 0.6666666666666666,
-		CanDelete:               false,
-		CanDownload:             true,
+		CanDelete:               boolPtr(false),
+		CanDownload:             boolPtr(true),
 		PlayAccess:              "Full",
 		ImageTags: &JFImageTags{
 			Primary:  movie.ID(),
@@ -81,20 +80,20 @@ func (j *Jellyfin) makeJFItemMovie(ctx context.Context, userID string, movie *co
 		response.PremiereDate = movie.Created().UTC()
 	}
 
-	// listview = true, movie carousel return both primary and BackdropImageTags
-	// non-listview = false, remove primary (thumbnail) image reference
-	// if !listView {
-	// 	response.ImageTags = nil
-	// }
-
-	response.MediaSources = j.makeMediaSource(movie)
-	response.MediaStreams = response.MediaSources[0].MediaStreams
-
+	// Set user data
 	if playstate, err := j.repo.GetUserData(ctx, userID, movie.ID()); err == nil {
 		response.UserData = j.makeJFUserData(userID, movie.ID(), playstate)
 	} else {
 		response.UserData = j.makeJFUserData(userID, movie.ID(), nil)
 	}
+
+	if !fulldetails {
+		return response, nil
+	}
+
+	// Optional full details, please note: fields that can be filtered should have been set earlier as ApplyItemFilter() depends on their presence.
+	response.MediaSources = j.makeMediaSource(movie)
+	response.MediaStreams = response.MediaSources[0].MediaStreams
 
 	return response, nil
 }

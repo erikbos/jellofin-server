@@ -385,6 +385,11 @@ func (j *Jellyfin) serveItemImage(w http.ResponseWriter, r *http.Request, itemID
 // serveImageFile serves an image file from the filesystem
 func (j *Jellyfin) serveImageFile(w http.ResponseWriter, r *http.Request, filename string, imageQuality int) {
 	file, err := j.imageresizer.OpenFile(w, r, filename, imageQuality)
+	if file == nil && err == nil {
+		log.Printf("Could not open image file: %s\n", filename)
+		apierror(w, "File not found", http.StatusNotFound)
+		return
+	}
 	if err != nil {
 		apierror(w, "File not found", http.StatusNotFound)
 		return

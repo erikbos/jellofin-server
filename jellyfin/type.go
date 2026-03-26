@@ -269,14 +269,13 @@ type JFItem struct {
 	Type                     string             `json:"Type,omitempty"`
 	Name                     string             `json:"Name"`
 	SortName                 string             `json:"SortName,omitempty"`
-	ForcedSortName           string             `json:"ForcedSortName,omitempty"`
 	SeriesName               string             `json:"SeriesName,omitempty"`
 	SeasonName               string             `json:"SeasonName,omitempty"`
 	OriginalTitle            string             `json:"OriginalTitle,omitempty"`
-	Etag                     string             `json:"Etag"`
+	Etag                     string             `json:"Etag,omitempty"`
 	DateCreated              time.Time          `json:"DateCreated,omitempty"` // When item was added to the library.
-	CanDelete                bool               `json:"CanDelete"`
-	CanDownload              bool               `json:"CanDownload"`
+	CanDelete                *bool              `json:"CanDelete,omitempty"`
+	CanDownload              *bool              `json:"CanDownload,omitempty"`
 	Container                string             `json:"Container,omitempty"`
 	PremiereDate             time.Time          `json:"PremiereDate,omitempty"`
 	MediaSources             []JFMediaSources   `json:"MediaSources,omitempty"`
@@ -284,7 +283,7 @@ type JFItem struct {
 	ProductionLocations      []string           `json:"ProductionLocations,omitempty"`
 	MediaType                string             `json:"MediaType,omitempty"`
 	Path                     string             `json:"Path,omitempty"`
-	EnableMediaSourceDisplay bool               `json:"EnableMediaSourceDisplay"`
+	EnableMediaSourceDisplay *bool              `json:"EnableMediaSourceDisplay,omitempty"`
 	OfficialRating           string             `json:"OfficialRating,omitempty"`
 	ChannelID                []string           `json:"ChannelId"`
 	ChildCount               int                `json:"ChildCount,omitempty"`
@@ -293,7 +292,7 @@ type JFItem struct {
 	Overview                 string             `json:"Overview,omitempty"`
 	Taglines                 []string           `json:"Taglines,omitempty"`
 	Trickplay                []string           `json:"Trickplay,omitempty"`
-	Genres                   []string           `json:"Genres"`
+	Genres                   []string           `json:"Genres,omitempty"`
 	CommunityRating          float32            `json:"CommunityRating,omitempty"`
 	RunTimeTicks             int64              `json:"RunTimeTicks,omitempty"`
 	PlayAccess               string             `json:"PlayAccess,omitempty"`
@@ -305,19 +304,19 @@ type JFItem struct {
 	Width                    int                `json:"Width,omitempty"`
 	Height                   int                `json:"Height,omitempty"`
 	IsFolder                 bool               `json:"IsFolder"`
-	IsHD                     bool               `json:"IsHD"`
-	Is4K                     bool               `json:"Is4K"`
+	IsHD                     *bool              `json:"IsHD,omitempty"`
+	Is4K                     *bool              `json:"Is4K,omitempty"`
 	LockData                 bool               `json:"LockData"`
 	HasSubtitles             bool               `json:"HasSubtitles,omitempty"`
-	People                   []JFPeople         `json:"People"`
-	Studios                  []JFStudios        `json:"Studios"`
-	GenreItems               []JFGenreItem      `json:"GenreItems"`
+	People                   []JFPeople         `json:"People,omitempty"`
+	Studios                  []JFStudios        `json:"Studios,omitempty"`
+	GenreItems               []JFGenreItem      `json:"GenreItems,omitempty"`
 	RemoteTrailers           []JFRemoteTrailers `json:"RemoteTrailers,omitempty"`
 	ImageBlurHashes          *JFImageBlurHashes `json:"ImageBlurHashes,omitempty"`
 	ProviderIds              JFProviderIds      `json:"ProviderIds,omitempty"`
 	ExternalUrls             []JFExternalUrls   `json:"ExternalUrls,omitempty"`
 	Tags                     []string           `json:"Tags"`
-	LockedFields             []string           `json:"LockedFields"`
+	LockedFields             []string           `json:"LockedFields,omitempty"`
 	LocalTrailerCount        int                `json:"LocalTrailerCount,omitempty"`
 	SpecialFeatureCount      int                `json:"SpecialFeatureCount,omitempty"`
 	DisplayPreferencesID     string             `json:"DisplayPreferencesId,omitempty"`

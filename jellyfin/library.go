@@ -176,42 +176,31 @@ func (j *Jellyfin) makeJFItemRoot(ctx context.Context, userID string) (response 
 	if rootitems, err := j.makeJFCollectionRootOverview(ctx, userID); err == nil {
 		childCount = len(rootitems)
 	}
-	// Build list of genres from all collections.
-	var collectionGenres []string
-	for _, c := range j.collections.GetCollections() {
-		for _, genre := range c.Genres() {
-			if !slices.Contains(collectionGenres, genre) {
-				collectionGenres = append(collectionGenres, genre)
-			}
-		}
-	}
-	rootID := makeJFRootID(collectionRootID)
+	rootID := j.makeJFRootID()
 	response = JFItem{
 		Name:                     "Media Folders",
 		ServerID:                 j.serverID,
 		ID:                       rootID,
-		Etag:                     idhash.Hash(collectionRootID),
+		Etag:                     idhash.Hash(rootID),
 		DateCreated:              time.Now().UTC(),
 		Type:                     itemTypeUserRootFolder,
 		IsFolder:                 true,
-		CanDelete:                false,
-		CanDownload:              false,
+		CanDelete:                boolPtr(false),
+		CanDownload:              boolPtr(false),
 		SortName:                 "media folders",
 		ExternalUrls:             []JFExternalUrls{},
 		Path:                     "/root",
-		EnableMediaSourceDisplay: true,
+		EnableMediaSourceDisplay: boolPtr(true),
 		Taglines:                 []string{},
 		PlayAccess:               "Full",
 		RemoteTrailers:           []JFRemoteTrailers{},
 		ProviderIds:              JFProviderIds{},
 		People:                   []JFPeople{},
 		Studios:                  []JFStudios{},
-		Genres:                   collectionGenres,
-		GenreItems:               makeJFGenreItems(collectionGenres),
 		LocalTrailerCount:        0,
 		ChildCount:               childCount,
 		SpecialFeatureCount:      0,
-		DisplayPreferencesID:     makeJFDisplayPreferencesID(collectionRootID),
+		DisplayPreferencesID:     makeJFDisplayPreferencesID(rootID),
 		Tags:                     []string{},
 		PrimaryImageAspectRatio:  1.7777777777777777,
 		BackdropImageTags:        []string{},
@@ -248,12 +237,11 @@ func (j *Jellyfin) makeJFItemCollection(ctx context.Context, userID, collectionI
 		return JFItem{}, errors.New("collection not found")
 	}
 	id := makeJFCollectionID(collectionID)
-	collectionGenres := c.Genres()
 	response := JFItem{
 		Name:                     c.Name,
 		ServerID:                 j.serverID,
 		ID:                       id,
-		ParentID:                 makeJFRootID(collectionRootID),
+		ParentID:                 j.makeJFRootID(),
 		Etag:                     idhash.Hash(collectionID),
 		DateCreated:              time.Now().UTC(),
 		PremiereDate:             time.Now().UTC(),
@@ -263,16 +251,14 @@ func (j *Jellyfin) makeJFItemCollection(ctx context.Context, userID, collectionI
 		Path:                     "/collection",
 		LockData:                 false,
 		MediaType:                "Unknown",
-		CanDelete:                false,
-		CanDownload:              true,
+		CanDelete:                boolPtr(false),
+		CanDownload:              boolPtr(true),
 		DisplayPreferencesID:     makeJFDisplayPreferencesID(collectionID),
 		PlayAccess:               "Full",
-		EnableMediaSourceDisplay: true,
+		EnableMediaSourceDisplay: boolPtr(true),
 		PrimaryImageAspectRatio:  1.7777777777777777,
 		ChildCount:               len(c.Items),
 		SpecialFeatureCount:      0,
-		Genres:                   collectionGenres,
-		GenreItems:               makeJFGenreItems(collectionGenres),
 		ExternalUrls:             []JFExternalUrls{},
 		RemoteTrailers:           []JFRemoteTrailers{},
 		ImageTags:                j.makeJFImageTags(ctx, id, imageTypePrimary),
@@ -302,7 +288,7 @@ func (j *Jellyfin) makeJFItemCollectionFavorites(ctx context.Context, userID str
 		Name:                     "Favorites",
 		ServerID:                 j.serverID,
 		ID:                       id,
-		ParentID:                 makeJFRootID(collectionRootID),
+		ParentID:                 j.makeJFRootID(),
 		Etag:                     idhash.Hash(favoritesCollectionID),
 		DateCreated:              time.Now().UTC(),
 		PremiereDate:             time.Now().UTC(),
@@ -310,7 +296,7 @@ func (j *Jellyfin) makeJFItemCollectionFavorites(ctx context.Context, userID str
 		SortName:                 collectionTypePlaylists,
 		Type:                     itemTypeUserView,
 		IsFolder:                 true,
-		EnableMediaSourceDisplay: true,
+		EnableMediaSourceDisplay: boolPtr(true),
 		ChildCount:               itemCount,
 		DisplayPreferencesID:     makeJFDisplayPreferencesID(favoritesCollectionID),
 		ExternalUrls:             []JFExternalUrls{},
@@ -321,8 +307,8 @@ func (j *Jellyfin) makeJFItemCollectionFavorites(ctx context.Context, userID str
 		Path:                     "/collection",
 		LockData:                 false,
 		MediaType:                "Unknown",
-		CanDelete:                false,
-		CanDownload:              true,
+		CanDelete:                boolPtr(false),
+		CanDownload:              boolPtr(true),
 		SpecialFeatureCount:      0,
 		ImageTags:                j.makeJFImageTags(ctx, id, imageTypePrimary),
 		UserData:                 j.makeJFUserData(userID, id, nil),
@@ -344,7 +330,7 @@ func (j *Jellyfin) makeJFItemFavoritesOverview(ctx context.Context, userID strin
 			// We only add movies and shows in favorites
 			switch i.(type) {
 			case *collection.Movie, *collection.Show:
-				jfitem, err := j.makeJFItem(ctx, userID, i, c.ID)
+				jfitem, err := j.makeJFItem(ctx, userID, i, c.ID, false)
 				if err != nil {
 					return []JFItem{}, err
 				}
@@ -356,8 +342,8 @@ func (j *Jellyfin) makeJFItemFavoritesOverview(ctx context.Context, userID strin
 }
 
 // makeJFRootID returns an external id for the root folder.
-func makeJFRootID(rootID string) string {
-	return itemprefix_root + rootID
+func (j *Jellyfin) makeJFRootID() string {
+	return itemprefix_root + j.serverID
 }
 
 // isJFRootID checks if the provided ID is a root ID.
