@@ -41,8 +41,8 @@ func (j *Jellyfin) makeJFItemMovie(ctx context.Context, userID string, movie *co
 		Container:               "mov,mp4,m4a",
 		DateCreated:             movie.Created().UTC(),
 		PrimaryImageAspectRatio: 0.6666666666666666,
-		CanDelete:               boolPtr(false),
-		CanDownload:             boolPtr(true),
+		CanDelete:               new(false),
+		CanDownload:             new(true),
 		PlayAccess:              "Full",
 		ImageTags: &JFImageTags{
 			Primary:  movie.ID(),

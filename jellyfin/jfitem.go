@@ -476,14 +476,10 @@ func decodeExternalName(itemprefix, id string) (string, error) {
 
 // itemIsHD checks if the provided item is HD (720p or higher)
 func itemIsHD(item collection.Item) *bool {
-	return boolPtr(item.VideoHeight() >= 720)
+	return new(item.VideoHeight() >= 720)
 }
 
 // itemIs4K checks if the provided item is 4K (2160p or higher)
 func itemIs4K(item collection.Item) *bool {
-	return boolPtr(item.VideoHeight() >= 1500)
-}
-
-func boolPtr(b bool) *bool {
-	return &b
+	return new(item.VideoHeight() >= 1500)
 }
