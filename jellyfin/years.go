@@ -134,7 +134,7 @@ func (j *Jellyfin) makeJFItemYear(year int, stats yearStats) (JFItem, error) {
 		Genres:            []string{},
 		GenreItems:        []JFGenreItem{},
 		LocationType:      "FileSystem",
-		LockData:          false,
+		LockData:          new(false),
 		LockedFields:      []string{},
 		Path:              fmt.Sprintf("/years/%d", year),
 		People:            []JFPeople{},

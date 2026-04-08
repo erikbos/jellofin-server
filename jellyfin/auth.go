@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -287,7 +288,11 @@ func (j *Jellyfin) parseAuthHeader(r *http.Request) (*authSchemeValues, error) {
 	var result authSchemeValues
 	for _, match := range matches {
 		if len(match) == 3 {
-			value := strings.TrimSpace(match[2])
+			value, err := url.PathUnescape(match[2])
+			if err != nil {
+				value = match[2]
+			}
+			value = strings.TrimSpace(value)
 			switch match[1] {
 			case "Client":
 				result.client = value

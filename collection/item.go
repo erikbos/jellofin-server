@@ -16,7 +16,7 @@ type Item interface {
 	Name() string
 	// SortName returns the name used for sorting.
 	SortName() string
-	// Path returns the directory to the m, relative to collection root.
+	// Path returns the directory to the item, relative to collection root.
 	Path() string
 	// BaseUrl returns the base URL for accessing the item.
 	BaseUrl() string

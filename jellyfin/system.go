@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	serverVersion = "10.11.6"
+	serverVersion = "10.11.8"
 )
 
 // /health

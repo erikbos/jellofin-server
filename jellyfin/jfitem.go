@@ -24,6 +24,7 @@ const (
 	collectionTypePlaylists  = "playlists"
 	itemTypeUserRootFolder   = "UserRootFolder"
 	itemTypeCollectionFolder = "CollectionFolder"
+	itemTypeBoxSet           = "BoxSet"
 	itemTypeUserView         = "UserView"
 	itemTypeMovie            = "Movie"
 	itemTypeShow             = "Series"

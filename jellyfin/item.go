@@ -943,9 +943,9 @@ func (j *Jellyfin) applyItemSorting(items []JFItem, queryparams url.Values) []JF
 			case "isfolder":
 				if items[i].IsFolder != items[j].IsFolder {
 					if sortDescending {
-						return items[i].IsFolder
+						return *items[i].IsFolder
 					}
-					return items[j].IsFolder
+					return *items[j].IsFolder
 				}
 			case "isplayed":
 				if items[i].UserData != nil && items[j].UserData != nil &&

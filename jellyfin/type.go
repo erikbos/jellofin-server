@@ -303,11 +303,11 @@ type JFItem struct {
 	BackdropImageTags        []string           `json:"BackdropImageTags,omitempty"`
 	Width                    int                `json:"Width,omitempty"`
 	Height                   int                `json:"Height,omitempty"`
-	IsFolder                 bool               `json:"IsFolder"`
+	IsFolder                 *bool              `json:"IsFolder"`
 	IsHD                     *bool              `json:"IsHD,omitempty"`
 	Is4K                     *bool              `json:"Is4K,omitempty"`
-	LockData                 bool               `json:"LockData"`
-	HasSubtitles             bool               `json:"HasSubtitles,omitempty"`
+	LockData                 *bool              `json:"LockData,omitempty"`
+	HasSubtitles             *bool              `json:"HasSubtitles,omitempty"`
 	People                   []JFPeople         `json:"People,omitempty"`
 	Studios                  []JFStudios        `json:"Studios,omitempty"`
 	GenreItems               []JFGenreItem      `json:"GenreItems,omitempty"`
@@ -315,7 +315,7 @@ type JFItem struct {
 	ImageBlurHashes          *JFImageBlurHashes `json:"ImageBlurHashes,omitempty"`
 	ProviderIds              JFProviderIds      `json:"ProviderIds,omitempty"`
 	ExternalUrls             []JFExternalUrls   `json:"ExternalUrls,omitempty"`
-	Tags                     []string           `json:"Tags"`
+	Tags                     []string           `json:"Tags,omitempty"`
 	LockedFields             []string           `json:"LockedFields,omitempty"`
 	LocalTrailerCount        int                `json:"LocalTrailerCount,omitempty"`
 	SpecialFeatureCount      int                `json:"SpecialFeatureCount,omitempty"`

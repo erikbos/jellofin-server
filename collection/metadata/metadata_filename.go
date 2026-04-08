@@ -41,10 +41,16 @@ func (n *MetadataFilename) parseFilename() {
 	// We should attempt to extract title from the filename, removing common tags.
 	n.name = n.filename
 
-	var reCodec = regexp.MustCompile(`(?i)[hx].?264`)
-	if reCodec.MatchString(n.name) {
+	if regexp.MustCompile(`[hHxX].?264`).MatchString(n.name) {
 		n.videoCodec = "h264"
 	}
+	if regexp.MustCompile(`[hHxX].?265`).MatchString(n.name) {
+		n.videoCodec = "h265"
+	}
+	if strings.Contains(n.name, "266") || strings.Contains(n.name, "VCC") {
+		n.videoCodec = "h266"
+	}
+
 	if strings.Contains(n.name, "720") {
 		n.height = 720
 	}
