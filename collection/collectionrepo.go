@@ -232,7 +232,7 @@ func (cr *CollectionRepo) NextUpInSeries(watchedEpisodeIDs []string, seriesID st
 	// If no episodes from this series have been watched, return first episode we can find
 	if !hasWatchedEpisodes {
 		if len(show.Seasons) > 0 && len(show.Seasons[0].Episodes) > 0 {
-			log.Printf("NextUp: returning first episode of unwatched series %s(%s)\n", show.name, show.id)
+			// log.Printf("NextUp: returning first episode of unwatched series %s(%s)\n", show.name, show.id)
 			return []string{show.Seasons[0].Episodes[0].id}, nil
 		}
 	}
@@ -261,7 +261,7 @@ func (cr *CollectionRepo) NextUpInCollection(watchedEpisodeIDs []string, seriesI
 			continue
 		}
 
-		log.Printf("NextUp: %s(%s) %s, %d-%d\n", show.name, show.id, episode.id, episode.SeasonNo, episode.EpisodeNo)
+		// log.Printf("NextUp: %s(%s) %s, %d-%d\n", show.name, show.id, episode.id, episode.SeasonNo, episode.EpisodeNo)
 
 		// Find season and episode index
 		seasonIdx, epIdx := -1, -1
@@ -300,7 +300,7 @@ func (cr *CollectionRepo) NextUpInCollection(watchedEpisodeIDs []string, seriesI
 		}
 	}
 
-	log.Printf("NextUp: showMap: %+v\n", showMap)
+	// log.Printf("NextUp: showMap: %+v\n", showMap)
 
 	nextUpEpisodeIDs = make([]string, 0)
 	for _, entry := range showMap {
@@ -311,14 +311,14 @@ func (cr *CollectionRepo) NextUpInCollection(watchedEpisodeIDs []string, seriesI
 		if seasonIdx < len(item.Seasons) {
 			season := &item.Seasons[seasonIdx]
 			if epIdx+1 < len(season.Episodes) {
-				log.Printf("Adding: in same season %s(%s) %s, %d-%d\n", item.name, item.id, season.Episodes[epIdx+1].id, seasonIdx, epIdx+1)
+				// log.Printf("Adding: in same season %s(%s) %s, %d-%d\n", item.name, item.id, season.Episodes[epIdx+1].id, seasonIdx, epIdx+1)
 				// Try next episode in same season
 				nextUpEpisodeIDs = append(nextUpEpisodeIDs, season.Episodes[epIdx+1].id)
 				continue
 			}
 			// Try first episode in next season
 			if seasonIdx+1 < len(item.Seasons) && len(item.Seasons[seasonIdx+1].Episodes) > 0 {
-				log.Printf("Adding: in next season %s(%s) %s, %d-%d\n", item.name, item.id, item.Seasons[seasonIdx+1].Episodes[0].id, seasonIdx+1, 0)
+				// log.Printf("Adding: in next season %s(%s) %s, %d-%d\n", item.name, item.id, item.Seasons[seasonIdx+1].Episodes[0].id, seasonIdx+1, 0)
 				nextUpEpisodeIDs = append(nextUpEpisodeIDs, item.Seasons[seasonIdx+1].Episodes[0].id)
 			}
 		}

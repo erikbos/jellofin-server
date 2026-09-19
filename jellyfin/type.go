@@ -49,6 +49,119 @@ type CastReceiverApplication struct {
 	Name string `json:"Name"`
 }
 
+type JFSystemConfigurationResponse struct {
+	ActivityLogRetentionDays            int                       `json:"ActivityLogRetentionDays"`
+	AllowClientLogUpload                bool                      `json:"AllowClientLogUpload"`
+	CacheSize                           int                       `json:"CacheSize"`
+	CastReceiverApplications            []CastReceiverApplication `json:"CastReceiverApplications"`
+	ChapterImageResolution              string                    `json:"ChapterImageResolution"`
+	CodecsUsed                          []string                  `json:"CodecsUsed"`
+	ContentTypes                        []string                  `json:"ContentTypes"`
+	CorsHosts                           []string                  `json:"CorsHosts"`
+	DisableLiveTvChannelUserDataName    bool                      `json:"DisableLiveTvChannelUserDataName"`
+	DisplaySpecialsWithinSeasons        bool                      `json:"DisplaySpecialsWithinSeasons"`
+	DummyChapterDuration                int                       `json:"DummyChapterDuration"`
+	EnableCaseSensitiveItemIds          bool                      `json:"EnableCaseSensitiveItemIds"`
+	EnableExternalContentInSuggestions  bool                      `json:"EnableExternalContentInSuggestions"`
+	EnableFolderView                    bool                      `json:"EnableFolderView"`
+	EnableGroupingMoviesIntoCollections bool                      `json:"EnableGroupingMoviesIntoCollections"`
+	EnableGroupingShowsIntoCollections  bool                      `json:"EnableGroupingShowsIntoCollections"`
+	EnableLegacyAuthorization           bool                      `json:"EnableLegacyAuthorization"`
+	EnableMetrics                       bool                      `json:"EnableMetrics"`
+	EnableNormalizedItemByNameIds       bool                      `json:"EnableNormalizedItemByNameIds"`
+	EnableSlowResponseWarning           bool                      `json:"EnableSlowResponseWarning"`
+	ImageExtractionTimeoutMs            int                       `json:"ImageExtractionTimeoutMs"`
+	ImageSavingConvention               string                    `json:"ImageSavingConvention"`
+	InactiveSessionThreshold            int                       `json:"InactiveSessionThreshold"`
+	IsPortAuthorized                    bool                      `json:"IsPortAuthorized"`
+	IsStartupWizardCompleted            bool                      `json:"IsStartupWizardCompleted"`
+	LibraryMetadataRefreshConcurrency   int                       `json:"LibraryMetadataRefreshConcurrency"`
+	LibraryMonitorDelay                 int                       `json:"LibraryMonitorDelay"`
+	LibraryScanFanoutConcurrency        int                       `json:"LibraryScanFanoutConcurrency"`
+	LibraryUpdateDuration               int                       `json:"LibraryUpdateDuration"`
+	LogFileRetentionDays                int                       `json:"LogFileRetentionDays"`
+	MaxAudiobookResume                  int                       `json:"MaxAudiobookResume"`
+	MaxResumePct                        int                       `json:"MaxResumePct"`
+	MetadataCountryCode                 string                    `json:"MetadataCountryCode"`
+	MetadataOptions                     []JFMetadataOptions       `json:"MetadataOptions"`
+	MetadataPath                        string                    `json:"MetadataPath"`
+	MinAudiobookResume                  int                       `json:"MinAudiobookResume"`
+	MinResumeDurationSeconds            int                       `json:"MinResumeDurationSeconds"`
+	MinResumePct                        int                       `json:"MinResumePct"`
+	ParallelImageEncodingLimit          int                       `json:"ParallelImageEncodingLimit"`
+	PathSubstitutions                   []string                  `json:"PathSubstitutions"`
+	PluginRepositories                  []JFPluginRepository      `json:"PluginRepositories"`
+	PreferredMetadataLanguage           string                    `json:"PreferredMetadataLanguage"`
+	QuickConnectAvailable               bool                      `json:"QuickConnectAvailable"`
+	RemoteClientBitrateLimit            int                       `json:"RemoteClientBitrateLimit"`
+	SaveMetadataHidden                  bool                      `json:"SaveMetadataHidden"`
+	ServerName                          string                    `json:"ServerName"`
+	SkipDeserializationForBasicTypes    bool                      `json:"SkipDeserializationForBasicTypes"`
+	SlowResponseThresholdMs             int                       `json:"SlowResponseThresholdMs"`
+	SortRemoveCharacters                []string                  `json:"SortRemoveCharacters"`
+	SortRemoveWords                     []string                  `json:"SortRemoveWords"`
+	SortReplaceCharacters               []string                  `json:"SortReplaceCharacters"`
+	TrickplayOptions                    TrickplayOptions          `json:"TrickplayOptions"`
+	UICulture                           string                    `json:"UICulture"`
+}
+
+type JFMetadataOptions struct {
+	DisabledImageFetchers    []string `json:"DisabledImageFetchers"`
+	DisabledMetadataFetchers []string `json:"DisabledMetadataFetchers"`
+	DisabledMetadataSavers   []string `json:"DisabledMetadataSavers"`
+	ImageFetcherOrder        []string `json:"ImageFetcherOrder"`
+	ItemType                 string   `json:"ItemType"`
+	LocalMetadataReaderOrder []string `json:"LocalMetadataReaderOrder"`
+	MetadataFetcherOrder     []string `json:"MetadataFetcherOrder"`
+}
+
+type JFPluginRepository struct {
+	Enabled bool   `json:"Enabled"`
+	Name    string `json:"Name"`
+	URL     string `json:"Url"`
+}
+
+type TrickplayOptions struct {
+	EnableHwAcceleration         bool   `json:"EnableHwAcceleration"`
+	EnableHwEncoding             bool   `json:"EnableHwEncoding"`
+	EnableKeyFrameOnlyExtraction bool   `json:"EnableKeyFrameOnlyExtraction"`
+	Interval                     int    `json:"Interval"`
+	JpegQuality                  int    `json:"JpegQuality"`
+	ProcessPriority              string `json:"ProcessPriority"`
+	ProcessThreads               int    `json:"ProcessThreads"`
+	Qscale                       int    `json:"Qscale"`
+	ScanBehavior                 string `json:"ScanBehavior"`
+	TileHeight                   int    `json:"TileHeight"`
+	TileWidth                    int    `json:"TileWidth"`
+	WidthResolutions             []int  `json:"WidthResolutions"`
+}
+
+type JFSystemConfigurationNetworkResponse struct {
+	AutoDiscovery                     bool     `json:"AutoDiscovery"`
+	BaseUrl                           string   `json:"BaseUrl"`
+	CertificatePassword               string   `json:"CertificatePassword"`
+	CertificatePath                   string   `json:"CertificatePath"`
+	EnableHttps                       bool     `json:"EnableHttps"`
+	EnableIPv4                        bool     `json:"EnableIPv4"`
+	EnableIPv6                        bool     `json:"EnableIPv6"`
+	EnablePublishedServerUriByRequest bool     `json:"EnablePublishedServerUriByRequest"`
+	EnableRemoteAccess                bool     `json:"EnableRemoteAccess"`
+	EnableUPnP                        bool     `json:"EnableUPnP"`
+	IgnoreVirtualInterfaces           bool     `json:"IgnoreVirtualInterfaces"`
+	InternalHttpPort                  int      `json:"InternalHttpPort"`
+	InternalHttpsPort                 int      `json:"InternalHttpsPort"`
+	IsRemoteIPFilterBlacklist         bool     `json:"IsRemoteIPFilterBlacklist"`
+	KnownProxies                      []string `json:"KnownProxies"`
+	LocalNetworkAddresses             []string `json:"LocalNetworkAddresses"`
+	LocalNetworkSubnets               []string `json:"LocalNetworkSubnets"`
+	PublicHttpPort                    int      `json:"PublicHttpPort"`
+	PublicHttpsPort                   int      `json:"PublicHttpsPort"`
+	PublishedServerUriBySubnet        []string `json:"PublishedServerUriBySubnet"`
+	RemoteIPFilter                    []string `json:"RemoteIPFilter"`
+	RequireHttps                      bool     `json:"RequireHttps"`
+	VirtualInterfaceNames             []string `json:"VirtualInterfaceNames"`
+}
+
 type JFPluginResponse struct {
 	Name                  string `json:"Name"`
 	Version               string `json:"Version"`
@@ -63,6 +176,31 @@ type JFPluginResponse struct {
 type JFSystemEndpointResponse struct {
 	IsLocal     bool `json:"IsLocal"`
 	IsInNetwork bool `json:"IsInNetwork"`
+}
+
+type JFActivityLogEntry struct {
+	Id                  int64     `json:"Id"`
+	Name                string    `json:"Name"`
+	Overview            string    `json:"Overview"`
+	ShortOverview       string    `json:"ShortOverview"`
+	Type                string    `json:"Type"`
+	ItemId              string    `json:"ItemId,omitempty"`
+	Date                time.Time `json:"Date"`
+	UserId              string    `json:"UserId,omitempty"`
+	UserPrimaryImageTag string    `json:"UserPrimaryImageTag,omitempty"`
+	Severity            string    `json:"Severity"`
+}
+
+type JFActivityLogEntriesResponse struct {
+	Items            []JFActivityLogEntry `json:"Items"`
+	TotalRecordCount int                  `json:"TotalRecordCount"`
+	StartIndex       int                  `json:"StartIndex"`
+}
+
+type JFEnvironmentDrive struct {
+	Name string `json:"Name"`
+	Path string `json:"Path"`
+	Type string `json:"Type"`
 }
 
 type JFUser struct {

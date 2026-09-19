@@ -144,6 +144,82 @@ func (j *Jellyfin) systemRestartHandler(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusForbidden)
 }
 
+// /System/ActivityLog/Entries
+//
+// systemActivityLogEntriesHandler returns activity log entries
+func (j *Jellyfin) systemActivityLogEntriesHandler(w http.ResponseWriter, r *http.Request) {
+	response := JFActivityLogEntriesResponse{
+		Items: []JFActivityLogEntry{
+			{
+				Id:            1,
+				Name:          "Server started",
+				Overview:      "Server has been started successfully",
+				ShortOverview: "Server started",
+				Type:          "SystemInfo",
+				Date:          time.Now().UTC(),
+				UserId:        "00000000-0000-0000-0000-000000000000",
+				Severity:      "Information",
+			},
+		},
+		TotalRecordCount: 1,
+		StartIndex:       0,
+	}
+	serveJSON(response, w)
+}
+
+// /System/Configuration
+// systemConfigurationHandler returns system configuration
+func (j *Jellyfin) systemConfigurationHandler(w http.ResponseWriter, r *http.Request) {
+	response := JFSystemConfigurationResponse{}
+	serveJSON(response, w)
+}
+
+// /System/Configuration/Network
+//
+// systemConfigurationNetworkHandler returns network configuration
+func (j *Jellyfin) systemConfigurationNetworkHandler(w http.ResponseWriter, r *http.Request) {
+	response := JFSystemConfigurationNetworkResponse{
+		AutoDiscovery:                     true,
+		BaseUrl:                           "",
+		CertificatePassword:               "",
+		CertificatePath:                   "",
+		EnableHttps:                       false,
+		EnableIPv4:                        true,
+		EnableIPv6:                        false,
+		EnablePublishedServerUriByRequest: false,
+		EnableRemoteAccess:                true,
+		EnableUPnP:                        false,
+		IgnoreVirtualInterfaces:           true,
+		InternalHttpPort:                  8096,
+		InternalHttpsPort:                 8920,
+		IsRemoteIPFilterBlacklist:         false,
+		KnownProxies:                      []string{},
+		LocalNetworkAddresses:             []string{},
+		LocalNetworkSubnets:               []string{},
+		PublicHttpPort:                    8096,
+		PublicHttpsPort:                   8920,
+		PublishedServerUriBySubnet:        []string{},
+		RemoteIPFilter:                    []string{},
+		RequireHttps:                      false,
+		VirtualInterfaceNames:             []string{"veth"},
+	}
+	serveJSON(response, w)
+}
+
+// /Environment/Drives
+//
+// environmentDrivesHandler returns list of drives
+func (j *Jellyfin) environmentDrivesHandler(w http.ResponseWriter, r *http.Request) {
+	response := []JFEnvironmentDrive{
+		{
+			Name: "/",
+			Path: "/",
+			Type: "Directory",
+		},
+	}
+	serveJSON(response, w)
+}
+
 // GET /ScheduledTasks
 //
 // scheduledTasksHandler returns empty scheduled task list, we do not support scheduled tasks at the moment
